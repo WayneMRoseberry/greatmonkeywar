@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "name": "Test Level Two",
+  "grid": [
+    "........",
+    "P..o..eG",
+    "########"
+  ],
+  "legend": {
+    "#": { "tile": { "solid": true, "color": "#6b4f2a" } },
+    "P": { "playerStart": true },
+    "G": { "goal": true, "color": "#ff3030" },
+    "o": { "object": "coconut" },
+    "e": { "enemy": "beetle" }
+  },
+  "background": {
+    "color": "#87ceeb",
+    "layers": []
+  }
+}

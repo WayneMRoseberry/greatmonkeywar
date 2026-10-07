@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "gravity": 35,
+  "maxFallSpeed": 20,
+  "jumpSpeed": 14,
+  "throwSpeed": { "x": 10, "y": 6 },
+  "dropSpeed": { "x": 0, "y": 0 },
+  "knockback": { "x": 6, "y": 6 },
+  "invincibilitySeconds": 1,
+  "stompBounceSpeed": 10,
+  "punchSeconds": 0.15
+}

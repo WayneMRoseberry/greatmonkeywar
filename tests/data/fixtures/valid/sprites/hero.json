@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "image": "sprites/hero.png",
+  "frameWidth": 32,
+  "frameHeight": 48,
+  "pixelsPerTile": 32,
+  "animations": {
+    "idle": { "frames": [0], "fps": 1 },
+    "run": { "frames": [0, 1], "fps": 8 }
+  }
+}

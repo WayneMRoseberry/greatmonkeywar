@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "kind": "player",
+  "name": "Hero",
+  "size": { "width": 0.8, "height": 1.4 },
+  "health": 3,
+  "speed": 6,
+  "punchDamage": 1,
+  "color": "#d2691e",
+  "sprite": "hero"
+}

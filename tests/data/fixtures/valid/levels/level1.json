@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../../../src/data/schemas/level.schema.json",
+  "formatVersion": 1,
+  "name": "Test Level One",
+  "grid": [
+    "............",
+    "......bb....",
+    "....====....",
+    "..P....e.c.G",
+    "######..####"
+  ],
+  "legend": {
+    "#": { "tile": { "solid": true, "color": "#6b4f2a" } },
+    "=": { "tile": { "solid": true, "color": "#3f7f3f" } },
+    "P": { "playerStart": true },
+    "G": { "goal": true, "color": "#ff3030" },
+    "b": { "reward": { "value": 1, "color": "#ffe135" } },
+    "c": { "object": "crate" },
+    "e": { "enemy": "beetle" }
+  },
+  "background": {
+    "color": "#87ceeb",
+    "layers": [
+      { "image": "images/far.png", "scrollFactor": 0.1 },
+      { "image": "images/mid.png", "scrollFactor": 0.4 },
+      { "image": "images/near.png", "scrollFactor": 0.7, "repeat": true }
+    ]
+  },
+  "cutscene": "after-level1"
+}
