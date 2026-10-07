@@ -103,6 +103,34 @@ test('every format in docs/data-formats.md has at least one example', () => {
   assert.deepEqual([...covered].sort(), [...SCHEMA_NAMES].sort());
 });
 
+// Complete data-file examples in the designer and artist guides: any ```json
+// block containing "formatVersion". Its format is worked out from its fields.
+function guideExamples() {
+  const guides = ['guide-levels.md', 'guide-characters-objects.md', 'guide-cutscenes.md', 'guide-sprites.md'];
+  const kindOf = (v) =>
+    'grid' in v ? 'level' : 'levels' in v ? 'level-list' : 'kind' in v ? 'character'
+      : 'stage' in v ? 'cutscene' : 'frameWidth' in v ? 'sprite' : 'object';
+  return guides.flatMap((guide) => {
+    const lines = fs.readFileSync(path.resolve('docs', guide), 'utf8').split(/\r?\n/);
+    const found = [];
+    lines.forEach((line, i) => {
+      if (line.trim() !== '```json') return;
+      const end = lines.findIndex((l, j) => j > i && l.trim() === '```');
+      const json = lines.slice(i + 1, end).join('\n');
+      if (json.includes('"formatVersion"')) found.push({ guide, line: i + 1, json });
+    });
+    return found.map((e) => ({ ...e, schema: kindOf(JSON.parse(e.json)) }));
+  });
+}
+
+for (const example of guideExamples()) {
+  test(`${example.guide} example at line ${example.line} passes the ${example.schema} schema`, () => {
+    const ajv = new Ajv2020({ allErrors: true });
+    const validate = ajv.compile(loadSchema(example.schema));
+    assert.ok(validate(JSON.parse(example.json)), JSON.stringify(validate.errors, null, 2));
+  });
+}
+
 for (const example of docExamples()) {
   test(`docs example at data-formats.md line ${example.line} passes the ${example.schema} schema`, () => {
     const ajv = new Ajv2020({ allErrors: true });
