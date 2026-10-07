@@ -34,6 +34,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `src/data/load.js` - Loads all JSON data (browser: `fetch`; Node: file system) and runs validation.
 - `src/data/validate.js` - Shared validation rules and plain-language error messages, used by the tool and the game.
 - `src/data/schemas/` - JSON Schemas for each data file type.
+- `docs/data-formats.md` - Developer specification of every data format; the source for the schemas and validator.
 
 **Presentation (browser)**
 - `index.html` - Page with the single `<canvas>`.
@@ -72,6 +73,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `tests/simulation/*.test.js` - Unit tests for each simulation module.
 - `tests/presentation/input-map.test.js` - Unit tests for input translation.
 - `tests/data/validate.test.js` - Unit tests for every validation error type.
+- `tests/data/schemas.test.js` - Checks each schema is valid JSON Schema (via Ajv, a test-only dependency), uses only supported keywords, and accepts every example in `docs/data-formats.md`.
 - `tests/data/fixtures/` - Small valid and broken data files used by tests.
 - `tests/helpers/` - Helpers for building small test levels and stepping the simulation.
 - `tests-ui/smoke.spec.js` - Playwright UI check: the page loads without errors and the canvas fills the window.
@@ -121,14 +123,14 @@ Update the file after completing each sub-task, not just after completing an ent
   - [x] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
   - [x] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
 - [ ] 2.0 Define the data formats and build the data validator
-  - [ ] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
-  - [ ] 2.2 Design the level list format (req 55).
-  - [ ] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
-  - [ ] 2.4 Design the object definition format: size, colour, sprite, and `stackable` (reqs 28, 35).
-  - [ ] 2.5 Design the cut scene format: background image, actors (sprite, animation, list of timed moves), and narration lines with start and end times (req 62).
-  - [ ] 2.6 Design the sprite sheet format: image file, frame width and height, named animations with frame lists and speed (req 77).
-  - [ ] 2.7 Design `tuning.json`, `bindings.json` (keyboard and gamepad, including punch and skip), and `display.json` (visible world height, stick dead zone) (reqs 16–17, 73).
-  - [ ] 2.8 Write a JSON Schema for each format in `src/data/schemas/`.
+  - [x] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
+  - [x] 2.2 Design the level list format (req 55).
+  - [x] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
+  - [x] 2.4 Design the object definition format: size, colour, sprite, and `stackable` (reqs 28, 35).
+  - [x] 2.5 Design the cut scene format: background image, actors (sprite, animation, list of timed moves), and narration lines with start and end times (req 62).
+  - [x] 2.6 Design the sprite sheet format: image file, frame width and height, named animations with frame lists and speed (req 77).
+  - [x] 2.7 Design `tuning.json`, `bindings.json` (keyboard and gamepad, including punch and skip), and `display.json` (visible world height, stick dead zone) (reqs 16–17, 73).
+  - [x] 2.8 Write a JSON Schema for each format in `src/data/schemas/`.
   - [ ] 2.9 Write `src/data/validate.js`: schema checks plus custom checks for every case in req 83. Rewrite every error into a plain-language message with file name and location (req 84). It must work in both Node and the browser, so it must not touch the file system itself.
   - [ ] 2.10 Write `tools/validate-data.js`, which reads all files under `data/`, runs `validate.js`, prints all errors, and exits non-zero on any error (req 82).
   - [ ] 2.11 Create test fixtures in `tests/data/fixtures/`: one valid set and one broken file for each error type in req 83.

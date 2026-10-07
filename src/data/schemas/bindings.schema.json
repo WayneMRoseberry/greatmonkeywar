@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bindings.schema.json",
+  "title": "Bindings",
+  "description": "Keyboard and gamepad bindings (data/config/bindings.json). See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "keyboard", "gamepad"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "keyboard": {
+      "type": "object",
+      "required": ["left", "right", "up", "down", "jump", "action", "punch", "confirm", "fullscreen", "debug"],
+      "additionalProperties": false,
+      "properties": {
+        "left": { "$ref": "#/$defs/keys" },
+        "right": { "$ref": "#/$defs/keys" },
+        "up": { "$ref": "#/$defs/keys" },
+        "down": { "$ref": "#/$defs/keys" },
+        "jump": { "$ref": "#/$defs/keys" },
+        "action": { "$ref": "#/$defs/keys" },
+        "punch": { "$ref": "#/$defs/keys" },
+        "confirm": { "$ref": "#/$defs/keys" },
+        "fullscreen": { "$ref": "#/$defs/keys" },
+        "debug": { "$ref": "#/$defs/keys" }
+      }
+    },
+    "gamepad": {
+      "type": "object",
+      "required": ["left", "right", "up", "down", "jump", "action", "punch", "confirm"],
+      "additionalProperties": false,
+      "properties": {
+        "left": { "$ref": "#/$defs/buttons" },
+        "right": { "$ref": "#/$defs/buttons" },
+        "up": { "$ref": "#/$defs/buttons" },
+        "down": { "$ref": "#/$defs/buttons" },
+        "jump": { "$ref": "#/$defs/buttons" },
+        "action": { "$ref": "#/$defs/buttons" },
+        "punch": { "$ref": "#/$defs/buttons" },
+        "confirm": { "$ref": "#/$defs/buttons" }
+      }
+    }
+  },
+  "$defs": {
+    "keys": {
+      "description": "Physical key codes (KeyboardEvent.code), e.g. KeyA, ArrowLeft, Space, Enter, F3.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" }
+    },
+    "buttons": {
+      "description": "Standard (Xbox-style) gamepad buttons and left-stick directions.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "back", "start", "ls", "rs",
+                 "dpadUp", "dpadDown", "dpadLeft", "dpadRight",
+                 "stickLeft", "stickRight", "stickUp", "stickDown"]
+      }
+    }
+  }
+}

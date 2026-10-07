@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "character.schema.json",
+  "title": "Character definition",
+  "description": "The player (data/characters/player.json) or an enemy type. punchDamage is allowed on the player only (checked by validate.js). See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "kind", "name", "size", "health", "speed", "color"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "kind": { "enum": ["player", "enemy"] },
+    "name": { "type": "string", "minLength": 1 },
+    "size": { "$ref": "#/$defs/size" },
+    "health": { "type": "integer", "minimum": 1 },
+    "speed": { "type": "number", "exclusiveMinimum": 0 },
+    "punchDamage": { "type": "integer", "minimum": 1, "default": 1 },
+    "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+    "sprite": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" }
+  },
+  "$defs": {
+    "size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tuning.schema.json",
+  "title": "Tuning",
+  "description": "Shared gameplay physics values (data/config/tuning.json). In this file y means upward. See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "gravity", "maxFallSpeed", "jumpSpeed", "throwSpeed", "dropSpeed",
+               "knockback", "invincibilitySeconds", "stompBounceSpeed", "punchSeconds"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "gravity": { "type": "number", "exclusiveMinimum": 0 },
+    "maxFallSpeed": { "type": "number", "exclusiveMinimum": 0 },
+    "jumpSpeed": { "type": "number", "exclusiveMinimum": 0 },
+    "throwSpeed": { "$ref": "#/$defs/velocity" },
+    "dropSpeed": { "$ref": "#/$defs/velocity" },
+    "knockback": { "$ref": "#/$defs/velocity" },
+    "invincibilitySeconds": { "type": "number", "minimum": 0 },
+    "stompBounceSpeed": { "type": "number", "exclusiveMinimum": 0 },
+    "punchSeconds": { "type": "number", "exclusiveMinimum": 0 }
+  },
+  "$defs": {
+    "velocity": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

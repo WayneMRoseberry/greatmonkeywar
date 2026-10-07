@@ -15,6 +15,7 @@
     "prepare": "node tools/install-hooks.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@playwright/test": "^1.63.0",
+    "ajv": "^8.20.0"
   }
 }
