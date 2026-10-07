@@ -74,6 +74,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `tests/simulation/*.test.js` - Unit tests for each simulation module.
 - `tests/presentation/input-map.test.js` - Unit tests for input translation.
 - `tests/data/validate.test.js` - Unit tests for every validation error type.
+- `tests/data/load.test.js` - Unit tests for the data loader, with file and image loading replaced by fixture readers.
 - `tests/data/schemas.test.js` - Checks each schema is valid JSON Schema (via Ajv, a test-only dependency), uses only supported keywords, and accepts every example in `docs/data-formats.md`.
 - `tests/data/fixtures/valid/` - A small, complete, valid data set (including tiny PNGs). Validator tests break one thing in it at a time, in memory, rather than keeping a separate broken file per case.
 - `tests/helpers/` - Helpers for building small test levels and stepping the simulation.
@@ -123,7 +124,7 @@ Update the file after completing each sub-task, not just after completing an ent
   - [x] 1.8 Confirm the hook installs automatically on a fresh clone after `npm install`.
   - [x] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
   - [x] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
-- [ ] 2.0 Define the data formats and build the data validator
+- [x] 2.0 Define the data formats and build the data validator
   - [x] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
   - [x] 2.2 Design the level list format (req 55).
   - [x] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
@@ -136,8 +137,8 @@ Update the file after completing each sub-task, not just after completing an ent
   - [x] 2.10 Write `tools/validate-data.js`, which reads all files under `data/`, runs `validate.js`, prints all errors, and exits non-zero on any error (req 82).
   - [x] 2.11 Create test fixtures in `tests/data/fixtures/`: one valid set and one broken file for each error type in req 83.
   - [x] 2.12 Write `tests/data/validate.test.js` covering every error type and checking the message wording (req 87).
-  - [ ] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
-  - [ ] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
+  - [x] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
+  - [x] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
 - [ ] 3.0 Build the simulation core: time step, collision, player movement, and health
   - [ ] 3.1 Create `tests/helpers/` with a helper to build a tiny level from a few strings and a helper to step the simulation N times with given inputs.
   - [ ] 3.2 Write `src/simulation/state.js`: build the initial game state from loaded data, and keep a snapshot of the level's starting state for restarts (req 27).
