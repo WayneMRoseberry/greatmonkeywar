@@ -1,0 +1,20 @@
+{
+  "name": "greatmonkeywar",
+  "version": "0.1.0",
+  "description": "Great Monkey War - a 2D side-scrolling game for Steam.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-reporter=spec \"tests/**/*.test.js\" && npm run validate",
+    "validate": "node tools/validate-data.js",
+    "web": "node tools/serve.js",
+    "test:ui": "playwright test",
+    "prepare": "node tools/install-hooks.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
