@@ -12,6 +12,7 @@ Status: Draft. These are the foundational requirements. Gameplay has not been de
 - **REQ-2.1** The game is written in HTML and JavaScript.
 - **REQ-2.2** The game runs inside the minimal host needed to ship it as a Steam desktop application. The host should add as little size, complexity, and dependency weight as possible while still meeting Steam's requirements.
 - **REQ-2.3** The host is Electron. Chosen for consistent rendering across platforms (bundled Chromium), maintained Steam integration (steamworks.js), Steam Deck/Linux support, and a large track record of shipped Steam games. Electron is free to use commercially (MIT license).
+- **REQ-2.4** Steam integration (for example the overlay and achievements) uses steamworks.js.
 
 ## 3. Separation of code and data
 
@@ -20,6 +21,7 @@ Status: Draft. These are the foundational requirements. Gameplay has not been de
 - **REQ-3.3** Artists and level designers can create and change game content without writing or reading code.
 - **REQ-3.4** Data file formats are documented so that contributors know how to author content.
 - **REQ-3.5** Invalid or broken data files are detected and reported with messages a non-programmer can understand and act on.
+- **REQ-3.6** Levels and other content definitions are stored as JSON files.
 
 ## 4. Testing and quality gates
 
@@ -33,8 +35,12 @@ Status: Draft. These are the foundational requirements. Gameplay has not been de
 
 - **REQ-5.1** The default branch is `main`.
 
+## 6. Engine prototype
+
+- **REQ-6.1** Before gameplay is designed, an engine prototype is built after initial project setup. It demonstrates a player/hero that can move left and right, jump, pick things up, drop and throw them, and collect reward items, in a level with obstacles, enemies, and a scrolling background with parallax effects.
+- **REQ-6.2** The prototype exists only to evaluate the core engine and to learn enough to continue with game design and refine the architecture requirements. It is not the final game.
+- **REQ-6.3** Detailed prototype requirements are in [tasks/prd-engine-prototype.md](../tasks/prd-engine-prototype.md).
+
 ## Open questions
 
-- How Electron integrates with Steam features such as the overlay and achievements (expected approach: steamworks.js). Answer: steamworks.js
-- What formats to use for levels and other content (for example JSON, or output from an existing level editor such as Tiled). Answer: JSON
-- Gameplay: everything about how the game plays is still to be defined. Answer: Pending initial project setup. Implement enough code to demonstrate a player/hero that can move left, right, jump, pick things up, drop and throw, collect reward items, has obstacles with scrolling background with parallax effects, and enemies. This implementation is purely for evaluating the behavior of the core engine and understanding enough to go further on game design and iterate on architecture requirements.
+- Gameplay: everything about how the game plays is still to be defined. It will be designed after the engine prototype (REQ-6.1).
