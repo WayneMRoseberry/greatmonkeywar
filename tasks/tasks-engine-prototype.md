@@ -187,10 +187,10 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.1 Architecture guard: simulation code must not import presentation, platform, or Electron code, or use browser globals (`window`, `document`, `requestAnimationFrame`, `Image`, `fetch`) (req 71).
     - Test: `tests/architecture.test.js`. For the red step, temporarily add a forbidden import to a stub simulation file and confirm the test fails; then remove it.
     - Code: `tools/architecture.js` (the checker, unit-tested with source samples). Simulation files may only import other simulation files, and may not use `Math.random`, `Date.now`, or `performance.now` (determinism).
-  - [ ] 3.2 Test helpers: build a tiny level from a few grid strings (with default definitions and tuning), and step the simulation N times with given inputs.
+  - [x] 3.2 Test helpers: build a tiny level from a few grid strings (with default definitions and tuning), and step the simulation N times with given inputs.
     - Test: `tests/helpers/helpers.test.js`: a level built from `["P.G", "###"]` has the right size, start, and goal; the runner calls `step` exactly N times with the given input.
     - Code: `tests/helpers/level-builder.js`, `tests/helpers/run.js`
-  - [ ] 3.3 Initial state from loaded data: level size, tiles, player at the start cell (bottom-centre placement), health from the player definition, and a separate snapshot of the level's starting state (req 27).
+  - [x] 3.3 Initial state from loaded data: level size, tiles, player at the start cell (bottom-centre placement), health from the player definition, and a separate snapshot of the level's starting state (req 27).
     - Test: `tests/simulation/state.test.js`
     - Code: `src/simulation/state.js`
   - [ ] 3.4 `step(state, input, dt)` with the fixed time step: returns the next state, doesn't change the state passed in, advances time, and gives identical results for identical inputs (reqs 5, 72).
