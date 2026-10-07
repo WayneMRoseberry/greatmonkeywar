@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "kind": "enemy",
+  "name": "Beetle",
+  "size": { "width": 0.9, "height": 0.7 },
+  "health": 1,
+  "speed": 2,
+  "color": "#5a2d82"
+}

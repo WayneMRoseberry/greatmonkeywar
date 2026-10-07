@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "keyboard": {
+    "left": ["ArrowLeft", "KeyA"],
+    "right": ["ArrowRight", "KeyD"],
+    "up": ["ArrowUp", "KeyW"],
+    "down": ["ArrowDown", "KeyS"],
+    "jump": ["Space", "ArrowUp", "KeyW"],
+    "action": ["KeyE", "KeyX"],
+    "punch": ["KeyQ", "KeyC"],
+    "confirm": ["Enter", "Space"],
+    "fullscreen": ["F11"],
+    "debug": ["F3"]
+  },
+  "gamepad": {
+    "left": ["dpadLeft", "stickLeft"],
+    "right": ["dpadRight", "stickRight"],
+    "up": ["dpadUp", "stickUp"],
+    "down": ["dpadDown", "stickDown"],
+    "jump": ["a"],
+    "action": ["x"],
+    "punch": ["b"],
+    "confirm": ["a"]
+  }
+}

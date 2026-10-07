@@ -33,6 +33,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 **Data loading and validation**
 - `src/data/load.js` - Loads all JSON data (browser: `fetch`; Node: file system) and runs validation.
 - `src/data/validate.js` - Shared validation rules and plain-language error messages, used by the tool and the game.
+- `src/data/schema-check.js` - Small JSON Schema checker (supported keywords only) so validation runs in the browser without npm packages.
 - `src/data/schemas/` - JSON Schemas for each data file type.
 - `docs/data-formats.md` - Developer specification of every data format; the source for the schemas and validator.
 
@@ -74,7 +75,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `tests/presentation/input-map.test.js` - Unit tests for input translation.
 - `tests/data/validate.test.js` - Unit tests for every validation error type.
 - `tests/data/schemas.test.js` - Checks each schema is valid JSON Schema (via Ajv, a test-only dependency), uses only supported keywords, and accepts every example in `docs/data-formats.md`.
-- `tests/data/fixtures/` - Small valid and broken data files used by tests.
+- `tests/data/fixtures/valid/` - A small, complete, valid data set (including tiny PNGs). Validator tests break one thing in it at a time, in memory, rather than keeping a separate broken file per case.
 - `tests/helpers/` - Helpers for building small test levels and stepping the simulation.
 - `tests-ui/smoke.spec.js` - Playwright UI check: the page loads without errors and the canvas fills the window.
 - `tests-ui/movement.spec.js` - Playwright UI check: left, right, jump.
@@ -131,10 +132,10 @@ Update the file after completing each sub-task, not just after completing an ent
   - [x] 2.6 Design the sprite sheet format: image file, frame width and height, named animations with frame lists and speed (req 77).
   - [x] 2.7 Design `tuning.json`, `bindings.json` (keyboard and gamepad, including punch and skip), and `display.json` (visible world height, stick dead zone) (reqs 16–17, 73).
   - [x] 2.8 Write a JSON Schema for each format in `src/data/schemas/`.
-  - [ ] 2.9 Write `src/data/validate.js`: schema checks plus custom checks for every case in req 83. Rewrite every error into a plain-language message with file name and location (req 84). It must work in both Node and the browser, so it must not touch the file system itself.
-  - [ ] 2.10 Write `tools/validate-data.js`, which reads all files under `data/`, runs `validate.js`, prints all errors, and exits non-zero on any error (req 82).
-  - [ ] 2.11 Create test fixtures in `tests/data/fixtures/`: one valid set and one broken file for each error type in req 83.
-  - [ ] 2.12 Write `tests/data/validate.test.js` covering every error type and checking the message wording (req 87).
+  - [x] 2.9 Write `src/data/validate.js`: schema checks plus custom checks for every case in req 83. Rewrite every error into a plain-language message with file name and location (req 84). It must work in both Node and the browser, so it must not touch the file system itself.
+  - [x] 2.10 Write `tools/validate-data.js`, which reads all files under `data/`, runs `validate.js`, prints all errors, and exits non-zero on any error (req 82).
+  - [x] 2.11 Create test fixtures in `tests/data/fixtures/`: one valid set and one broken file for each error type in req 83.
+  - [x] 2.12 Write `tests/data/validate.test.js` covering every error type and checking the message wording (req 87).
   - [ ] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
   - [ ] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
 - [ ] 3.0 Build the simulation core: time step, collision, player movement, and health

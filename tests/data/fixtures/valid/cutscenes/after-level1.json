@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "stage": { "width": 16, "height": 9 },
+  "background": "images/camp.png",
+  "backgroundColor": "#000000",
+  "actors": [
+    {
+      "character": "player",
+      "keyframes": [
+        { "time": 0, "x": -1, "y": 8, "animation": "run" },
+        { "time": 3, "x": 7, "y": 8, "animation": "idle" },
+        { "time": 5, "x": 7, "y": 8 }
+      ]
+    },
+    {
+      "character": "beetle",
+      "facing": "left",
+      "keyframes": [
+        { "time": 1, "x": 17, "y": 8 },
+        { "time": 4, "x": 10, "y": 8 }
+      ]
+    }
+  ],
+  "narration": [
+    { "start": 0.5, "end": 3, "text": "Our hero escapes the jungle edge..." },
+    { "start": 3, "end": 5.5, "text": "...but a beetle follows." }
+  ]
+}
