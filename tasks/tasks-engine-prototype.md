@@ -13,6 +13,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `playwright.config.js` - Playwright settings; starts the browser-mode web server for UI checks.
 - `tools/serve.js` - Small local web server for browser mode.
 - `tools/validate-data.js` - Command-line data validator.
+- `tools/architecture.js` - Checks source files against the architecture rules; used by `tests/architecture.test.js`.
 - `.gitignore` - Ignores `node_modules/`, Playwright reports, and build output.
 
 **Simulation (pure game logic; runs in Node)**
@@ -32,7 +33,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 
 **Data loading and validation**
 - `src/data/load.js` - Loads all JSON data (browser: `fetch`; Node: file system) and runs validation.
-- `src/data/validate.js` - Shared validation rules and plain-language error messages, used by the tool and the game.
+- `src/data/validate.js` - Shared validation rules, used by the tool and the game. Each problem has a `code` and `details`; `describeProblem(code, details)` holds all the plain-language wording in one table.
 - `src/data/schema-check.js` - Small JSON Schema checker (supported keywords only) so validation runs in the browser without npm packages.
 - `src/data/schemas/` - JSON Schemas for each data file type.
 - `docs/data-formats.md` - Developer specification of every data format; the source for the schemas and validator.
@@ -183,9 +184,9 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
   - [x] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
 - [ ] 3.0 Build the simulation core: time step, collision, player movement, and health
-  - [ ] 3.1 Architecture guard: simulation code must not import presentation, platform, or Electron code, or use browser globals (`window`, `document`, `requestAnimationFrame`, `Image`, `fetch`) (req 71).
+  - [x] 3.1 Architecture guard: simulation code must not import presentation, platform, or Electron code, or use browser globals (`window`, `document`, `requestAnimationFrame`, `Image`, `fetch`) (req 71).
     - Test: `tests/architecture.test.js`. For the red step, temporarily add a forbidden import to a stub simulation file and confirm the test fails; then remove it.
-    - Code: none beyond the stub; this test guards all later simulation work.
+    - Code: `tools/architecture.js` (the checker, unit-tested with source samples). Simulation files may only import other simulation files, and may not use `Math.random`, `Date.now`, or `performance.now` (determinism).
   - [ ] 3.2 Test helpers: build a tiny level from a few grid strings (with default definitions and tuning), and step the simulation N times with given inputs.
     - Test: `tests/helpers/helpers.test.js`: a level built from `["P.G", "###"]` has the right size, start, and goal; the runner calls `step` exactly N times with the given input.
     - Code: `tests/helpers/level-builder.js`, `tests/helpers/run.js`
