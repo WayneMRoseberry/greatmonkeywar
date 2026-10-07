@@ -7,7 +7,13 @@
 //   files:  { 'levels/level1.json': '<file text>', ... }   paths relative to data/
 //   images: { 'sprites/player.png': { width, height } | null, ... }   null = size unknown
 // returns { errors, warnings, data }
-//   errors/warnings: [{ file, message }]  (see formatProblem)
+//   errors/warnings: [{ file, code, details, message }]
+//     code:    what kind of problem it is, e.g. 'row-length' (see MESSAGES below)
+//     details: the facts about it, e.g. { row: 3, length: 11, expected: 12 }.
+//              Schema problems include `path`, the location in the file's data
+//              (array indexes from 0). Other positions (rows, columns, items,
+//              layers, actors, keyframes, lines) count from 1, as people do.
+//     message: describeProblem(code, details), the plain-language explanation
 //   data: the parsed files, grouped by kind (only files that parsed)
 //
 // The formats are specified in docs/data-formats.md.
@@ -67,8 +73,9 @@ function baseName(path) {
 export function validateData({ files, images = {} }) {
   const errors = [];
   const warnings = [];
-  const error = (file, message) => errors.push({ file, message });
-  const warn = (file, message) => warnings.push({ file, message });
+  const problem = (file, code, details = {}) => ({ file, code, details, message: describeProblem(code, details) });
+  const error = (file, code, details) => errors.push(problem(file, code, details));
+  const warn = (file, code, details) => warnings.push(problem(file, code, details));
 
   // Names of every file of each kind, valid or not, so a reference to a broken
   // file isn't also reported as a missing file.
@@ -78,23 +85,26 @@ export function validateData({ files, images = {} }) {
   for (const [path, text] of Object.entries(files)) {
     const kind = classifyFile(path);
     if (!kind) {
-      warn(path, 'this is not a file the game uses, so it was not checked. Check its name and folder (see docs/data-formats.md).');
+      warn(path, 'unrecognized-file');
       continue;
     }
     if (names[kind]) names[kind].add(baseName(path));
 
     const json = parseJson(text);
     if (json.error) {
-      error(path, json.error);
+      error(path, 'invalid-json', json.error);
       continue;
     }
     const problems = checkSchema(SCHEMAS[kind], json.value);
-    for (const problem of problems) error(path, describeSchemaProblem(problem));
+    for (const p of problems) {
+      const [code, details] = fromSchemaProblem(p);
+      error(path, code, details);
+    }
     parsed.push({ path, kind, name: baseName(path), value: json.value, valid: problems.length === 0 });
   }
 
   for (const required of REQUIRED_FILES) {
-    if (!(required in files)) error(required, 'this file is missing. The game cannot start without it.');
+    if (!(required in files)) error(required, 'missing-file');
   }
 
   const data = groupByKind(parsed);
@@ -130,22 +140,61 @@ function parseJson(text) {
     return { value: JSON.parse(clean) };
   } catch (err) {
     const position = /position (\d+)/.exec(err.message);
-    let where = '';
+    let line = null;
+    let column = null;
     if (position) {
       const before = clean.slice(0, Number(position[1]));
-      const line = before.split('\n').length;
-      const column = before.length - before.lastIndexOf('\n');
-      where = ` near line ${line}, column ${column}`;
+      line = before.split('\n').length;
+      column = before.length - before.lastIndexOf('\n');
     }
     const detail = err.message.replace(/ in JSON at position \d+.*$/, '');
-    return {
-      error: `this file is not valid JSON${where}. Look for a missing or extra comma, quote mark, or bracket there. (Details: ${detail}.)`,
-    };
+    return { error: { line, column, detail } };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Schema problems in plain language
+// Schema problems → codes
+
+// Names for the patterns used in the schemas.
+const FORMAT_NAMES = new Map([
+  [levelSchema.$defs.color.pattern, 'color'],
+  [levelSchema.$defs.name.pattern, 'name'],
+  [levelSchema.$defs.imagePath.pattern, 'image-path'],
+  [spriteSchema.properties.image.pattern, 'png-path'],
+  [bindingsSchema.$defs.keys.items.pattern, 'key-code'],
+  [levelSchema.properties.legend.propertyNames.pattern, 'legend-key'],
+]);
+
+const formatName = (pattern) => FORMAT_NAMES.get(pattern) ?? 'other';
+
+function fromSchemaProblem(p) {
+  const { path, value } = p;
+  switch (p.keyword) {
+    case 'required': return ['missing-field', { path, field: p.field }];
+    case 'additionalProperties':
+      return ['unknown-field', { path: path.slice(0, -1), field: path[path.length - 1], allowed: p.allowed.filter((f) => f !== '$schema') }];
+    case 'propertyNames': return ['bad-key', { path, key: p.key, format: formatName(p.pattern) }];
+    case 'type': return ['wrong-type', { path, expected: p.expected, value }];
+    case 'const':
+      return path.length === 1 && path[0] === 'formatVersion'
+        ? ['wrong-format-version', { expected: p.expected, value }]
+        : ['wrong-value', { path, expected: p.expected, value }];
+    case 'enum': return ['not-allowed', { path, allowed: p.allowed, value }];
+    case 'minimum': return ['too-small', { path, limit: p.limit, inclusive: true, value }];
+    case 'exclusiveMinimum': return ['too-small', { path, limit: p.limit, inclusive: false, value }];
+    case 'maximum': return ['too-large', { path, limit: p.limit, inclusive: true, value }];
+    case 'exclusiveMaximum': return ['too-large', { path, limit: p.limit, inclusive: false, value }];
+    case 'minLength': return ['too-short', { path, limit: p.limit }];
+    case 'maxLength': return ['too-long', { path, limit: p.limit }];
+    case 'pattern': return ['bad-format', { path, format: formatName(p.pattern), value }];
+    case 'minItems': return ['too-few-items', { path, limit: p.limit }];
+    case 'uniqueItems': return ['duplicate-item', { path, value: p.duplicate }];
+    default: return ['invalid-value', { path, keyword: p.keyword }];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Messages: the plain-language wording for every problem code (req 84).
 
 const TYPE_WORDS = {
   integer: 'a whole number',
@@ -156,15 +205,15 @@ const TYPE_WORDS = {
   array: 'a list in [ ]',
 };
 
-// Plain-language descriptions of the patterns used in the schemas.
-const PATTERN_WORDS = new Map([
-  [levelSchema.$defs.color.pattern, 'a colour written like "#7a5230"'],
-  [levelSchema.$defs.name.pattern, 'a name made only of letters, numbers, "-" and "_" (no spaces, folder, or ".json")'],
-  [levelSchema.$defs.imagePath.pattern, 'an image path inside the data folder, like "images/sky.png"'],
-  [spriteSchema.properties.image.pattern, 'a PNG image path inside the data folder, like "sprites/player.png"'],
-  [bindingsSchema.$defs.keys.items.pattern, 'a key code like "KeyA", "ArrowLeft", or "Space"'],
-  [levelSchema.properties.legend.propertyNames.pattern, 'a single character other than "." or a space'],
-]);
+const FORMAT_WORDS = {
+  color: 'a colour written like "#7a5230"',
+  name: 'a name made only of letters, numbers, "-" and "_" (no spaces, folder, or ".json")',
+  'image-path': 'an image path inside the data folder, like "images/sky.png"',
+  'png-path': 'a PNG image path inside the data folder, like "sprites/player.png"',
+  'key-code': 'a key code like "KeyA", "ArrowLeft", or "Space"',
+  'legend-key': 'a single character other than "." or a space',
+  other: 'in the expected form',
+};
 
 function show(value) {
   return typeof value === 'string' ? `"${value}"` : String(value);
@@ -179,6 +228,10 @@ function describeValue(value) {
   }
 }
 
+function plural(n, word, many = `${word}s`) {
+  return `${n} ${n === 1 ? word : many}`;
+}
+
 function segmentLabel(segment, parentSegment) {
   if (typeof segment === 'number') return parentSegment === 'grid' ? `row ${segment + 1}` : `item ${segment + 1}`;
   return segment;
@@ -188,66 +241,142 @@ function pathText(path) {
   return path.map((seg, i) => segmentLabel(seg, path[i - 1])).join(' → ');
 }
 
-/** Splits a path into "in <parent>, " and the label of its last part. */
+/** "in <parent>, " for a location's parent, or '' at the top of the file. */
+function inPrefix(parentPath) {
+  return parentPath.length ? `in ${pathText(parentPath)}, ` : '';
+}
+
+/** For a schema problem at `path`: the "in ..., " prefix and the quoted name of the last part. */
 function subject(path) {
   if (path.length === 0) return { prefix: '', label: 'the file' };
   const parent = path.slice(0, -1);
-  const label = `"${segmentLabel(path[path.length - 1], parent[parent.length - 1])}"`;
-  return { prefix: parent.length ? `in ${pathText(parent)}, ` : '', label };
+  return { prefix: inPrefix(parent), label: `"${segmentLabel(path[path.length - 1], parent[parent.length - 1])}"` };
 }
 
-function plural(n, word) {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
+const at = ({ row, column }) => `row ${row}, column ${column}`;
+
+function countMessage(what, how, { count, positions }) {
+  return count === 0
+    ? `the level has no ${what}. It needs exactly one: a grid character whose legend entry is ${how}.`
+    : `the level has ${count} ${what}s (at ${positions.map(at).join('; ')}). It needs exactly one.`;
 }
 
-export function describeSchemaProblem(problem) {
-  const { path, keyword, value } = problem;
-  const { prefix, label } = subject(path);
-  const inside = path.length ? ` from ${pathText(path)}` : '';
+const MESSAGES = {
+  // File-level
+  'invalid-json': ({ line, column, detail }) =>
+    `this file is not valid JSON${line ? ` near line ${line}, column ${column}` : ''}. Look for a missing or extra comma, quote mark, or bracket there. (Details: ${detail}.)`,
+  'missing-file': () => 'this file is missing. The game cannot start without it.',
+  'unrecognized-file': () => 'this is not a file the game uses, so it was not checked. Check its name and folder (see docs/data-formats.md).',
 
-  switch (keyword) {
-    case 'required':
-      return `"${problem.field}" is missing${inside}.`;
-    case 'additionalProperties': {
-      const allowed = problem.allowed.filter((f) => f !== '$schema').map((f) => `"${f}"`).join(', ');
-      return `${prefix}${label} is not a field that belongs here. Check its spelling. The fields allowed here are: ${allowed}.`;
-    }
-    case 'propertyNames': {
-      const rule = PATTERN_WORDS.get(problem.pattern) ?? 'in the expected form';
-      return `${path.length ? `in ${pathText(path)}, ` : ''}"${problem.key}" can't be used as a key: it must be ${rule}.`;
-    }
-    case 'type':
-      return `${prefix}${label} should be ${TYPE_WORDS[problem.expected]}, but it is ${describeValue(value)}.`;
-    case 'const':
-      if (path.length === 1 && path[0] === 'formatVersion') {
-        return `"formatVersion" must be ${problem.expected}, but it is ${show(value)}. This file may have been made for a different version of the game.`;
-      }
-      return `${prefix}${label} must be ${show(problem.expected)}, but it is ${show(value)}.`;
-    case 'enum':
-      return `${prefix}${label} must be one of ${problem.allowed.map(show).join(', ')}, but it is ${show(value)}.`;
-    case 'minimum':
-      return `${prefix}${label} must be at least ${problem.limit}, but it is ${value}.`;
-    case 'maximum':
-      return `${prefix}${label} must be at most ${problem.limit}, but it is ${value}.`;
-    case 'exclusiveMinimum':
-      return `${prefix}${label} must be more than ${problem.limit}, but it is ${value}.`;
-    case 'exclusiveMaximum':
-      return `${prefix}${label} must be less than ${problem.limit}, but it is ${value}.`;
-    case 'minLength':
-      return problem.limit === 1
-        ? `${prefix}${label} must not be empty.`
-        : `${prefix}${label} must be at least ${plural(problem.limit, 'character')} long.`;
-    case 'maxLength':
-      return `${prefix}${label} must be at most ${plural(problem.limit, 'character')} long.`;
-    case 'pattern':
-      return `${prefix}${label} is ${show(value)}, which is not ${PATTERN_WORDS.get(problem.pattern) ?? 'in the expected form'}.`;
-    case 'minItems':
-      return `${prefix}${label} must have at least ${plural(problem.limit, 'entry').replace('entrys', 'entries')}.`;
-    case 'uniqueItems':
-      return `${prefix}${label} lists ${show(problem.duplicate)} more than once.`;
-    default:
-      return `${prefix}${label} is not valid (${keyword}).`;
-  }
+  // Structure (from the schemas)
+  'missing-field': ({ path, field }) => `"${field}" is missing${path.length ? ` from ${pathText(path)}` : ''}.`,
+  'unknown-field': ({ path, field, allowed }) =>
+    `${inPrefix(path)}"${field}" is not a field that belongs here. Check its spelling. The fields allowed here are: ${allowed.map((f) => `"${f}"`).join(', ')}.`,
+  'bad-key': ({ path, key, format }) => `${inPrefix(path)}"${key}" can't be used as a key: it must be ${FORMAT_WORDS[format]}.`,
+  'wrong-type': ({ path, expected, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} should be ${TYPE_WORDS[expected]}, but it is ${describeValue(value)}.`;
+  },
+  'wrong-value': ({ path, expected, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} must be ${show(expected)}, but it is ${show(value)}.`;
+  },
+  'wrong-format-version': ({ expected, value }) =>
+    `"formatVersion" must be ${expected}, but it is ${show(value)}. This file may have been made for a different version of the game.`,
+  'not-allowed': ({ path, allowed, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} must be one of ${allowed.map(show).join(', ')}, but it is ${show(value)}.`;
+  },
+  'too-small': ({ path, limit, inclusive, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} must be ${inclusive ? 'at least' : 'more than'} ${limit}, but it is ${value}.`;
+  },
+  'too-large': ({ path, limit, inclusive, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} must be ${inclusive ? 'at most' : 'less than'} ${limit}, but it is ${value}.`;
+  },
+  'too-short': ({ path, limit }) => {
+    const { prefix, label } = subject(path);
+    return limit === 1
+      ? `${prefix}${label} must not be empty.`
+      : `${prefix}${label} must be at least ${plural(limit, 'character')} long.`;
+  },
+  'too-long': ({ path, limit }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} must be at most ${plural(limit, 'character')} long.`;
+  },
+  'bad-format': ({ path, format, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} is ${show(value)}, which is not ${FORMAT_WORDS[format]}.`;
+  },
+  'too-few-items': ({ path, limit }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} must have at least ${plural(limit, 'entry', 'entries')}.`;
+  },
+  'duplicate-item': ({ path, value }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} lists ${show(value)} more than once.`;
+  },
+  'invalid-value': ({ path, keyword }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} is not valid (${keyword}).`;
+  },
+
+  // Levels
+  'row-length': ({ row, length, expected }) =>
+    `row ${row} has ${length} tiles but row 1 has ${expected}. All rows must be the same length.`,
+  'unknown-character': ({ character, row, column, count }) => {
+    const more = count > 1 ? `, and ${plural(count - 1, 'more time')}` : '';
+    return `the character "${character}" (at row ${row}, column ${column}${more}) is not in the legend. Add it to "legend", or replace it with "." for empty space.`;
+  },
+  'player-start-count': (d) => countMessage('player start', '"playerStart": true', d),
+  'goal-count': (d) => countMessage('goal', '"goal": true', d),
+  'legend-no-kind': ({ key }) => `legend "${key}" doesn't say what it is. Give it exactly one of: ${LEGEND_KINDS.join(', ')}.`,
+  'legend-many-kinds': ({ key, kinds }) => `legend "${key}" has more than one of ${kinds.join(' and ')}. A legend entry must be exactly one thing.`,
+  'legend-stray-color': ({ key }) =>
+    `legend "${key}" has a "color" directly inside it, which only goals use. For a tile or reward, put "color" inside "tile" or "reward".`,
+  'goal-without-color': ({ key }) => `legend "${key}" is a goal but has no "color". Add one, like "color": "#ff3030".`,
+  'missing-enemy': ({ key, name }) => `legend "${key}" is the enemy "${name}", but there is no file data/characters/${name}.json.`,
+  'enemy-is-player': ({ key, name }) => `legend "${key}" uses "${name}" as an enemy, but that character is the player.`,
+  'missing-object': ({ key, name }) => `legend "${key}" is the object "${name}", but there is no file data/objects/${name}.json.`,
+  'unused-legend': ({ key }) => `legend "${key}" is not used anywhere in the grid.`,
+  'missing-cutscene': ({ name }) => `"cutscene" is "${name}", but there is no file data/cutscenes/${name}.json.`,
+  'missing-layer-image': ({ layer, image }) => `background layer ${layer} uses the image "${image}", but there is no file data/${image}.`,
+
+  // Level list
+  'level-list-self': ({ item }) => `levels, item ${item}: "levels" is the level list itself, not a level.`,
+  'missing-level': ({ item, name }) => `levels, item ${item} is "${name}", but there is no file data/levels/${name}.json.`,
+
+  // Characters and objects
+  'missing-sprite': ({ name }) => `"sprite" is "${name}", but there is no file data/sprites/${name}.json.`,
+  'player-kind': ({ kind }) => `"kind" must be "player" in player.json, but it is "${kind}".`,
+  'enemy-kind': ({ kind }) => `"kind" is "${kind}", but only data/characters/player.json can be the player. Use "enemy".`,
+  'enemy-punch-damage': () => '"punchDamage" is only for the player. Remove it from this enemy.',
+
+  // Cut scenes
+  'missing-background-image': ({ image }) => `"background" is "${image}", but there is no file data/${image}.`,
+  'missing-character': ({ actor, name }) => `actors, item ${actor}: "character" is "${name}", but there is no file data/characters/${name}.json.`,
+  'keyframe-order': ({ actor, keyframe, time, previous }) =>
+    `actors, item ${actor}, keyframe ${keyframe}: "time" is ${time}, but it must be later than the keyframe before it (${previous}). Keyframes must be in time order.`,
+  'unknown-animation': ({ actor, animation, sprite }) =>
+    `actors, item ${actor}: the animation "${animation}" is not in the sprite sheet "${sprite}", so "idle" will be shown instead.`,
+  'narration-end': ({ line, start, end }) => `narration, item ${line}: "end" (${end}) must be later than "start" (${start}).`,
+  'narration-order': ({ line, start, previous }) =>
+    `narration, item ${line}: "start" is ${start}, which is earlier than the line before it (${previous}). Narration lines must be listed in time order.`,
+
+  // Sprite sheets
+  'missing-sprite-image': ({ image }) => `"image" is "${image}", but there is no file data/${image}.`,
+  'frame-too-big': ({ frameWidth, frameHeight, imageWidth, imageHeight }) =>
+    `each frame is ${frameWidth} × ${frameHeight} pixels, which is bigger than the whole image (${imageWidth} × ${imageHeight}).`,
+  'frame-out-of-range': ({ animation, frame, frames }) =>
+    `the animation "${animation}" uses frame ${frame}, but the image only has ${plural(frames, 'frame')} (numbered 0 to ${frames - 1}).`,
+};
+
+/** The plain-language message for a problem code and its details. */
+export function describeProblem(code, details = {}) {
+  const describe = MESSAGES[code];
+  if (!describe) throw new Error(`No message for problem code "${code}"`);
+  return describe(details);
 }
 
 // ---------------------------------------------------------------------------
@@ -263,15 +392,13 @@ const CUSTOM_CHECKS = {
   sprite: checkSprite,
 };
 
-function checkLevel({ path, value: level }, { names, images, data, error, warn }) {
+function checkLevel({ path, value: level }, { names, images, error, warn }) {
   const { grid, legend } = level;
 
   // Row lengths
   const width = grid[0].length;
   grid.forEach((row, i) => {
-    if (row.length !== width) {
-      error(path, `row ${i + 1} has ${row.length} tiles but row 1 has ${width}. All rows must be the same length.`);
-    }
+    if (row.length !== width) error(path, 'row-length', { row: i + 1, length: row.length, expected: width });
   });
 
   // Grid characters: unknown characters, and where player starts and goals are
@@ -284,96 +411,59 @@ function checkLevel({ path, value: level }, { names, images, data, error, warn }
       if (ch === '.') return;
       const entry = legend[ch];
       if (!entry) {
-        const seen = unknown.get(ch) ?? { row: r + 1, column: c + 1, count: 0 };
+        const seen = unknown.get(ch) ?? { character: ch, row: r + 1, column: c + 1, count: 0 };
         seen.count++;
         unknown.set(ch, seen);
         return;
       }
       used.add(ch);
-      if (entry.playerStart) starts.push(`row ${r + 1}, column ${c + 1}`);
-      if (entry.goal) goals.push(`row ${r + 1}, column ${c + 1}`);
+      if (entry.playerStart) starts.push({ row: r + 1, column: c + 1 });
+      if (entry.goal) goals.push({ row: r + 1, column: c + 1 });
     });
   });
-  for (const [ch, { row, column, count }] of unknown) {
-    const times = count > 1 ? `, and ${count - 1} more time${count === 2 ? '' : 's'}` : '';
-    error(path, `the character "${ch}" (at row ${row}, column ${column}${times}) is not in the legend. Add it to "legend", or replace it with "." for empty space.`);
-  }
-  checkExactlyOne(path, error, starts, 'player start', '"playerStart": true');
-  checkExactlyOne(path, error, goals, 'goal', '"goal": true');
+  for (const details of unknown.values()) error(path, 'unknown-character', details);
+  if (starts.length !== 1) error(path, 'player-start-count', { count: starts.length, positions: starts });
+  if (goals.length !== 1) error(path, 'goal-count', { count: goals.length, positions: goals });
 
   // Legend entries
   for (const [key, entry] of Object.entries(legend)) {
     const kinds = LEGEND_KINDS.filter((k) => k in entry);
-    if (kinds.length === 0) {
-      error(path, `legend "${key}" doesn't say what it is. Give it exactly one of: ${LEGEND_KINDS.join(', ')}.`);
-    } else if (kinds.length > 1) {
-      error(path, `legend "${key}" has more than one of ${kinds.join(' and ')}. A legend entry must be exactly one thing.`);
-    }
-    if ('color' in entry && !('goal' in entry)) {
-      error(path, `legend "${key}" has a "color" directly inside it, which only goals use. For a tile or reward, put "color" inside "tile" or "reward".`);
-    }
-    if ('goal' in entry && !('color' in entry)) {
-      error(path, `legend "${key}" is a goal but has no "color". Add one, like "color": "#ff3030".`);
-    }
+    if (kinds.length === 0) error(path, 'legend-no-kind', { key });
+    else if (kinds.length > 1) error(path, 'legend-many-kinds', { key, kinds });
+    if ('color' in entry && !('goal' in entry)) error(path, 'legend-stray-color', { key });
+    if ('goal' in entry && !('color' in entry)) error(path, 'goal-without-color', { key });
     if ('enemy' in entry) {
-      if (!names.character.has(entry.enemy)) {
-        error(path, `legend "${key}" is the enemy "${entry.enemy}", but there is no file data/characters/${entry.enemy}.json.`);
-      } else if (data.characters[entry.enemy]?.kind === 'player') {
-        error(path, `legend "${key}" uses "${entry.enemy}" as an enemy, but that character is the player.`);
-      }
+      if (!names.character.has(entry.enemy)) error(path, 'missing-enemy', { key, name: entry.enemy });
+      // A wrong "kind" in another character file is reported on that file, not on every level using it.
+      else if (entry.enemy === 'player') error(path, 'enemy-is-player', { key, name: entry.enemy });
     }
-    if ('object' in entry && !names.object.has(entry.object)) {
-      error(path, `legend "${key}" is the object "${entry.object}", but there is no file data/objects/${entry.object}.json.`);
-    }
-    if (!used.has(key)) {
-      warn(path, `legend "${key}" is not used anywhere in the grid.`);
-    }
+    if ('object' in entry && !names.object.has(entry.object)) error(path, 'missing-object', { key, name: entry.object });
+    if (!used.has(key)) warn(path, 'unused-legend', { key });
   }
 
   if (level.cutscene !== undefined && !names.cutscene.has(level.cutscene)) {
-    error(path, `"cutscene" is "${level.cutscene}", but there is no file data/cutscenes/${level.cutscene}.json.`);
+    error(path, 'missing-cutscene', { name: level.cutscene });
   }
   level.background.layers.forEach((layer, i) => {
-    if (!(layer.image in images)) {
-      error(path, `background layer ${i + 1} uses the image "${layer.image}", but there is no file data/${layer.image}.`);
-    }
+    if (!(layer.image in images)) error(path, 'missing-layer-image', { layer: i + 1, image: layer.image });
   });
-}
-
-function checkExactlyOne(path, error, found, what, how) {
-  if (found.length === 0) {
-    error(path, `the level has no ${what}. It needs exactly one: a grid character whose legend entry is ${how}.`);
-  } else if (found.length > 1) {
-    error(path, `the level has ${found.length} ${what}s (at ${found.join('; ')}). It needs exactly one.`);
-  }
 }
 
 function checkLevelList({ path, value }, { names, error }) {
   value.levels.forEach((name, i) => {
-    if (name === 'levels') {
-      error(path, `levels, item ${i + 1}: "levels" is the level list itself, not a level.`);
-    } else if (!names.level.has(name)) {
-      error(path, `levels, item ${i + 1} is "${name}", but there is no file data/levels/${name}.json.`);
-    }
+    if (name === 'levels') error(path, 'level-list-self', { item: i + 1 });
+    else if (!names.level.has(name)) error(path, 'missing-level', { item: i + 1, name });
   });
 }
 
 function checkSpriteReference(path, owner, names, error) {
-  if (owner.sprite !== undefined && !names.sprite.has(owner.sprite)) {
-    error(path, `"sprite" is "${owner.sprite}", but there is no file data/sprites/${owner.sprite}.json.`);
-  }
+  if (owner.sprite !== undefined && !names.sprite.has(owner.sprite)) error(path, 'missing-sprite', { name: owner.sprite });
 }
 
 function checkCharacter({ path, name, value }, { names, error }) {
-  if (name === 'player' && value.kind !== 'player') {
-    error(path, `"kind" must be "player" in player.json, but it is "${value.kind}".`);
-  }
-  if (name !== 'player' && value.kind !== 'enemy') {
-    error(path, `"kind" is "player", but only data/characters/player.json can be the player. Use "enemy".`);
-  }
-  if (value.kind === 'enemy' && 'punchDamage' in value) {
-    error(path, `"punchDamage" is only for the player. Remove it from this enemy.`);
-  }
+  if (name === 'player' && value.kind !== 'player') error(path, 'player-kind', { kind: value.kind });
+  if (name !== 'player' && value.kind !== 'enemy') error(path, 'enemy-kind', { kind: value.kind });
+  if (value.kind === 'enemy' && 'punchDamage' in value) error(path, 'enemy-punch-damage');
   checkSpriteReference(path, value, names, error);
 }
 
@@ -382,60 +472,51 @@ function checkObject({ path, value }, { names, error }) {
 }
 
 function checkCutscene({ path, value }, { names, images, data, error, warn }) {
-  if (!(value.background in images)) {
-    error(path, `"background" is "${value.background}", but there is no file data/${value.background}.`);
-  }
+  if (!(value.background in images)) error(path, 'missing-background-image', { image: value.background });
   value.actors.forEach((actor, a) => {
-    const where = `actors, item ${a + 1}`;
-    if (!names.character.has(actor.character)) {
-      error(path, `${where}: "character" is "${actor.character}", but there is no file data/characters/${actor.character}.json.`);
-    }
+    if (!names.character.has(actor.character)) error(path, 'missing-character', { actor: a + 1, name: actor.character });
     actor.keyframes.forEach((frame, k) => {
       const previous = actor.keyframes[k - 1];
       if (previous && frame.time <= previous.time) {
-        error(path, `${where}, keyframe ${k + 1}: "time" is ${frame.time}, but it must be later than the keyframe before it (${previous.time}). Keyframes must be in time order.`);
+        error(path, 'keyframe-order', { actor: a + 1, keyframe: k + 1, time: frame.time, previous: previous.time });
       }
     });
-    const sprite = data.sprites[data.characters[actor.character]?.sprite];
+    const spriteName = data.characters[actor.character]?.sprite;
+    const sprite = data.sprites[spriteName];
     if (sprite) {
       for (const frame of actor.keyframes) {
         if (frame.animation && !(frame.animation in sprite.animations)) {
-          warn(path, `${where}: the animation "${frame.animation}" is not in the sprite sheet "${data.characters[actor.character].sprite}", so "idle" will be shown instead.`);
+          warn(path, 'unknown-animation', { actor: a + 1, animation: frame.animation, sprite: spriteName });
         }
       }
     }
   });
   value.narration.forEach((line, n) => {
-    const where = `narration, item ${n + 1}`;
-    if (line.end <= line.start) {
-      error(path, `${where}: "end" (${line.end}) must be later than "start" (${line.start}).`);
-    }
+    if (line.end <= line.start) error(path, 'narration-end', { line: n + 1, start: line.start, end: line.end });
     const previous = value.narration[n - 1];
     if (previous && line.start < previous.start) {
-      error(path, `${where}: "start" is ${line.start}, which is earlier than the line before it (${previous.start}). Narration lines must be listed in time order.`);
+      error(path, 'narration-order', { line: n + 1, start: line.start, previous: previous.start });
     }
   });
 }
 
 function checkSprite({ path, value }, { images, error }) {
   if (!(value.image in images)) {
-    error(path, `"image" is "${value.image}", but there is no file data/${value.image}.`);
+    error(path, 'missing-sprite-image', { image: value.image });
     return;
   }
   const size = images[value.image];
   if (!size) return; // Size unknown; frames can't be checked.
-  const columns = Math.floor(size.width / value.frameWidth);
-  const rows = Math.floor(size.height / value.frameHeight);
-  const total = columns * rows;
+  const total = Math.floor(size.width / value.frameWidth) * Math.floor(size.height / value.frameHeight);
   if (total === 0) {
-    error(path, `each frame is ${value.frameWidth} × ${value.frameHeight} pixels, which is bigger than the whole image (${size.width} × ${size.height}).`);
+    error(path, 'frame-too-big', {
+      frameWidth: value.frameWidth, frameHeight: value.frameHeight, imageWidth: size.width, imageHeight: size.height,
+    });
     return;
   }
   for (const [name, animation] of Object.entries(value.animations)) {
     for (const frame of animation.frames) {
-      if (frame >= total) {
-        error(path, `the animation "${name}" uses frame ${frame}, but the image only has ${plural(total, 'frame')} (numbered 0 to ${total - 1}).`);
-      }
+      if (frame >= total) error(path, 'frame-out-of-range', { animation: name, frame, frames: total });
     }
   }
 }

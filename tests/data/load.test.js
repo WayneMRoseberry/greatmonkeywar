@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadGameData, referencesOf } from '../../src/data/load.js';
-import { formatProblem } from '../../src/data/validate.js';
 import { pngSize } from '../../tools/validate-data.js';
 
 const VALID_DIR = path.resolve('tests/data/fixtures/valid');
@@ -57,36 +56,38 @@ test('loads and validates the whole valid data set by following references', asy
   assert.equal(requested.length, new Set(requested).size);
 });
 
+/** What was found, without the wording (wording is tested in validate.test.js). */
+const found = (errors) => errors.map(({ file, code, details }) => ({ file, code, details }));
+
 test('a missing referenced file is reported, not thrown', async () => {
   const { options } = fixtureLoader({ 'objects/coconut.json': null });
   const result = await loadGameData(options);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.errors.map(formatProblem), [
-    'levels/level2.json: legend "o" is the object "coconut", but there is no file data/objects/coconut.json.',
+  assert.deepEqual(found(result.errors), [
+    { file: 'levels/level2.json', code: 'missing-object', details: { key: 'o', name: 'coconut' } },
   ]);
 });
 
 test('a missing required file is reported', async () => {
   const { options } = fixtureLoader({ 'config/tuning.json': null });
   const result = await loadGameData(options);
-  assert.deepEqual(result.errors.map(formatProblem), [
-    'config/tuning.json: this file is missing. The game cannot start without it.',
+  assert.deepEqual(found(result.errors), [
+    { file: 'config/tuning.json', code: 'missing-file', details: {} },
   ]);
 });
 
 test('an image that fails to load is reported as missing', async () => {
   const { options } = fixtureLoader({ 'sprites/hero.png': null });
   const result = await loadGameData(options);
-  assert.deepEqual(result.errors.map(formatProblem), [
-    'sprites/hero.json: "image" is "sprites/hero.png", but there is no file data/sprites/hero.png.',
+  assert.deepEqual(found(result.errors), [
+    { file: 'sprites/hero.json', code: 'missing-sprite-image', details: { image: 'sprites/hero.png' } },
   ]);
 });
 
 test('invalid JSON is reported, and loading continues for everything else', async () => {
   const { options } = fixtureLoader({ 'levels/level2.json': '{ broken' });
   const result = await loadGameData(options);
-  assert.equal(result.errors.length, 1);
-  assert.match(formatProblem(result.errors[0]), /^levels\/level2\.json: this file is not valid JSON/);
+  assert.deepEqual(result.errors.map((e) => [e.file, e.code]), [['levels/level2.json', 'invalid-json']]);
   assert.ok(result.data.levels.level1);
 });
 
