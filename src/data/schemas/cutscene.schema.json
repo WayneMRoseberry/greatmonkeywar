@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cutscene.schema.json",
+  "title": "Cut scene",
+  "description": "Background art, animated actors, and timed narration. Increasing times are checked by validate.js. See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "stage", "background", "backgroundColor", "actors", "narration"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "stage": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "background": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(png|jpg|jpeg)$" },
+    "backgroundColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["character", "keyframes"],
+        "additionalProperties": false,
+        "properties": {
+          "character": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+          "facing": { "enum": ["left", "right"], "default": "right" },
+          "keyframes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["time", "x", "y"],
+              "additionalProperties": false,
+              "properties": {
+                "time": { "type": "number", "minimum": 0 },
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "animation": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "narration": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

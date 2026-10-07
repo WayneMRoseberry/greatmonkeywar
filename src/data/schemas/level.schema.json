@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "level.schema.json",
+  "title": "Level",
+  "description": "A level, drawn as a grid of characters with a legend. See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "name", "grid", "legend", "background"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "grid": {
+      "description": "One string per row, top row first. '.' is empty space.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "legend": {
+      "description": "Maps single characters to what they mean.",
+      "type": "object",
+      "propertyNames": { "minLength": 1, "maxLength": 1, "pattern": "^[^.\\s]$" },
+      "additionalProperties": { "$ref": "#/$defs/legendEntry" }
+    },
+    "background": {
+      "type": "object",
+      "required": ["color", "layers"],
+      "additionalProperties": false,
+      "properties": {
+        "color": { "$ref": "#/$defs/color" },
+        "layers": {
+          "description": "Parallax layers; the first is the farthest away.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["image", "scrollFactor"],
+            "additionalProperties": false,
+            "properties": {
+              "image": { "$ref": "#/$defs/imagePath" },
+              "scrollFactor": { "type": "number", "minimum": 0, "maximum": 1 },
+              "repeat": { "type": "boolean", "default": true }
+            }
+          }
+        }
+      }
+    },
+    "cutscene": { "$ref": "#/$defs/name" }
+  },
+  "$defs": {
+    "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+    "name": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+    "imagePath": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(png|jpg|jpeg)$" },
+    "legendEntry": {
+      "description": "Exactly one of tile, playerStart, goal, enemy, object, reward (checked by validate.js). 'color' belongs with goal.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tile": {
+          "type": "object",
+          "required": ["solid", "color"],
+          "additionalProperties": false,
+          "properties": {
+            "solid": { "type": "boolean" },
+            "color": { "$ref": "#/$defs/color" }
+          }
+        },
+        "playerStart": { "const": true },
+        "goal": { "const": true },
+        "color": { "$ref": "#/$defs/color" },
+        "enemy": { "$ref": "#/$defs/name" },
+        "object": { "$ref": "#/$defs/name" },
+        "reward": {
+          "type": "object",
+          "required": ["color"],
+          "additionalProperties": false,
+          "properties": {
+            "value": { "type": "number", "exclusiveMinimum": 0, "default": 1 },
+            "color": { "$ref": "#/$defs/color" }
+          }
+        }
+      }
+    }
+  }
+}

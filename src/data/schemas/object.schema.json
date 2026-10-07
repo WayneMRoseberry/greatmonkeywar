@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "object.schema.json",
+  "title": "Object definition",
+  "description": "A kind of carriable object. See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "name", "size", "color"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "stackable": { "type": "boolean", "default": false },
+    "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+    "sprite": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" }
+  }
+}

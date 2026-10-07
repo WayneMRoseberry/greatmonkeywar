@@ -1,0 +1,10 @@
+#!/bin/sh
+# Runs unit tests and data validation before every commit (PRD requirement 89).
+# UI checks (npm run test:ui) are deliberately not run here (requirement 93).
+
+echo "pre-commit: running unit tests and data validation (npm test)..."
+if ! npm test; then
+  echo ""
+  echo "pre-commit: COMMIT BLOCKED. Fix the failing tests or data errors above, then commit again."
+  exit 1
+fi

@@ -6,7 +6,9 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 
 **Project and tooling**
 - `package.json` - npm scripts (`test`, `test:ui`, `validate`, `web`, `start`), dependencies, and the `prepare` script that installs the pre-commit hook.
-- `.githooks/pre-commit` (or `.husky/pre-commit`) - Runs unit tests and data validation before each commit.
+- `.githooks/pre-commit` - Runs unit tests and data validation before each commit.
+- `tools/install-hooks.js` - Run by `npm install` (the `prepare` script); points Git at `.githooks/`.
+- `.gitattributes` - Keeps hook files with LF line endings so they run on every platform.
 - `.github/workflows/ci.yml` - Runs unit tests and data validation on pull requests to `main`.
 - `playwright.config.js` - Playwright settings; starts the browser-mode web server for UI checks.
 - `tools/serve.js` - Small local web server for browser mode.
@@ -32,6 +34,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `src/data/load.js` - Loads all JSON data (browser: `fetch`; Node: file system) and runs validation.
 - `src/data/validate.js` - Shared validation rules and plain-language error messages, used by the tool and the game.
 - `src/data/schemas/` - JSON Schemas for each data file type.
+- `docs/data-formats.md` - Developer specification of every data format; the source for the schemas and validator.
 
 **Presentation (browser)**
 - `index.html` - Page with the single `<canvas>`.
@@ -70,9 +73,12 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `tests/simulation/*.test.js` - Unit tests for each simulation module.
 - `tests/presentation/input-map.test.js` - Unit tests for input translation.
 - `tests/data/validate.test.js` - Unit tests for every validation error type.
+- `tests/data/schemas.test.js` - Checks each schema is valid JSON Schema (via Ajv, a test-only dependency), uses only supported keywords, and accepts every example in `docs/data-formats.md`.
 - `tests/data/fixtures/` - Small valid and broken data files used by tests.
 - `tests/helpers/` - Helpers for building small test levels and stepping the simulation.
+- `tests-ui/smoke.spec.js` - Playwright UI check: the page loads without errors and the canvas fills the window.
 - `tests-ui/movement.spec.js` - Playwright UI check: left, right, jump.
+- `tests/tools/serve.test.js` - Unit tests for the browser-mode web server.
 
 **Docs**
 - `docs/guide-levels.md` - Level format guide for designers.
@@ -103,28 +109,28 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ## Tasks
 
-- [ ] 0.0 Create feature branch
-  - [ ] 0.1 Create and check out a new branch from `main`: `git checkout -b feature/engine-prototype`
-- [ ] 1.0 Set up the project, test tooling, and quality gates
-  - [ ] 1.1 Create `package.json` with `"type": "module"` and a Node version in `engines` (current LTS). Add `.gitignore`.
-  - [ ] 1.2 Create the folder structure from the PRD's Technical Considerations (`src/simulation`, `src/presentation`, `src/platform`, `src/data`, `electron`, `data/...`, `tools`, `tests`, `tests-ui`, `docs`).
-  - [ ] 1.3 Set up `npm test` to run Node's built-in test runner on `tests/` and then the data validator (req 88). Add a trivial passing test to prove it works.
-  - [ ] 1.4 Write `tools/serve.js`, a small dependency-free static web server, and add `npm run web` (browser mode, PRD Technical Considerations).
-  - [ ] 1.5 Add a minimal `index.html` and `src/presentation/main.js` that draw a coloured rectangle on a full-window canvas, to prove browser mode works through `npm run web`.
-  - [ ] 1.6 Install Playwright (`@playwright/test`) and a Chromium browser. Create `playwright.config.js` that starts `tools/serve.js` automatically. Add `npm run test:ui` (req 93).
-  - [ ] 1.7 Add a pre-commit hook (Husky, or a `.githooks/` folder plus `git config core.hooksPath` in the `prepare` script) that runs `npm test` and blocks the commit on failure (reqs 89–90). Confirm it does **not** run UI checks.
-  - [ ] 1.8 Confirm the hook installs automatically on a fresh clone after `npm install`.
-  - [ ] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
-  - [ ] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
+- [x] 0.0 Create feature branch
+  - [x] 0.1 Create and check out a new branch from `main`: `git checkout -b feature/engine-prototype`
+- [x] 1.0 Set up the project, test tooling, and quality gates
+  - [x] 1.1 Create `package.json` with `"type": "module"` and a Node version in `engines` (current LTS). Add `.gitignore`.
+  - [x] 1.2 Create the folder structure from the PRD's Technical Considerations (`src/simulation`, `src/presentation`, `src/platform`, `src/data`, `electron`, `data/...`, `tools`, `tests`, `tests-ui`, `docs`).
+  - [x] 1.3 Set up `npm test` to run Node's built-in test runner on `tests/` and then the data validator (req 88). Add a trivial passing test to prove it works.
+  - [x] 1.4 Write `tools/serve.js`, a small dependency-free static web server, and add `npm run web` (browser mode, PRD Technical Considerations).
+  - [x] 1.5 Add a minimal `index.html` and `src/presentation/main.js` that draw a coloured rectangle on a full-window canvas, to prove browser mode works through `npm run web`.
+  - [x] 1.6 Install Playwright (`@playwright/test`) and a Chromium browser. Create `playwright.config.js` that starts `tools/serve.js` automatically. Add `npm run test:ui` (req 93).
+  - [x] 1.7 Add a pre-commit hook (Husky, or a `.githooks/` folder plus `git config core.hooksPath` in the `prepare` script) that runs `npm test` and blocks the commit on failure (reqs 89–90). Confirm it does **not** run UI checks.
+  - [x] 1.8 Confirm the hook installs automatically on a fresh clone after `npm install`.
+  - [x] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
+  - [x] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
 - [ ] 2.0 Define the data formats and build the data validator
-  - [ ] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
-  - [ ] 2.2 Design the level list format (req 55).
-  - [ ] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
-  - [ ] 2.4 Design the object definition format: size, colour, sprite, and `stackable` (reqs 28, 35).
-  - [ ] 2.5 Design the cut scene format: background image, actors (sprite, animation, list of timed moves), and narration lines with start and end times (req 62).
-  - [ ] 2.6 Design the sprite sheet format: image file, frame width and height, named animations with frame lists and speed (req 77).
-  - [ ] 2.7 Design `tuning.json`, `bindings.json` (keyboard and gamepad, including punch and skip), and `display.json` (visible world height, stick dead zone) (reqs 16–17, 73).
-  - [ ] 2.8 Write a JSON Schema for each format in `src/data/schemas/`.
+  - [x] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
+  - [x] 2.2 Design the level list format (req 55).
+  - [x] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
+  - [x] 2.4 Design the object definition format: size, colour, sprite, and `stackable` (reqs 28, 35).
+  - [x] 2.5 Design the cut scene format: background image, actors (sprite, animation, list of timed moves), and narration lines with start and end times (req 62).
+  - [x] 2.6 Design the sprite sheet format: image file, frame width and height, named animations with frame lists and speed (req 77).
+  - [x] 2.7 Design `tuning.json`, `bindings.json` (keyboard and gamepad, including punch and skip), and `display.json` (visible world height, stick dead zone) (reqs 16–17, 73).
+  - [x] 2.8 Write a JSON Schema for each format in `src/data/schemas/`.
   - [ ] 2.9 Write `src/data/validate.js`: schema checks plus custom checks for every case in req 83. Rewrite every error into a plain-language message with file name and location (req 84). It must work in both Node and the browser, so it must not touch the file system itself.
   - [ ] 2.10 Write `tools/validate-data.js`, which reads all files under `data/`, runs `validate.js`, prints all errors, and exits non-zero on any error (req 82).
   - [ ] 2.11 Create test fixtures in `tests/data/fixtures/`: one valid set and one broken file for each error type in req 83.

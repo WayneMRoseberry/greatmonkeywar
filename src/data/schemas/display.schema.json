@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "display.schema.json",
+  "title": "Display",
+  "description": "Display settings (data/config/display.json). See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion", "visibleHeight", "stickDeadZone"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "visibleHeight": { "type": "number", "exclusiveMinimum": 0 },
+    "stickDeadZone": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 }
+  }
+}
