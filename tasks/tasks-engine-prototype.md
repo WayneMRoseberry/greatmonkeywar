@@ -193,7 +193,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.3 Initial state from loaded data: level size, tiles, player at the start cell (bottom-centre placement), health from the player definition, and a separate snapshot of the level's starting state (req 27).
     - Test: `tests/simulation/state.test.js`
     - Code: `src/simulation/state.js`
-  - [ ] 3.4 `step(state, input, dt)` with the fixed time step: returns the next state, doesn't change the state passed in, advances time, and gives identical results for identical inputs (reqs 5, 72).
+  - [x] 3.4 `step(state, input, dt)` with the fixed time step: returns the next state, doesn't change the state passed in, advances time, and gives identical results for identical inputs (reqs 5, 72).
     - Test: `tests/simulation/step.test.js`
     - Code: `src/simulation/step.js`, `src/simulation/constants.js`
   - [ ] 3.5 Tile collision: moving a box into a wall stops it flush, landing sets on-ground, hitting a ceiling stops upward movement, X is resolved before Y, the level's side edges act as walls, the top is open, and extra solid boxes can be passed in (for stacking later).
