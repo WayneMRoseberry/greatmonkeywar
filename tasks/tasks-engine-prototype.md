@@ -196,7 +196,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.4 `step(state, input, dt)` with the fixed time step: returns the next state, doesn't change the state passed in, advances time, and gives identical results for identical inputs (reqs 5, 72).
     - Test: `tests/simulation/step.test.js`
     - Code: `src/simulation/step.js`, `src/simulation/constants.js`
-  - [ ] 3.5 Tile collision: moving a box into a wall stops it flush, landing sets on-ground, hitting a ceiling stops upward movement, X is resolved before Y, the level's side edges act as walls, the top is open, and extra solid boxes can be passed in (for stacking later).
+  - [x] 3.5 Tile collision: moving a box into a wall stops it flush, landing sets on-ground, hitting a ceiling stops upward movement, X is resolved before Y, the level's side edges act as walls, the top is open, and extra solid boxes can be passed in (for stacking later).
     - Test: `tests/simulation/collision.test.js`
     - Code: `src/simulation/collision.js`
   - [ ] 3.6 Running left and right at the speed from the player definition, stopping when no direction is held (req 20).
