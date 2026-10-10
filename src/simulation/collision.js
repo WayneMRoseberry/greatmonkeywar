@@ -8,6 +8,11 @@
 //
 // Solid: tiles whose type is solid, the level's left and right edges, and any
 // extra solid boxes passed in. The top and bottom of the level are open.
+//
+// Assumes a valid level: `level` is the one built by createLevelState
+// (state.js) from validated data, so its grid is rectangular (width × height)
+// and every character in it is either '.' or a key of `tileTypes`. These
+// aren't checked again here.
 
 // Allowance for floating-point error when deciding whether edges touch or overlap.
 const EPS = 1e-9;

@@ -7,6 +7,7 @@ import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { input, NO_INPUT, runSteps } from '../helpers/run.js';
+import { deepFreeze } from '../../src/data/load.js';
 
 const GRID = [
   '........',
@@ -58,6 +59,15 @@ describe('step', () => {
     next.levelStart.rewardCount = 99;
     assert.equal(state.player.health, healthBefore);
     assert.equal(state.levelStart.rewardCount, 0);
+  });
+
+  test('works with frozen (read-only) data, as the game loads it, so any attempt to change data fails loudly', () => {
+    // The loader freezes game data (src/data/load.js). Running here on frozen data
+    // means simulation code that tried to change the data would throw in this test.
+    const data = deepFreeze(buildData(GRID));
+    const state = createLevelState(data, TEST_LEVEL);
+    const script = (i) => input({ right: i % 2 === 0, left: i % 3 === 0, jump: i % 5 === 0 });
+    assert.doesNotThrow(() => runSteps(step, state, script, STEPS_PER_SECOND, FIXED_DT));
   });
 
   test('keeps the loaded data by reference', () => {

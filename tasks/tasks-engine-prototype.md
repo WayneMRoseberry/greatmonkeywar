@@ -199,18 +199,31 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.5 Tile collision: moving a box into a wall stops it flush, landing sets on-ground, hitting a ceiling stops upward movement, X is resolved before Y, the level's side edges act as walls, the top is open, and extra solid boxes can be passed in (for stacking later).
     - Test: `tests/simulation/collision.test.js`
     - Code: `src/simulation/collision.js`
-  - [ ] 3.6 Running left and right at the speed from the player definition, stopping when no direction is held (req 20).
+  - [x] 3.6 Running left and right at the speed from the player definition, stopping when no direction is held (req 20).
     - Test: `tests/simulation/player.test.js` ("running")
     - Code: `src/simulation/player.js`, `src/simulation/step.js`
   - [ ] 3.7 Facing direction: the player faces the way they last moved, and keeps facing that way when stopped (needed for throwing and punching).
     - Test: `tests/simulation/player.test.js` ("facing")
     - Code: `src/simulation/player.js`
-  - [ ] 3.8 Jumping and gravity: jump speed, gravity, and maximum fall speed from tuning; jumping only from the ground (no double jump) (reqs 21–22).
-    - Test: `tests/simulation/player.test.js` ("jumping")
+  - [ ] 3.8 Sideways collision for the player: running moves the player through `moveBox` (collision.js), so walls and the level's left and right edges stop them (req 23). This comes before jumping because jumping needs the player to stand on something.
+    - Test: `tests/simulation/player.test.js` ("walls and edges"). The player-level tests show the player *uses* `moveBox` correctly; the collision details themselves are already covered by `collision.test.js`. Cases, comparing the distance to a wall *d* with one step's move *m = speed × dt*:
+      - *m < d*: moves the full amount; no hit;
+      - *m = d*: arrives exactly touching the wall; not a hit;
+      - *m > d*: stops flush against the wall, never past it;
+      - *m* several tiles larger than *d* (a large `dt` passed to `step`): still stops at the first wall, with no passing through;
+      - *d = 0* (already touching) while pushing into the wall: doesn't move;
+      - the same cases at the level's left and right edges;
+      - running into a wall to the left and to the right.
+    - Rule to decide and test: when a wall stops the player, `vx` becomes 0 for that step (pushing but not moving), so later animation shows idle rather than running.
     - Code: `src/simulation/player.js`
-  - [ ] 3.9 The player colliding with tiles through `step`: landing on the ground, stopping at walls, and bumping ceilings (req 23).
-    - Test: `tests/simulation/player.test.js` ("collision")
-    - Code: `src/simulation/player.js`, `src/simulation/step.js`
+  - [ ] 3.9 Gravity, jumping, and vertical collision: gravity, jump speed, and maximum fall speed from tuning; landing on the ground sets `onGround`; jumping only from the ground (no double jump); hitting a ceiling stops upward movement (reqs 21–23).
+    - Test: `tests/simulation/player.test.js` ("gravity and jumping"). The same distance-versus-move cases as 3.8, vertically:
+      - a fall whose step is smaller than, equal to, larger than, and many tiles larger than the distance to the ground: lands on top, never inside or through it;
+      - a jump whose step is smaller than, equal to, and larger than the distance to a ceiling: stops just below it;
+      - falling until `maxFallSpeed` is reached, then no faster;
+      - running and jumping together (both inputs held).
+    - Rules to decide and test: `vy` becomes 0 on landing and on hitting a ceiling; arriving exactly on the ground isn't `onGround` until the next step pulls the player down (the existing collision rule), and must not stop the player from jumping on that next step.
+    - Code: `src/simulation/player.js`
   - [ ] 3.10 Taking damage: lose 1 health, knockback away from the source (from tuning), and invincibility for the time in tuning, with a flag the renderer can use to flash (reqs 24–25).
     - Test: `tests/simulation/player.test.js` ("damage")
     - Code: `src/simulation/player.js`

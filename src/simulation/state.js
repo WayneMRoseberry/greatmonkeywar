@@ -2,6 +2,12 @@
 //
 // All positions and sizes are in tiles. A box is { x, y, width, height } where
 // (x, y) is its top-left corner; y increases downwards (docs/data-formats.md).
+//
+// createLevelState is the gate between data and simulation. Data is validated
+// when loaded (src/data/validate.js); this file then checks what building a
+// level needs (the level exists, exactly one start and goal, a player
+// definition) and throws a LevelDataError if not. The rest of the simulation
+// (step.js, player.js, collision.js, ...) relies on that and doesn't check again.
 
 const GRID_AND_LEGEND = "the level's grid and legend";
 
