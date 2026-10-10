@@ -3,7 +3,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildData, TEST_LEVEL } from './level-builder.js';
-import { input, NO_INPUT, runSteps } from './run.js';
+import { runSteps } from './run.js';
+import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/input.js';
 import { validateData } from '../../src/data/validate.js';
 
 /** The data in the { files } form validateData expects. */
@@ -74,23 +75,6 @@ describe('buildData', () => {
   });
 });
 
-describe('input', () => {
-  test('NO_INPUT has every input off', () => {
-    assert.deepEqual(NO_INPUT, {
-      left: false, right: false, up: false, down: false,
-      jump: false, action: false, punch: false, confirm: false,
-    });
-  });
-
-  test('input() turns on only the named inputs', () => {
-    assert.deepEqual(input({ right: true, jump: true }), { ...NO_INPUT, right: true, jump: true });
-  });
-
-  test('input() rejects names that are not inputs', () => {
-    assert.throws(() => input({ rigth: true }), /Unknown input "rigth"/);
-  });
-});
-
 describe('runSteps', () => {
   test('calls step exactly N times, passing each result to the next call', () => {
     const calls = [];
@@ -98,7 +82,7 @@ describe('runSteps', () => {
       calls.push({ state, inp, dt });
       return { count: state.count + 1 };
     };
-    const held = input({ right: true });
+    const held = holding(Input.RIGHT);
     const result = runSteps(fakeStep, { count: 0 }, held, 5, 0.5);
 
     assert.deepEqual(result, { count: 5 });
@@ -109,8 +93,8 @@ describe('runSteps', () => {
 
   test('input can be a function of the step number, to script presses', () => {
     const seen = [];
-    const fakeStep = (state, inp) => { seen.push(inp.jump); return state; };
-    runSteps(fakeStep, {}, (i) => input({ jump: i === 2 }), 4, 1 / 60);
+    const fakeStep = (state, inp) => { seen.push(inp[Input.JUMP]); return state; };
+    runSteps(fakeStep, {}, (i) => createInput({ [Input.JUMP]: i === 2 }), 4, 1 / 60);
     assert.deepEqual(seen, [false, false, true, false]);
   });
 

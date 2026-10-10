@@ -6,7 +6,8 @@ import { step } from '../../src/simulation/step.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
-import { input, NO_INPUT, runSteps } from '../helpers/run.js';
+import { runSteps } from '../helpers/run.js';
+import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/input.js';
 import { deepFreeze } from '../../src/data/load.js';
 
 const GRID = [
@@ -40,12 +41,12 @@ describe('step', () => {
   test('does not change the state passed in', () => {
     const state = newState();
     const before = structuredClone(withoutData(state));
-    step(state, input({ right: true, jump: true }), FIXED_DT);
+    step(state, holding(Input.RIGHT, Input.JUMP), FIXED_DT);
     assert.deepEqual(withoutData(state), before);
   });
 
   test('does not change the input passed in', () => {
-    const held = input({ left: true, action: true });
+    const held = holding(Input.LEFT, Input.ACTION);
     const before = { ...held };
     step(newState(), held, FIXED_DT);
     assert.deepEqual(held, before);
@@ -66,7 +67,7 @@ describe('step', () => {
     // means simulation code that tried to change the data would throw in this test.
     const data = deepFreeze(buildData(GRID));
     const state = createLevelState(data, TEST_LEVEL);
-    const script = (i) => input({ right: i % 2 === 0, left: i % 3 === 0, jump: i % 5 === 0 });
+    const script = (i) => createInput({ [Input.RIGHT]: i % 2 === 0, [Input.LEFT]: i % 3 === 0, [Input.JUMP]: i % 5 === 0 });
     assert.doesNotThrow(() => runSteps(step, state, script, STEPS_PER_SECOND, FIXED_DT));
   });
 
@@ -88,7 +89,7 @@ describe('step', () => {
 
   test('the same starting state and inputs always give the same result (determinism)', () => {
     // A scripted mix of inputs over two seconds.
-    const script = (i) => input({ right: i % 40 < 25, left: i % 90 > 70, jump: i % 30 === 0, action: i === 50 });
+    const script = (i) => createInput({ [Input.RIGHT]: i % 40 < 25, [Input.LEFT]: i % 90 > 70, [Input.JUMP]: i % 30 === 0, [Input.ACTION]: i === 50 });
     const count = 2 * STEPS_PER_SECOND;
     const a = runSteps(step, newState(), script, count, FIXED_DT);
     const b = runSteps(step, newState(), script, count, FIXED_DT);

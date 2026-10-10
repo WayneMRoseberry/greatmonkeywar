@@ -17,7 +17,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `.gitignore` - Ignores `node_modules/`, Playwright reports, and build output.
 
 **Simulation (pure game logic; runs in Node)**
-- `src/simulation/constants.js` - Fixed time step and shared constants.
+- `src/simulation/constants.js` - Fixed time step and shared constants (`Facing`).
+- `src/simulation/input.js` - The input state: `Input` names, `NO_INPUT`, `createInput()`, `holding()`. The one definition used by the simulation, the input translation (task 7.9), and tests.
 - `src/simulation/state.js` - Creates the initial game state from loaded data; resets a level.
 - `src/simulation/step.js` - The single `step(state, input, dt)` update function.
 - `src/simulation/collision.js` - AABB collision against tiles and resting stackable objects.
@@ -202,7 +203,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.6 Running left and right at the speed from the player definition, stopping when no direction is held (req 20).
     - Test: `tests/simulation/player.test.js` ("running")
     - Code: `src/simulation/player.js`, `src/simulation/step.js`
-  - [ ] 3.7 Facing direction: the player faces the way they last moved, and keeps facing that way when stopped (needed for throwing and punching).
+  - [x] 3.7 Facing direction: the player faces the direction they're trying to run (the held input, not the actual movement), and keeps facing that way when neither or both directions are held (needed for throwing and punching).
     - Test: `tests/simulation/player.test.js` ("facing")
     - Code: `src/simulation/player.js`
   - [ ] 3.8 Sideways collision for the player: running moves the player through `moveBox` (collision.js), so walls and the level's left and right edges stop them (req 23). This comes before jumping because jumping needs the player to stand on something.
@@ -213,7 +214,8 @@ These were completed before this approach was adopted: their tests were written 
       - *m* several tiles larger than *d* (a large `dt` passed to `step`): still stops at the first wall, with no passing through;
       - *d = 0* (already touching) while pushing into the wall: doesn't move;
       - the same cases at the level's left and right edges;
-      - running into a wall to the left and to the right.
+      - running into a wall to the left and to the right;
+      - pushing into a wall keeps the player facing the wall, though they don't move (facing follows the held input, task 3.7).
     - Rule to decide and test: when a wall stops the player, `vx` becomes 0 for that step (pushing but not moving), so later animation shows idle rather than running.
     - Code: `src/simulation/player.js`
   - [ ] 3.9 Gravity, jumping, and vertical collision: gravity, jump speed, and maximum fall speed from tuning; landing on the ground sets `onGround`; jumping only from the ground (no double jump); hitting a ceiling stops upward movement (reqs 21–23).

@@ -9,6 +9,8 @@
 // definition) and throws a LevelDataError if not. The rest of the simulation
 // (step.js, player.js, collision.js, ...) relies on that and doesn't check again.
 
+import { Facing } from './constants.js';
+
 const GRID_AND_LEGEND = "the level's grid and legend";
 
 /**
@@ -104,7 +106,7 @@ export function createLevelState(data, levelName) {
   const player = step(levelName, 'creating the player', 'the player definition (characters/player.json)', (fail) => {
     const definition = data.characters.player ?? fail('there is no player definition');
     const box = placeInCell(startCell.column, startCell.row, definition.size.width, definition.size.height);
-    return { ...box, vx: 0, vy: 0, onGround: false, facing: 'right', health: definition.health };
+    return { ...box, vx: 0, vy: 0, onGround: false, facing: Facing.RIGHT, health: definition.health };
   });
 
   const goalCell = step(levelName, 'placing the goal', GRID_AND_LEGEND, (fail) =>

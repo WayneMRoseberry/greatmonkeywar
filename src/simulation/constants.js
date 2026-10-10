@@ -4,3 +4,13 @@
 
 export const STEPS_PER_SECOND = 60;
 export const FIXED_DT = 1 / STEPS_PER_SECOND;
+
+/**
+ * The directions a character can face. Use these names, never the raw strings.
+ * The values match the "facing" values in cut scene data files
+ * (src/data/schemas/cutscene.schema.json); a test keeps the two in sync.
+ */
+export const Facing = Object.freeze({
+  LEFT: 'left',
+  RIGHT: 'right',
+});

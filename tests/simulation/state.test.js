@@ -3,6 +3,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLevelState, LevelDataError } from '../../src/simulation/state.js';
+import { Facing } from '../../src/simulation/constants.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 
 const GRID = [
@@ -69,7 +70,7 @@ describe('player', () => {
     const { player } = stateFor(GRID, { player: { health: 5 } });
     assert.equal(player.vx, 0);
     assert.equal(player.vy, 0);
-    assert.equal(player.facing, 'right');
+    assert.equal(player.facing, Facing.RIGHT);
     assert.equal(player.health, 5);
   });
 
