@@ -10,11 +10,15 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
+import { moveBox } from './collision.js';
 
 /**
- * Running left and right (PRD requirement 20), and facing: the player faces the
- * direction they're trying to run, and keeps facing that way when neither or
- * both directions are held.
+ * Running left and right (PRD requirement 20), stopped by walls and the level's
+ * side edges (req 23). When something stops the player, vx becomes 0: they're
+ * pushing but not moving.
+ *
+ * Facing: the player faces the direction they're trying to run, even when a
+ * wall stops them, and keeps facing that way when neither or both are held.
  */
 export function updatePlayer(state, input, dt) {
   const { player } = state;
@@ -22,5 +26,8 @@ export function updatePlayer(state, input, dt) {
   const direction = (input[Input.RIGHT] ? 1 : 0) - (input[Input.LEFT] ? 1 : 0);
   if (direction !== 0) player.facing = direction > 0 ? Facing.RIGHT : Facing.LEFT;
   player.vx = direction * speed;
-  player.x += player.vx * dt;
+
+  const moved = moveBox(state.level, player, player.vx * dt, 0);
+  player.x = moved.x;
+  if (moved.hitLeft || moved.hitRight) player.vx = 0;
 }

@@ -206,7 +206,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.7 Facing direction: the player faces the direction they're trying to run (the held input, not the actual movement), and keeps facing that way when neither or both directions are held (needed for throwing and punching).
     - Test: `tests/simulation/player.test.js` ("facing")
     - Code: `src/simulation/player.js`
-  - [ ] 3.8 Sideways collision for the player: running moves the player through `moveBox` (collision.js), so walls and the level's left and right edges stop them (req 23). This comes before jumping because jumping needs the player to stand on something.
+  - [x] 3.8 Sideways collision for the player: running moves the player through `moveBox` (collision.js), so walls and the level's left and right edges stop them (req 23). This comes before jumping because jumping needs the player to stand on something.
     - Test: `tests/simulation/player.test.js` ("walls and edges"). The player-level tests show the player *uses* `moveBox` correctly; the collision details themselves are already covered by `collision.test.js`. Cases, comparing the distance to a wall *d* with one step's move *m = speed × dt*:
       - *m < d*: moves the full amount; no hit;
       - *m = d*: arrives exactly touching the wall; not a hit;
