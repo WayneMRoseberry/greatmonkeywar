@@ -171,7 +171,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 1.8 Confirm the hook installs automatically on a fresh clone after `npm install`.
   - [x] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
   - [x] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
-- [ ] 2.0 Define the data formats and build the data validator
+- [x] 2.0 Define the data formats and build the data validator
   - [x] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
   - [x] 2.2 Design the level list format (req 55).
   - [x] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
@@ -186,7 +186,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 2.12 Write `tests/data/validate.test.js` covering every error type and checking the message wording (req 87).
   - [x] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
   - [x] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
-  - [ ] 2.15 Validator check that the player fits at each level's start, so designers see the problem when running `npm run validate` instead of only when the game builds the level. `createLevelState` already refuses to build such a level (`LevelDataError`, "fitting the player at the start"); this reports the same problem earlier, in plain language.
+  - [x] 2.15 Validator check that the player fits at each level's start, so designers see the problem when running `npm run validate` instead of only when the game builds the level. `createLevelState` already refuses to build such a level (`LevelDataError`, "fitting the player at the start"); this reports the same problem earlier, in plain language.
     - Test: `tests/data/validate.test.js`: a player too tall for the space at the start (head inside a ceiling), too wide (inside walls beside it), and one that exactly fits (no error). The error names the level, the player's size, and the overlapping tile's row and column. Plus a wording test for the new problem code.
     - Code: `src/data/validate.js`. Reuse the simulation's placement rule (bottom-centre on the start cell) and `overlapsSolid` (`src/simulation/collision.js`) rather than writing them a second time, so the validator and the game can't disagree. Data code may import from the simulation (the architecture guard only restricts the other direction).
 - [ ] 3.0 Build the simulation core: time step, collision, player movement, and health

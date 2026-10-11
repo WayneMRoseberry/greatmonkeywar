@@ -132,6 +132,7 @@ Errors:
 - a legend key is not exactly one character, or is `.`;
 - a legend entry has zero or more than one of `tile`, `playerStart`, `goal`, `enemy`, `object`, `reward`;
 - not exactly one `playerStart` or exactly one `goal` in the grid;
+- the player (sized by `characters/player.json`, placed bottom-centre on the start cell) would overlap a solid tile;
 - `enemy` names a character file that doesn't exist, or `object` names an object file that doesn't exist;
 - `cutscene` names a cut scene file that doesn't exist;
 - a layer `image` file doesn't exist;
