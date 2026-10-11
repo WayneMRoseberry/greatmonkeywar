@@ -26,9 +26,22 @@ function copyState({ data, player, levelStart, ...rest }) {
   };
 }
 
+/**
+ * Restarting the level when the player's health reaches 0 (req 27): everything
+ * returns to how it was when the level started, from the level-start snapshot.
+ * The snapshot itself is kept, so the level can restart again.
+ */
+function restartLevel(state) {
+  const { levelStart } = state;
+  state.player = levelStart.player.copy();
+  state.rewardCount = levelStart.rewardCount;
+}
+
 export function step(state, input, dt) {
   const next = copyState(state);
   next.time += dt;
   updatePlayer(next, input, dt);
+  // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.
+  if (next.player.health <= 0) restartLevel(next);
   return next;
 }

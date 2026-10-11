@@ -52,7 +52,7 @@ function step(levelName, task, part, run) {
  * The box of an entity of the given size placed in grid cell (column, row):
  * its bottom-centre sits at the bottom-centre of the cell.
  */
-function placeInCell(column, row, width, height) {
+export function placeInCell(column, row, width, height) {
   return { x: column + 0.5 - width / 2, y: row + 1 - height, width, height };
 }
 
