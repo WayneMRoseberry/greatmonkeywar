@@ -189,7 +189,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 2.15 Validator check that the player fits at each level's start, so designers see the problem when running `npm run validate` instead of only when the game builds the level. `createLevelState` already refuses to build such a level (`LevelDataError`, "fitting the player at the start"); this reports the same problem earlier, in plain language.
     - Test: `tests/data/validate.test.js`: a player too tall for the space at the start (head inside a ceiling), too wide (inside walls beside it), and one that exactly fits (no error). The error names the level, the player's size, and the overlapping tile's row and column. Plus a wording test for the new problem code.
     - Code: `src/data/validate.js`. Reuse the simulation's placement rule (bottom-centre on the start cell) and `overlapsSolid` (`src/simulation/collision.js`) rather than writing them a second time, so the validator and the game can't disagree. Data code may import from the simulation (the architecture guard only restricts the other direction).
-- [ ] 3.0 Build the simulation core: time step, collision, player movement, and health
+- [x] 3.0 Build the simulation core: time step, collision, player movement, and health
   - [x] 3.1 Architecture guard: simulation code must not import presentation, platform, or Electron code, or use browser globals (`window`, `document`, `requestAnimationFrame`, `Image`, `fetch`) (req 71).
     - Test: `tests/architecture.test.js`. For the red step, temporarily add a forbidden import to a stub simulation file and confirm the test fails; then remove it.
     - Code: `tools/architecture.js` (the checker, unit-tested with source samples). Simulation files may only import other simulation files, and may not use `Math.random`, `Date.now`, or `performance.now` (determinism).
@@ -231,13 +231,13 @@ These were completed before this approach was adopted: their tests were written 
       - running and jumping together (both inputs held).
     - Rules to decide and test: `vy` becomes 0 on landing and on hitting a ceiling; arriving exactly on the ground isn't `onGround` until the next step pulls the player down (the existing collision rule), and must not stop the player from jumping on that next step.
     - Code: `src/simulation/player.js`
-  - [ ] 3.10 Taking damage: lose 1 health, knockback away from the source (from tuning), and invincibility for the time in tuning, with a flag the renderer can use to flash (reqs 24–25).
+  - [x] 3.10 Taking damage (decided: `damagePlayer(state, source)` for enemies to call; knockback takes control away until the player lands; hit dead-centre pushes backwards): lose 1 health, knockback away from the source (from tuning), and invincibility for the time in tuning, with a flag the renderer can use to flash (reqs 24–25).
     - Test: `tests/simulation/player.test.js` ("damage")
     - Code: `src/simulation/player.js`
-  - [ ] 3.11 Falling into a pit: below the bottom of the level, lose 1 health and respawn at the start point (req 26).
+  - [x] 3.11 Falling into a pit (decided: "below the bottom" means entirely below it; invincibility doesn't protect against pits; respawning resets speed and ends knockback): below the bottom of the level, lose 1 health and respawn at the start point (req 26).
     - Test: `tests/simulation/player.test.js` ("pits")
     - Code: `src/simulation/player.js`, `src/simulation/step.js`
-  - [ ] 3.12 Restart at 0 health: the level returns to its starting snapshot, including health and reward count (req 27).
+  - [x] 3.12 Restart at 0 health: the level returns to its starting snapshot, including health and reward count (req 27).
     - Test: `tests/simulation/step.test.js` ("restart")
     - Code: `src/simulation/step.js`, `src/simulation/state.js`
 - [ ] 4.0 Build objects and stacking: pick up, drop, throw, stack, and rewards
