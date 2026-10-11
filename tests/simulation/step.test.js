@@ -3,6 +3,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
+import { Player } from '../../src/simulation/player.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -40,9 +41,10 @@ describe('step', () => {
 
   test('does not change the state passed in', () => {
     const state = newState();
+    // Compare plain copies of the values (structuredClone of both sides), before and after.
     const before = structuredClone(withoutData(state));
     step(state, holding(Input.RIGHT, Input.JUMP), FIXED_DT);
-    assert.deepEqual(withoutData(state), before);
+    assert.deepEqual(structuredClone(withoutData(state)), before);
   });
 
   test('does not change the input passed in', () => {
@@ -69,6 +71,14 @@ describe('step', () => {
     const state = createLevelState(data, TEST_LEVEL);
     const script = (i) => createInput({ [Input.RIGHT]: i % 2 === 0, [Input.LEFT]: i % 3 === 0, [Input.JUMP]: i % 5 === 0 });
     assert.doesNotThrow(() => runSteps(step, state, script, STEPS_PER_SECOND, FIXED_DT));
+  });
+
+  test('the player stays a Player, with its structure locked, after any number of steps', () => {
+    const script = (i) => createInput({ [Input.RIGHT]: i % 40 < 25, [Input.JUMP]: i % 30 === 0 });
+    const after = runSteps(step, newState(), script, 2 * STEPS_PER_SECOND, FIXED_DT);
+    assert.ok(after.player instanceof Player);
+    assert.ok(Object.isSealed(after.player));
+    assert.ok(after.levelStart.player instanceof Player);
   });
 
   test('keeps the loaded data by reference', () => {

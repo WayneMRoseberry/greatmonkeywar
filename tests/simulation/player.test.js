@@ -3,6 +3,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
+import { Player } from '../../src/simulation/player.js';
 import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -12,6 +13,75 @@ import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/inpu
 function assertNear(actual, expected, label) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${label} was ${actual}, expected ${expected}`);
 }
+
+/**
+ * Checks every part of the player's motion at once: position and speed (to
+ * within rounding) and whether they're on the ground (exactly).
+ */
+function assertMotion(player, expected, when) {
+  for (const key of ['x', 'y', 'vx', 'vy']) assertNear(player[key], expected[key], `${key} ${when}`);
+  assert.equal(player.onGround, expected.onGround, `onGround ${when}`);
+}
+
+describe('the Player structure', () => {
+  // The one central declaration of the player's properties is the Player class.
+  const PROPERTIES = ['x', 'y', 'width', 'height', 'vx', 'vy', 'onGround', 'facing', 'health', 'jumpHeld'];
+
+  test('has exactly the declared properties', () => {
+    assert.deepEqual(Object.keys(new Player()).sort(), [...PROPERTIES].sort());
+  });
+
+  test('starts at rest with safe defaults', () => {
+    const player = new Player();
+    assert.deepEqual({ ...player }, {
+      x: 0, y: 0, width: 0, height: 0, vx: 0, vy: 0,
+      onGround: false, facing: Facing.RIGHT, health: 0, jumpHeld: false,
+    });
+  });
+
+  test('takes starting values for any of its properties', () => {
+    const player = new Player({ x: 2.5, vy: -3, facing: Facing.LEFT, health: 4 });
+    assert.equal(player.x, 2.5);
+    assert.equal(player.vy, -3);
+    assert.equal(player.facing, Facing.LEFT);
+    assert.equal(player.health, 4);
+    assert.equal(player.y, 0);   // not given: the default
+  });
+
+  test('rejects a starting value for a property it doesn\'t have, such as a typo', () => {
+    assert.throws(() => new Player({ vxx: 1 }), /"vxx" is not a Player property/);
+  });
+
+  test('writing a property it doesn\'t have, such as a typo, throws instead of adding it', () => {
+    const player = new Player();
+    assert.throws(() => { player.vxx = 1; }, TypeError);
+    assert.equal('vxx' in player, false);
+  });
+
+  test('its properties can\'t be removed', () => {
+    const player = new Player();
+    assert.throws(() => { delete player.x; }, TypeError);
+  });
+
+  test('its declared properties can be changed', () => {
+    const player = new Player();
+    player.x = 3;
+    player.onGround = true;
+    assert.equal(player.x, 3);
+    assert.equal(player.onGround, true);
+  });
+
+  test('copy() gives a separate Player with the same values', () => {
+    const player = new Player({ x: 1, vy: 2, facing: Facing.LEFT });
+    const copy = player.copy();
+    assert.ok(copy instanceof Player);
+    assert.notEqual(copy, player);
+    assert.deepEqual({ ...copy }, { ...player });
+    copy.x = 9;
+    assert.equal(player.x, 1);
+    assert.throws(() => { copy.vxx = 1; }, TypeError);   // the copy is sealed too
+  });
+});
 
 describe('running (req 20)', () => {
   // Open space around the start, so nothing gets in the way while running.
@@ -159,6 +229,230 @@ describe('walls and edges (req 23)', () => {
     const back = step(atWall, holding(Input.LEFT), 0.25);
     assertNear(back.player.x, atWall.player.x - SPEED * 0.25, 'x');
     assert.equal(back.player.vx, -SPEED);
+  });
+});
+
+describe('gravity and jumping (reqs 21-23)', () => {
+  // Tuning set here so expected values can be computed from named numbers.
+  const GRAVITY = 10;          // tiles/s², downwards
+  const JUMP_SPEED = 6;        // tiles/s, upwards
+  const MAX_FALL_SPEED = 1000; // high enough not to matter, except in its own test
+  const SIZE = { width: 1, height: 1 };
+  const SPEED = 4;
+
+  function newState(grid, tuning = {}) {
+    return createLevelState(buildData(grid, {
+      player: { size: SIZE, speed: SPEED },
+      tuning: { gravity: GRAVITY, jumpSpeed: JUMP_SPEED, maxFallSpeed: MAX_FALL_SPEED, ...tuning },
+    }), TEST_LEVEL);
+  }
+
+  /** The state with some of the player's properties changed (for setting up falls). */
+  function withPlayer(state, changes) {
+    return { ...state, player: new Player({ ...state.player, ...changes }) };
+  }
+
+  describe('standing and falling', () => {
+    test('a player standing on the ground stays put and is on the ground', () => {
+      const start = newState(['....G', '.P...', '#####']);
+      const after = runSteps(step, start, NO_INPUT, STEPS_PER_SECOND, FIXED_DT);
+      assertNear(after.player.y, start.player.y, 'y');
+      assert.equal(after.player.vy, 0);
+      assert.equal(after.player.onGround, true);
+    });
+
+    test('in open air, gravity speeds the player up by gravity × dt each step', () => {
+      // P starts in row 1 with nothing below until the ground in row 9.
+      const start = newState(['....G', '.P...', '.....', '.....', '.....', '.....', '.....', '.....', '.....', '#####']);
+
+      // Step 1: vy grows by GRAVITY × dt from rest, and the player falls vy × dt. Still in the air.
+      const one = step(start, NO_INPUT, FIXED_DT);
+      const vy1 = GRAVITY * FIXED_DT;
+      assertMotion(one.player, { x: start.player.x, y: start.player.y + vy1 * FIXED_DT, vx: 0, vy: vy1, onGround: false }, 'after one step');
+
+      // Step 2: vy grows by GRAVITY × dt again. Still in the air.
+      const two = step(one, NO_INPUT, FIXED_DT);
+      const vy2 = vy1 + GRAVITY * FIXED_DT;
+      assertMotion(two.player, { x: start.player.x, y: one.player.y + vy2 * FIXED_DT, vx: 0, vy: vy2, onGround: false }, 'after two steps');
+    });
+
+    test('falling never gets faster than maxFallSpeed', () => {
+      const maxFallSpeed = 3;
+      const tall = ['....G', '.P...', ...Array(40).fill('.....'), '#####'];
+      const start = newState(tall, { maxFallSpeed });
+      // Reaching maxFallSpeed takes maxFallSpeed / GRAVITY seconds; run for longer.
+      const after = runSteps(step, start, NO_INPUT, STEPS_PER_SECOND, FIXED_DT);
+      assert.equal(after.player.vy, maxFallSpeed);
+      const next = step(after, NO_INPUT, FIXED_DT);
+      assert.equal(next.player.vy, maxFallSpeed);
+      assertNear(next.player.y, after.player.y + maxFallSpeed * FIXED_DT, 'y');
+    });
+  });
+
+  describe('landing: one step\'s fall m compared with the distance d to the ground', () => {
+    // P (1 × 1) in row 1 has its bottom edge at 2; the ground's top is at row 4,
+    // so D = 2. A second floor at row 7 shows a big fall doesn't pass through.
+    const GRID = ['....G', '.P...', '.....', '.....', '#####', '.....', '.....', '#####'];
+    const D = 2;
+    const DT = 0.5;
+
+    /** A falling start state whose next step moves down exactly m. */
+    function fallingBy(m) {
+      // One step: vy becomes vy0 + GRAVITY × DT, then moves vy × DT, so choose vy0 to give m.
+      const vy0 = m / DT - GRAVITY * DT;
+      return withPlayer(newState(GRID), { vy: vy0 });
+    }
+
+    test('m < d: falls the full amount, not on the ground yet', () => {
+      const m = 1;
+      const start = fallingBy(m);
+      const after = step(start, NO_INPUT, DT);
+      assertNear(after.player.y, start.player.y + m, 'y');
+      assert.equal(after.player.onGround, false);
+      assertNear(after.player.vy, m / DT, 'vy');
+    });
+
+    test('m = d: arrives exactly on the ground, which isn\'t landing until the next step pulls down', () => {
+      const start = fallingBy(D);
+      const arrived = step(start, NO_INPUT, DT);
+      assertNear(arrived.player.y, start.player.y + D, 'y');
+      assert.equal(arrived.player.onGround, false);
+
+      const next = step(arrived, NO_INPUT, FIXED_DT);
+      assertNear(next.player.y, arrived.player.y, 'y on the next step');
+      assert.equal(next.player.onGround, true);
+      assert.equal(next.player.vy, 0);
+    });
+
+    test('m > d: lands on top of the ground, not inside it, and stops falling', () => {
+      const start = fallingBy(3);
+      const after = step(start, NO_INPUT, DT);
+      assertNear(after.player.y, start.player.y + D, 'y');
+      assert.equal(after.player.onGround, true);
+      assert.equal(after.player.vy, 0);
+    });
+
+    test('m many tiles more than d: lands on the first floor, never passing through it', () => {
+      const start = fallingBy(20);
+      const after = step(start, NO_INPUT, DT);
+      assertNear(after.player.y, start.player.y + D, 'y');
+      assert.equal(after.player.onGround, true);
+      assert.equal(after.player.vy, 0);
+    });
+  });
+
+  describe('hitting a ceiling: one step\'s rise m compared with the distance d to the ceiling', () => {
+    // P (1 × 1) stands in row 3, top edge at 3; the ceiling in row 0 ends at 1, so D = 2.
+    const GRID = ['#####', '.....', '.....', '.P..G', '#####'];
+    const D = 2;
+    const DT = 0.5;
+
+    /** Jumping sets vy to -jumpSpeed, and the first step rises jumpSpeed × DT: choose jumpSpeed to give m. */
+    function jumpRising(m) {
+      return newState(GRID, { jumpSpeed: m / DT });
+    }
+
+    test('m < d: rises the full amount, still rising', () => {
+      const m = 1;
+      const start = jumpRising(m);
+      const after = step(start, holding(Input.JUMP), DT);
+      assertNear(after.player.y, start.player.y - m, 'y');
+      assertNear(after.player.vy, -m / DT, 'vy');
+    });
+
+    test('m = d: arrives exactly touching the ceiling, which is not a hit, still rising', () => {
+      const start = jumpRising(D);
+      const after = step(start, holding(Input.JUMP), DT);
+      assertNear(after.player.y, start.player.y - D, 'y');
+      assertNear(after.player.vy, -D / DT, 'vy');
+    });
+
+    test('m > d: stops just below the ceiling, and stops rising', () => {
+      const start = jumpRising(3);
+      const after = step(start, holding(Input.JUMP), DT);
+      assertNear(after.player.y, start.player.y - D, 'y');
+      assert.equal(after.player.vy, 0);
+    });
+  });
+
+  describe('jumping', () => {
+    const GRID = ['.......G', '.......', '.......', '.P.....', '#######'].map((row) => row.padEnd(8, '.'));
+
+    test('pressing jump on the ground sets upward speed to jumpSpeed and rises jumpSpeed × dt that step', () => {
+      const start = newState(GRID);
+      const after = step(start, holding(Input.JUMP), FIXED_DT);
+      assert.equal(after.player.vy, -JUMP_SPEED);
+      assertNear(after.player.y, start.player.y - JUMP_SPEED * FIXED_DT, 'y');
+      assert.equal(after.player.onGround, false);
+    });
+
+    test('a jump comes back down and lands where it started', () => {
+      const start = newState(GRID);
+      const jumped = step(start, holding(Input.JUMP), FIXED_DT);
+      // A jump lasts about 2 × JUMP_SPEED / GRAVITY seconds; run comfortably longer.
+      const landed = runSteps(step, jumped, NO_INPUT, 2 * STEPS_PER_SECOND, FIXED_DT);
+      assertNear(landed.player.y, start.player.y, 'y');
+      assert.equal(landed.player.onGround, true);
+      assert.equal(landed.player.vy, 0);
+    });
+
+    test('no double jump: pressing again in the air does nothing', () => {
+      const start = newState(GRID);
+      const rising = step(start, holding(Input.JUMP), FIXED_DT);
+      const released = step(rising, NO_INPUT, FIXED_DT);
+      const pressedAgain = step(released, holding(Input.JUMP), FIXED_DT);
+      // Still following the same arc: gravity has slowed the rise, with no new boost.
+      assertNear(pressedAgain.player.vy, released.player.vy + GRAVITY * FIXED_DT, 'vy');
+    });
+
+    test('jump can\'t start while falling through the air', () => {
+      const open = ['.......G', '.P.....', '.......', '.......', '.......', '.......', '#######'].map((row) => row.padEnd(8, '.'));
+      const start = newState(open);
+      const falling = step(start, NO_INPUT, FIXED_DT);
+      const after = step(falling, holding(Input.JUMP), FIXED_DT);
+      assertNear(after.player.vy, falling.player.vy + GRAVITY * FIXED_DT, 'vy');
+    });
+
+    test('holding jump through a landing doesn\'t jump again; releasing and pressing again does', () => {
+      const start = newState(GRID);
+      const heldThroughJump = runSteps(step, start, holding(Input.JUMP), 2 * STEPS_PER_SECOND, FIXED_DT);
+      assertNear(heldThroughJump.player.y, start.player.y, 'y after landing with jump still held');
+      assert.equal(heldThroughJump.player.onGround, true);
+
+      const released = step(heldThroughJump, NO_INPUT, FIXED_DT);
+      const pressed = step(released, holding(Input.JUMP), FIXED_DT);
+      assert.equal(pressed.player.vy, -JUMP_SPEED);
+    });
+
+    test('a player who arrived exactly on the ground can jump on the very next step', () => {
+      const grid = ['....G', '.P...', '.....', '.....', '#####'];
+      const d = 2;   // P's bottom edge at 2; the ground's top at 4
+      const dt = 0.5;
+      const start = withPlayer(newState(grid), { vy: d / dt - GRAVITY * dt });
+      const arrived = step(start, NO_INPUT, dt);
+      assert.equal(arrived.player.onGround, false);   // exactly touching: not landed yet
+
+      const jumped = step(arrived, holding(Input.JUMP), FIXED_DT);
+      assert.equal(jumped.player.vy, -JUMP_SPEED);
+    });
+
+    test('running and jumping at the same time does both', () => {
+      const start = newState(GRID);
+      const after = step(start, holding(Input.RIGHT, Input.JUMP), FIXED_DT);
+      assertNear(after.player.x, start.player.x + SPEED * FIXED_DT, 'x');
+      assertNear(after.player.y, start.player.y - JUMP_SPEED * FIXED_DT, 'y');
+    });
+
+    test('a running jump can carry the player onto a higher platform', () => {
+      // A 1-tile-high step up at column 3; standing jump height is about JUMP_SPEED² / (2 × GRAVITY) = 1.8 tiles.
+      const grid = ['.......G', '........', '........', '.P.#####', '########'];
+      const start = newState(grid);
+      const stepTop = 3;   // the platform (row 3) has its top edge at 3, one tile above the ground (row 4)
+      // The jump lasts about a second; run for two (holding right ends at the level's edge, still on the platform).
+      const after = runSteps(step, start, (i) => holding(Input.RIGHT, ...(i === 0 ? [Input.JUMP] : [])), 2 * STEPS_PER_SECOND, FIXED_DT);
+      assertNear(after.player.y, stepTop - SIZE.height, 'y on the platform');
+      assert.equal(after.player.onGround, true);
+    });
   });
 });
 

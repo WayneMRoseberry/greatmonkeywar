@@ -4,6 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildData, TEST_LEVEL } from './level-builder.js';
 import { runSteps } from './run.js';
+import { seededRandom } from './random.js';
 import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/input.js';
 import { validateData } from '../../src/data/validate.js';
 
@@ -72,6 +73,34 @@ describe('buildData', () => {
     const b = buildData(['P.G', '###']);
     assert.notEqual(b.tuning.gravity, 999);
     assert.notEqual(b.characters.player.speed, 999);
+  });
+});
+
+describe('seededRandom', () => {
+  test('the same seed always gives the same sequence', () => {
+    const a = seededRandom(42);
+    const b = seededRandom(42);
+    const first = Array.from({ length: 5 }, () => a());
+    assert.deepEqual(Array.from({ length: 5 }, () => b()), first);
+  });
+
+  test('different seeds give different sequences', () => {
+    assert.notEqual(seededRandom(1)(), seededRandom(2)());
+  });
+
+  test('values are from 0 up to (not including) 1, and spread across that range', () => {
+    const random = seededRandom(7);
+    const values = Array.from({ length: 1000 }, () => random());
+    assert.ok(values.every((v) => v >= 0 && v < 1));
+    assert.ok(values.some((v) => v < 0.1) && values.some((v) => v > 0.9));
+  });
+
+  test('between(min, max) gives values in that range', () => {
+    const random = seededRandom(3);
+    const min = -2;
+    const max = 5;
+    const values = Array.from({ length: 1000 }, () => random.between(min, max));
+    assert.ok(values.every((v) => v >= min && v < max));
   });
 });
 

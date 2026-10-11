@@ -13,9 +13,17 @@ import { updatePlayer } from './player.js';
 /**
  * A copy of `state` that shares nothing changeable with it. The loaded game
  * data is read-only and the same for every state, so it is shared, not copied.
+ * Players are copied with Player.copy(), which keeps them sealed Player objects
+ * (structuredClone would turn them into plain objects).
  */
-function copyState({ data, ...rest }) {
-  return { ...structuredClone(rest), data };
+function copyState({ data, player, levelStart, ...rest }) {
+  const { player: startPlayer, ...startRest } = levelStart;
+  return {
+    ...structuredClone(rest),
+    data,
+    player: player.copy(),
+    levelStart: { ...structuredClone(startRest), player: startPlayer.copy() },
+  };
 }
 
 export function step(state, input, dt) {

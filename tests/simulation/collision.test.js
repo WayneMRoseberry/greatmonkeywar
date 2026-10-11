@@ -6,7 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveBox } from '../../src/simulation/collision.js';
+import { moveBox, overlapsSolid } from '../../src/simulation/collision.js';
 
 const TILE_TYPES = {
   '#': { solid: true, color: '#000000' },
@@ -387,6 +387,96 @@ describe('above, below, and beside the level', () => {
     const result = moveBox(level, start, 1.5, 0);
     assertNear(result.x, wallColumn - start.width, 'x');
     assert.deepEqual(hits(result), { ...NO_HITS, hitRight: true });
+  });
+});
+
+describe('starting already overlapping something solid', () => {
+  // Movement through moveBox can't put a box inside a solid, but spawning or
+  // placing things directly can. A box overlapping a solid must not move
+  // further into it (or through it), but may move away from it.
+
+  test('a box half inside the ground does not fall further in or through it', () => {
+    const level = levelFrom(['...', '...', '...', '###', '...', '...']);
+    const start = box(1, 2.5, 1, 1);   // bottom edge at 3.5: half inside ground row 3
+    const result = moveBox(level, start, 0, 2);
+    assertNear(result.y, start.y, 'y');
+    assert.deepEqual(hits(result), { ...NO_HITS, onGround: true });
+  });
+
+  test('a box half inside the ground can move up, out of it', () => {
+    const level = levelFrom(['...', '...', '...', '###', '...', '...']);
+    const start = box(1, 2.5, 1, 1);
+    const dy = -1;
+    const result = moveBox(level, start, 0, dy);
+    assertNear(result.y, start.y + dy, 'y');
+    assert.deepEqual(hits(result), NO_HITS);
+  });
+
+  test('a box whose head is inside a ceiling does not rise further in or through it', () => {
+    const level = levelFrom(['...', '###', '...', '...', '###']);
+    const start = box(1, 1.5, 1, 1);   // top edge at 1.5: inside ceiling row 1
+    const result = moveBox(level, start, 0, -2);
+    assertNear(result.y, start.y, 'y');
+    assert.deepEqual(hits(result), { ...NO_HITS, hitCeiling: true });
+  });
+
+  test('a box partly inside a wall does not move further into or through it, but can move away', () => {
+    const level = levelFrom(['..#...', '..#...', '######']);
+    const start = box(1.5, 1, 1, 1);   // right edge at 2.5: inside wall column 2
+    const into = moveBox(level, start, 3, 0);
+    assertNear(into.x, start.x, 'x moving into the wall');
+    assert.deepEqual(hits(into), { ...NO_HITS, hitRight: true });
+
+    const away = moveBox(level, start, -1, 0);
+    assertNear(away.x, start.x - 1, 'x moving away');
+    assert.deepEqual(hits(away), NO_HITS);
+  });
+
+  test('a box partly inside a solid box does not move further into or through it', () => {
+    const level = levelFrom(['......', '......', '######']);
+    const crate = box(2, 1, 1, 1);
+    const start = box(1.5, 1, 1, 1);   // right edge at 2.5: inside the crate
+    const result = moveBox(level, start, 3, 0, [crate]);
+    assertNear(result.x, start.x, 'x');
+    assert.deepEqual(hits(result), { ...NO_HITS, hitRight: true });
+  });
+
+  test('a box whose bottom is inside a solid box does not fall through it', () => {
+    const level = levelFrom(['...', '...', '...', '...', '###']);
+    const crate = box(1, 2, 1, 1);
+    const start = box(1, 1.5, 1, 1);   // bottom edge at 2.5: inside the crate
+    const result = moveBox(level, start, 0, 2, [crate]);
+    assertNear(result.y, start.y, 'y');
+    assert.deepEqual(hits(result), { ...NO_HITS, onGround: true });
+  });
+});
+
+describe('overlapsSolid', () => {
+  const level = levelFrom(['....', '.#..', '....', '####']);
+  const tile = { row: 1, column: 1 };
+
+  test('a box clear of every solid tile does not overlap', () => {
+    assert.equal(overlapsSolid(level, box(2, 0, 1, 1)), null);
+  });
+
+  test('a box touching a solid tile only at an edge does not overlap', () => {
+    assert.equal(overlapsSolid(level, box(0, 1, 1, 1)), null);   // right edge on the tile's left edge
+    assert.equal(overlapsSolid(level, box(1, 2, 1, 1)), null);   // bottom edge on the ground's top edge
+  });
+
+  test('a box overlapping a solid tile reports that tile', () => {
+    assert.deepEqual(overlapsSolid(level, box(0.5, 0.5, 1, 1)), tile);
+  });
+
+  test('a box overlapping the ground reports the first overlapping tile, top-left first', () => {
+    assert.deepEqual(overlapsSolid(level, box(0.5, 2.5, 2, 1)), { row: 3, column: 0 });
+  });
+
+  test('non-solid tiles and space outside the level are not overlaps', () => {
+    const withWater = levelFrom(['~~~~', '####']);
+    assert.equal(overlapsSolid(withWater, box(0, 0, 4, 1)), null);
+    assert.equal(overlapsSolid(withWater, box(1, -3, 1, 2)), null);   // above the level
+    assert.equal(overlapsSolid(withWater, box(1, 2, 1, 2)), null);    // below the level
   });
 });
 

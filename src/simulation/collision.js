@@ -58,6 +58,19 @@ function sweep(level, box, delta, solidBoxes, along) {
   const boxAcrossOverlaps = (b) =>
     isX ? overlaps(acrossStart, acrossEnd, b.y, b.y + b.height) : overlaps(acrossStart, acrossEnd, b.x, b.x + b.width);
 
+  // A box already overlapping something solid (placed there, not moved there)
+  // must not move further into it or through it: if its leading edge is inside
+  // a solid tile or box, it can't move that way. An edge exactly on a boundary
+  // isn't inside, so resting on the ground or against a wall is unaffected.
+  const leadingEdgeInsideSolid = (front) => {
+    const onBoundary = Math.abs(front - Math.round(front)) < EPS;
+    if (!onBoundary && lineIsSolid(Math.floor(front))) return true;
+    return solidBoxes.some((b) => boxAcrossOverlaps(b) && boxStart(b) < front - EPS && boxEnd(b) > front + EPS);
+  };
+  if (delta !== 0 && leadingEdgeInsideSolid(delta > 0 ? pos + size : pos)) {
+    return { position: pos, blocked: true };
+  }
+
   if (delta > 0) {
     const front = pos + size;
     const target = front + delta;
@@ -89,6 +102,22 @@ function sweep(level, box, delta, solidBoxes, along) {
   }
 
   return { position: pos, blocked: false };
+}
+
+/**
+ * The first solid tile `box` overlaps (scanning rows top to bottom, then
+ * columns left to right), as { row, column }, or null if it overlaps none.
+ * Touching a tile's edge isn't overlapping it.
+ */
+export function overlapsSolid(level, box) {
+  const rows = cellRange(box.y, box.y + box.height);
+  const columns = cellRange(box.x, box.x + box.width);
+  for (let row = rows.first; row <= rows.last; row++) {
+    for (let column = columns.first; column <= columns.last; column++) {
+      if (isSolidTile(level, column, row)) return { row, column };
+    }
+  }
+  return null;
 }
 
 /**
