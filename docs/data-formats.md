@@ -386,7 +386,7 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
 }
 ```
 
-- **Inputs.** `left`, `right`, `up`, `down`, `jump`, `action`, `punch`, and `confirm` make up the input state passed to the simulation (req 18). `fullscreen` and `debug` are keyboard-only and handled by the presentation layer. `up` and `down` move menu selections; drop is `down` + `action`.
+- **Inputs.** `left`, `right`, `up`, `down`, `jump`, `action`, `punch`, and `confirm` make up the input state passed to the simulation (req 18). In code they are the `Input` names in `src/simulation/input.js`; a test keeps those and this file's required names in sync. `fullscreen` and `debug` are keyboard-only and handled by the presentation layer. `up` and `down` move menu selections; drop is `down` + `action`.
 - **Required.** Every input must be listed under `keyboard`. Every input except `fullscreen` and `debug` must be listed under `gamepad`. Each list must have at least one entry.
 - **Keyboard names** are the browser's physical key codes (`KeyboardEvent.code`), for example `KeyA`, `ArrowLeft`, `Space`, `Enter`, `F3`. Because they name physical key positions, W/A/S/D stay in the same place on non-QWERTY keyboards.
 - **Gamepad names** use the standard (Xbox-style) layout. Buttons: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `back`, `start`, `ls`, `rs`, `dpadUp`, `dpadDown`, `dpadLeft`, `dpadRight`. Left-stick directions: `stickLeft`, `stickRight`, `stickUp`, `stickDown`.

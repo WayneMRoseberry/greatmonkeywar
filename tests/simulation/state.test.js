@@ -3,6 +3,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLevelState, LevelDataError } from '../../src/simulation/state.js';
+import { Facing } from '../../src/simulation/constants.js';
+import { Player } from '../../src/simulation/player.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 
 const GRID = [
@@ -69,8 +71,14 @@ describe('player', () => {
     const { player } = stateFor(GRID, { player: { health: 5 } });
     assert.equal(player.vx, 0);
     assert.equal(player.vy, 0);
-    assert.equal(player.facing, 'right');
+    assert.equal(player.facing, Facing.RIGHT);
     assert.equal(player.health, 5);
+  });
+
+  test('is a Player, with its structure locked', () => {
+    const { player } = stateFor();
+    assert.ok(player instanceof Player);
+    assert.ok(Object.isSealed(player));
   });
 
   test('the start point is remembered for respawning', () => {
@@ -96,6 +104,12 @@ describe('level-start snapshot (req 27)', () => {
   test('records the player and reward count as they were when the level started', () => {
     const state = stateFor();
     assert.deepEqual(state.levelStart, { player: state.player, rewardCount: 0 });
+  });
+
+  test('the snapshot\'s player is a Player too', () => {
+    const { levelStart } = stateFor();
+    assert.ok(levelStart.player instanceof Player);
+    assert.ok(Object.isSealed(levelStart.player));
   });
 
   test('is a separate copy: changing the live state does not change it', () => {
@@ -351,6 +365,28 @@ describe('invalid levels fail with an explanation', () => {
     const err = levelErrorFor(data);
     assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'building the tile grid', part: GRID_AND_LEGEND });
     assert.ok(err.cause instanceof TypeError);
+  });
+
+  const FIT_PART = "the level's grid and legend, or the player's size in characters/player.json";
+
+  test('a player too tall for the space at the start (head inside a ceiling)', () => {
+    // Row 1 is one tile high between ceiling and ground; the player is 1.4 tall.
+    const data = buildData(['#####', '.P..G', '#####'], { player: { size: { width: 0.8, height: 1.4 } } });
+    const err = levelErrorFor(data);
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the player at the start', part: FIT_PART });
+    assert.match(err.message, /row 1, column 2/);   // the ceiling tile above P (counting from 1)
+  });
+
+  test('a player too wide for the space at the start (inside the walls beside it)', () => {
+    const data = buildData(['....G', '#P#..', '#####'], { player: { size: { width: 2.5, height: 1 } } });
+    const err = levelErrorFor(data);
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the player at the start', part: FIT_PART });
+    assert.match(err.message, /row 2, column 1/);   // the wall left of P (counting from 1)
+  });
+
+  test('a player that exactly fills the space at the start fits', () => {
+    const data = buildData(['#####', '#P..G', '#####'], { player: { size: { width: 1, height: 1 } } });
+    assert.doesNotThrow(() => createLevelState(data, TEST_LEVEL));
   });
 
   test('the message says which level, what was being done, why, and what to check', () => {

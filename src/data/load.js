@@ -9,7 +9,7 @@
 // loadGameData(options) resolves to
 //   { ok, errors, warnings, data, images }
 //   ok:     true if there are no errors
-//   data:   parsed data grouped by kind (see validate.js)
+//   data:   parsed data grouped by kind (see validate.js), frozen: read-only
 //   images: { 'sprites/player.png': <loaded image>, ... } ready for drawing
 // It never throws for bad or missing data; problems are reported in `errors`.
 
@@ -65,6 +65,18 @@ export function referencesOf(kind, value) {
   return { json, images };
 }
 
+/**
+ * Freezes `value` and everything inside it, so the game data can't be changed
+ * by mistake: any attempt throws a TypeError (modules run in strict mode).
+ */
+export function deepFreeze(value) {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const inner of Object.values(value)) deepFreeze(inner);
+  }
+  return value;
+}
+
 function tryParse(text) {
   try {
     return JSON.parse(text.replace(/^﻿/, ''));
@@ -109,5 +121,6 @@ export async function loadGameData({
   }
 
   const { errors, warnings, data } = validateData({ files, images: imageInfo });
-  return { ok: errors.length === 0, errors, warnings, data, images };
+  // The game treats data as read-only; freezing makes that a guarantee.
+  return { ok: errors.length === 0, errors, warnings, data: deepFreeze(data), images };
 }

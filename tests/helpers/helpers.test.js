@@ -3,7 +3,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildData, TEST_LEVEL } from './level-builder.js';
-import { input, NO_INPUT, runSteps } from './run.js';
+import { runSteps } from './run.js';
+import { seededRandom } from './random.js';
+import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/input.js';
 import { validateData } from '../../src/data/validate.js';
 
 /** The data in the { files } form validateData expects. */
@@ -74,20 +76,31 @@ describe('buildData', () => {
   });
 });
 
-describe('input', () => {
-  test('NO_INPUT has every input off', () => {
-    assert.deepEqual(NO_INPUT, {
-      left: false, right: false, up: false, down: false,
-      jump: false, action: false, punch: false, confirm: false,
-    });
+describe('seededRandom', () => {
+  test('the same seed always gives the same sequence', () => {
+    const a = seededRandom(42);
+    const b = seededRandom(42);
+    const first = Array.from({ length: 5 }, () => a());
+    assert.deepEqual(Array.from({ length: 5 }, () => b()), first);
   });
 
-  test('input() turns on only the named inputs', () => {
-    assert.deepEqual(input({ right: true, jump: true }), { ...NO_INPUT, right: true, jump: true });
+  test('different seeds give different sequences', () => {
+    assert.notEqual(seededRandom(1)(), seededRandom(2)());
   });
 
-  test('input() rejects names that are not inputs', () => {
-    assert.throws(() => input({ rigth: true }), /Unknown input "rigth"/);
+  test('values are from 0 up to (not including) 1, and spread across that range', () => {
+    const random = seededRandom(7);
+    const values = Array.from({ length: 1000 }, () => random());
+    assert.ok(values.every((v) => v >= 0 && v < 1));
+    assert.ok(values.some((v) => v < 0.1) && values.some((v) => v > 0.9));
+  });
+
+  test('between(min, max) gives values in that range', () => {
+    const random = seededRandom(3);
+    const min = -2;
+    const max = 5;
+    const values = Array.from({ length: 1000 }, () => random.between(min, max));
+    assert.ok(values.every((v) => v >= min && v < max));
   });
 });
 
@@ -98,7 +111,7 @@ describe('runSteps', () => {
       calls.push({ state, inp, dt });
       return { count: state.count + 1 };
     };
-    const held = input({ right: true });
+    const held = holding(Input.RIGHT);
     const result = runSteps(fakeStep, { count: 0 }, held, 5, 0.5);
 
     assert.deepEqual(result, { count: 5 });
@@ -109,8 +122,8 @@ describe('runSteps', () => {
 
   test('input can be a function of the step number, to script presses', () => {
     const seen = [];
-    const fakeStep = (state, inp) => { seen.push(inp.jump); return state; };
-    runSteps(fakeStep, {}, (i) => input({ jump: i === 2 }), 4, 1 / 60);
+    const fakeStep = (state, inp) => { seen.push(inp[Input.JUMP]); return state; };
+    runSteps(fakeStep, {}, (i) => createInput({ [Input.JUMP]: i === 2 }), 4, 1 / 60);
     assert.deepEqual(seen, [false, false, true, false]);
   });
 

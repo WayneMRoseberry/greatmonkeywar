@@ -1,7 +1,7 @@
 // Tests for the data loader (PRD requirement 85), run in Node with the file
 // reading and image loading replaced by versions that read the test fixtures.
 
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -89,6 +89,43 @@ test('invalid JSON is reported, and loading continues for everything else', asyn
   const result = await loadGameData(options);
   assert.deepEqual(result.errors.map((e) => [e.file, e.code]), [['levels/level2.json', 'invalid-json']]);
   assert.ok(result.data.levels.level1);
+});
+
+describe('the loaded data is read-only (frozen)', () => {
+  test('the data and everything inside it is frozen', async () => {
+    const { options } = fixtureLoader();
+    const { data } = await loadGameData(options);
+    const level = data.levels.level1;
+    for (const [label, value] of [
+      ['data', data],
+      ['a level', level],
+      ['a level\'s grid', level.grid],
+      ['a legend entry', level.legend.P],
+      ['a background layer', level.background.layers[0]],
+      ['the player definition', data.characters.player],
+      ['the player\'s size', data.characters.player.size],
+      ['tuning', data.tuning],
+      ['a cut scene keyframe', data.cutscenes['after-level1'].actors[0].keyframes[0]],
+    ]) {
+      assert.ok(Object.isFrozen(value), `${label} is not frozen`);
+    }
+  });
+
+  test('trying to change the data fails with an error instead of silently changing it', async () => {
+    const { options } = fixtureLoader();
+    const { data } = await loadGameData(options);
+    // Modules run in strict mode, where writing to a frozen object throws a TypeError.
+    assert.throws(() => { data.characters.player.speed = 99; }, TypeError);
+    assert.throws(() => { data.levels.level1.grid.push('####'); }, TypeError);
+    assert.throws(() => { delete data.tuning.gravity; }, TypeError);
+  });
+
+  test('freezing doesn\'t change the data\'s contents', async () => {
+    const { options } = fixtureLoader();
+    const { data } = await loadGameData(options);
+    const player = JSON.parse(fs.readFileSync(path.join(VALID_DIR, 'characters', 'player.json'), 'utf8'));
+    assert.deepEqual(data.characters.player, player);
+  });
 });
 
 test('references with unsafe names are not fetched', () => {

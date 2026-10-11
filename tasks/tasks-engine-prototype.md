@@ -17,11 +17,12 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `.gitignore` - Ignores `node_modules/`, Playwright reports, and build output.
 
 **Simulation (pure game logic; runs in Node)**
-- `src/simulation/constants.js` - Fixed time step and shared constants.
+- `src/simulation/constants.js` - Fixed time step and shared constants (`Facing`).
+- `src/simulation/input.js` - The input state: `Input` names, `NO_INPUT`, `createInput()`, `holding()`. The one definition used by the simulation, the input translation (task 7.9), and tests.
 - `src/simulation/state.js` - Creates the initial game state from loaded data; resets a level.
 - `src/simulation/step.js` - The single `step(state, input, dt)` update function.
 - `src/simulation/collision.js` - AABB collision against tiles and resting stackable objects.
-- `src/simulation/player.js` - Running, jumping, health, damage, knockback, invincibility, pits.
+- `src/simulation/player.js` - The `Player` class (the one declaration of the player's properties, sealed so unknown properties throw), and running, jumping, health, damage, knockback, invincibility, pits.
 - `src/simulation/objects.js` - Pick up, drop, throw, stacking, objects falling when support is removed.
 - `src/simulation/punch.js` - Punch area, damage, and rules.
 - `src/simulation/enemies.js` - Patrol, turning at edges, stomp, being hit.
@@ -84,6 +85,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `tests/platform/*.test.js` - Platform contract test and tests for each platform implementation.
 - `tests/electron/*.test.js` - Unit tests for the Electron and Steam modules, with fake `electron` and steamworks.js.
 - `tests/helpers/fake-canvas.js` - Recording fake canvas context for testing drawing code.
+- `tests/helpers/random.js` - Seeded random numbers, so randomised tests are repeatable.
+- `tests/simulation/collision-properties.test.js` - Randomised check: thousands of random boxes and moves must all obey the collision rules (seed overridable with `COLLISION_SEED`).
 - `tests/data/validate.test.js` - Unit tests for every validation error type.
 - `tests/data/load.test.js` - Unit tests for the data loader, with file and image loading replaced by fixture readers.
 - `tests/data/schemas.test.js` - Checks each schema is valid JSON Schema (via Ajv, a test-only dependency), uses only supported keywords, and accepts every example in `docs/data-formats.md`.
@@ -168,7 +171,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 1.8 Confirm the hook installs automatically on a fresh clone after `npm install`.
   - [x] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
   - [x] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
-- [x] 2.0 Define the data formats and build the data validator
+- [ ] 2.0 Define the data formats and build the data validator
   - [x] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
   - [x] 2.2 Design the level list format (req 55).
   - [x] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
@@ -183,6 +186,9 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 2.12 Write `tests/data/validate.test.js` covering every error type and checking the message wording (req 87).
   - [x] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
   - [x] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
+  - [ ] 2.15 Validator check that the player fits at each level's start, so designers see the problem when running `npm run validate` instead of only when the game builds the level. `createLevelState` already refuses to build such a level (`LevelDataError`, "fitting the player at the start"); this reports the same problem earlier, in plain language.
+    - Test: `tests/data/validate.test.js`: a player too tall for the space at the start (head inside a ceiling), too wide (inside walls beside it), and one that exactly fits (no error). The error names the level, the player's size, and the overlapping tile's row and column. Plus a wording test for the new problem code.
+    - Code: `src/data/validate.js`. Reuse the simulation's placement rule (bottom-centre on the start cell) and `overlapsSolid` (`src/simulation/collision.js`) rather than writing them a second time, so the validator and the game can't disagree. Data code may import from the simulation (the architecture guard only restricts the other direction).
 - [ ] 3.0 Build the simulation core: time step, collision, player movement, and health
   - [x] 3.1 Architecture guard: simulation code must not import presentation, platform, or Electron code, or use browser globals (`window`, `document`, `requestAnimationFrame`, `Image`, `fetch`) (req 71).
     - Test: `tests/architecture.test.js`. For the red step, temporarily add a forbidden import to a stub simulation file and confirm the test fails; then remove it.
@@ -193,24 +199,38 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.3 Initial state from loaded data: level size, tiles, player at the start cell (bottom-centre placement), health from the player definition, and a separate snapshot of the level's starting state (req 27).
     - Test: `tests/simulation/state.test.js`
     - Code: `src/simulation/state.js`
-  - [ ] 3.4 `step(state, input, dt)` with the fixed time step: returns the next state, doesn't change the state passed in, advances time, and gives identical results for identical inputs (reqs 5, 72).
+  - [x] 3.4 `step(state, input, dt)` with the fixed time step: returns the next state, doesn't change the state passed in, advances time, and gives identical results for identical inputs (reqs 5, 72).
     - Test: `tests/simulation/step.test.js`
     - Code: `src/simulation/step.js`, `src/simulation/constants.js`
-  - [ ] 3.5 Tile collision: moving a box into a wall stops it flush, landing sets on-ground, hitting a ceiling stops upward movement, X is resolved before Y, the level's side edges act as walls, the top is open, and extra solid boxes can be passed in (for stacking later).
+  - [x] 3.5 Tile collision: moving a box into a wall stops it flush, landing sets on-ground, hitting a ceiling stops upward movement, X is resolved before Y, the level's side edges act as walls, the top is open, and extra solid boxes can be passed in (for stacking later).
     - Test: `tests/simulation/collision.test.js`
     - Code: `src/simulation/collision.js`
-  - [ ] 3.6 Running left and right at the speed from the player definition, stopping when no direction is held (req 20).
+  - [x] 3.6 Running left and right at the speed from the player definition, stopping when no direction is held (req 20).
     - Test: `tests/simulation/player.test.js` ("running")
     - Code: `src/simulation/player.js`, `src/simulation/step.js`
-  - [ ] 3.7 Facing direction: the player faces the way they last moved, and keeps facing that way when stopped (needed for throwing and punching).
+  - [x] 3.7 Facing direction: the player faces the direction they're trying to run (the held input, not the actual movement), and keeps facing that way when neither or both directions are held (needed for throwing and punching).
     - Test: `tests/simulation/player.test.js` ("facing")
     - Code: `src/simulation/player.js`
-  - [ ] 3.8 Jumping and gravity: jump speed, gravity, and maximum fall speed from tuning; jumping only from the ground (no double jump) (reqs 21–22).
-    - Test: `tests/simulation/player.test.js` ("jumping")
+  - [x] 3.8 Sideways collision for the player: running moves the player through `moveBox` (collision.js), so walls and the level's left and right edges stop them (req 23). This comes before jumping because jumping needs the player to stand on something.
+    - Test: `tests/simulation/player.test.js` ("walls and edges"). The player-level tests show the player *uses* `moveBox` correctly; the collision details themselves are already covered by `collision.test.js`. Cases, comparing the distance to a wall *d* with one step's move *m = speed × dt*:
+      - *m < d*: moves the full amount; no hit;
+      - *m = d*: arrives exactly touching the wall; not a hit;
+      - *m > d*: stops flush against the wall, never past it;
+      - *m* several tiles larger than *d* (a large `dt` passed to `step`): still stops at the first wall, with no passing through;
+      - *d = 0* (already touching) while pushing into the wall: doesn't move;
+      - the same cases at the level's left and right edges;
+      - running into a wall to the left and to the right;
+      - pushing into a wall keeps the player facing the wall, though they don't move (facing follows the held input, task 3.7).
+    - Rule to decide and test: when a wall stops the player, `vx` becomes 0 for that step (pushing but not moving), so later animation shows idle rather than running.
     - Code: `src/simulation/player.js`
-  - [ ] 3.9 The player colliding with tiles through `step`: landing on the ground, stopping at walls, and bumping ceilings (req 23).
-    - Test: `tests/simulation/player.test.js` ("collision")
-    - Code: `src/simulation/player.js`, `src/simulation/step.js`
+  - [x] 3.9 Gravity, jumping, and vertical collision (decided: a jump needs a new press; holding jump through a landing doesn't jump again, matching the PRD's punch rule): gravity, jump speed, and maximum fall speed from tuning; landing on the ground sets `onGround`; jumping only from the ground (no double jump); hitting a ceiling stops upward movement (reqs 21–23).
+    - Test: `tests/simulation/player.test.js` ("gravity and jumping"). The same distance-versus-move cases as 3.8, vertically:
+      - a fall whose step is smaller than, equal to, larger than, and many tiles larger than the distance to the ground: lands on top, never inside or through it;
+      - a jump whose step is smaller than, equal to, and larger than the distance to a ceiling: stops just below it;
+      - falling until `maxFallSpeed` is reached, then no faster;
+      - running and jumping together (both inputs held).
+    - Rules to decide and test: `vy` becomes 0 on landing and on hitting a ceiling; arriving exactly on the ground isn't `onGround` until the next step pulls the player down (the existing collision rule), and must not stop the player from jumping on that next step.
+    - Code: `src/simulation/player.js`
   - [ ] 3.10 Taking damage: lose 1 health, knockback away from the source (from tuning), and invincibility for the time in tuning, with a flag the renderer can use to flash (reqs 24–25).
     - Test: `tests/simulation/player.test.js` ("damage")
     - Code: `src/simulation/player.js`

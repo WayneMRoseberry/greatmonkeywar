@@ -2,6 +2,15 @@
 //
 // All positions and sizes are in tiles. A box is { x, y, width, height } where
 // (x, y) is its top-left corner; y increases downwards (docs/data-formats.md).
+//
+// createLevelState is the gate between data and simulation. Data is validated
+// when loaded (src/data/validate.js); this file then checks what building a
+// level needs (the level exists, exactly one start and goal, a player
+// definition) and throws a LevelDataError if not. The rest of the simulation
+// (step.js, player.js, collision.js, ...) relies on that and doesn't check again.
+
+import { Player } from './player.js';
+import { overlapsSolid } from './collision.js';
 
 const GRID_AND_LEGEND = "the level's grid and legend";
 
@@ -98,7 +107,18 @@ export function createLevelState(data, levelName) {
   const player = step(levelName, 'creating the player', 'the player definition (characters/player.json)', (fail) => {
     const definition = data.characters.player ?? fail('there is no player definition');
     const box = placeInCell(startCell.column, startCell.row, definition.size.width, definition.size.height);
-    return { ...box, vx: 0, vy: 0, onGround: false, facing: 'right', health: definition.health };
+    return new Player({ ...box, health: definition.health });   // everything else starts at Player's defaults
+  });
+
+  // The player must not start inside something solid: collision only stops boxes
+  // moving into solids, so one placed inside a floor or ceiling could pass through
+  // it. Respawning uses the same start point, so this covers that too.
+  step(levelName, 'fitting the player at the start', "the level's grid and legend, or the player's size in characters/player.json", (fail) => {
+    const tile = overlapsSolid(level, player);
+    if (tile) {
+      fail(`the player (${player.width} × ${player.height} tiles) would overlap ` +
+        `the solid tile at row ${tile.row + 1}, column ${tile.column + 1}`);
+    }
   });
 
   const goalCell = step(levelName, 'placing the goal', GRID_AND_LEGEND, (fail) =>
@@ -114,6 +134,6 @@ export function createLevelState(data, levelName) {
     rewardCount: 0,
     time: 0,
   };
-  state.levelStart = structuredClone({ player: state.player, rewardCount: state.rewardCount });
+  state.levelStart = { player: player.copy(), rewardCount: state.rewardCount };
   return state;
 }
