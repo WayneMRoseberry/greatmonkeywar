@@ -4,6 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player, damagePlayer } from '../../src/simulation/player.js';
+import { CarriableObject } from '../../src/simulation/objects.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -186,5 +187,43 @@ describe('restart when health reaches 0 (req 27)', () => {
     assert.notEqual(restarted.player, restarted.levelStart.player);
     restarted.player.x += 3;
     assert.equal(restarted.levelStart.player.x, start.levelStart.player.x);
+  });
+});
+
+describe('objects across steps (req 27)', () => {
+  // c is a stackable crate in the standard legend (level-builder.js).
+  const OBJECT_GRID = ['........', '.P.c..G.', '########'];
+
+  function newObjectState() {
+    return createLevelState(buildData(OBJECT_GRID), TEST_LEVEL);
+  }
+
+  test('the new state\'s objects are separate copies: changing them doesn\'t change the old state', () => {
+    const state = newObjectState();
+    const next = step(state, NO_INPUT, FIXED_DT);
+    const xBefore = state.objects[0].x;
+    next.objects[0].x = xBefore + 5;
+    next.levelStart.objects[0].x = xBefore + 5;
+    assert.equal(state.objects[0].x, xBefore);
+    assert.equal(state.levelStart.objects[0].x, xBefore);
+  });
+
+  test('objects stay CarriableObjects, with their structure locked, after any number of steps', () => {
+    const after = runSteps(step, newObjectState(), NO_INPUT, STEPS_PER_SECOND, FIXED_DT);
+    for (const object of [...after.objects, ...after.levelStart.objects]) {
+      assert.ok(object instanceof CarriableObject);
+      assert.ok(Object.isSealed(object));
+    }
+  });
+
+  test('a restart puts the objects back as they were when the level started, as separate copies', () => {
+    const start = newObjectState();
+    const [startObject] = start.objects;
+    const moved = new CarriableObject({ ...startObject, x: startObject.x + 2, resting: false });
+    const lastLife = { ...start, player: new Player({ ...start.player, health: 0 }), objects: [moved] };
+
+    const restarted = step(lastLife, NO_INPUT, FIXED_DT);
+    assert.deepEqual(restarted.objects.map((o) => ({ ...o })), start.levelStart.objects.map((o) => ({ ...o })));
+    assert.notEqual(restarted.objects[0], restarted.levelStart.objects[0]);
   });
 });

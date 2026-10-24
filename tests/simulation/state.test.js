@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createLevelState, LevelDataError } from '../../src/simulation/state.js';
 import { Facing } from '../../src/simulation/constants.js';
 import { Player } from '../../src/simulation/player.js';
+import { CarriableObject } from '../../src/simulation/objects.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 
 const GRID = [
@@ -87,6 +88,107 @@ describe('player', () => {
   });
 });
 
+describe('objects (req 28)', () => {
+  // Grids use the standard legend (level-builder.js): c is a stackable crate,
+  // o a coconut, which isn't stackable.
+
+  test('each object placement becomes an object of that type, at the bottom-centre of its cell, still', () => {
+    const crateColumn = 2;
+    const coconutColumn = 4;
+    const row = 0;
+    const state = stateFor(['P.c.o.G', '#######']);
+    const { crate, coconut } = state.data.objects;
+
+    assert.equal(state.objects.length, 2);
+    const [first, second] = state.objects;
+    assert.equal(first.type, 'crate');
+    assertBoxNear(first, expectedBox(crateColumn, row, crate.size));
+    assert.equal(second.type, 'coconut');
+    assertBoxNear(second, expectedBox(coconutColumn, row, coconut.size));
+    for (const object of state.objects) {
+      assert.equal(object.vx, 0);
+      assert.equal(object.vy, 0);
+    }
+  });
+
+  test('objects are listed in grid order: rows top to bottom, then left to right', () => {
+    const state = stateFor(['..o.c', 'Pc.oG', '#####']);
+    assert.deepEqual(
+      state.objects.map(({ type, x, y }) => ({ type, column: Math.floor(x), row: Math.floor(y) })),
+      [
+        { type: 'coconut', column: 2, row: 0 },
+        { type: 'crate', column: 4, row: 0 },
+        { type: 'crate', column: 1, row: 1 },
+        { type: 'coconut', column: 3, row: 1 },
+      ],
+    );
+  });
+
+  test('a level with no objects has an empty list', () => {
+    assert.deepEqual(stateFor().objects, []);
+  });
+
+  test('objects are CarriableObjects, with their structure locked', () => {
+    const [object] = stateFor(['P.c.G', '#####']).objects;
+    assert.ok(object instanceof CarriableObject);
+    assert.ok(Object.isSealed(object));
+  });
+
+  test('the object\'s type is found by its legend entry, not by the letter', () => {
+    const [object] = stateFor(['P.x.G', '#####'], { legend: { x: { object: 'coconut' } } }).objects;
+    assert.equal(object.type, 'coconut');
+  });
+});
+
+describe('objects that start at rest (req 28; decided: an object rests if something solid is directly under it)', () => {
+  // "Something solid" is a solid tile or a stackable object that is itself at
+  // rest. Objects not at rest fall once object gravity exists (task 4.5).
+
+  /** The `resting` flag of each object, in grid order. */
+  const restingOf = (grid, overrides) => stateFor(grid, overrides).objects.map((o) => o.resting);
+
+  test('objects on the ground are at rest, stackable or not', () => {
+    assert.deepEqual(restingOf(['P.c.o.G', '#######']), [true, true]);
+  });
+
+  test('crates placed one above another start stacked: each one rests on the one below', () => {
+    const state = stateFor(['..c..', '..c..', 'P.c.G', '#####']);
+    assert.deepEqual(state.objects.map((o) => o.resting), [true, true, true]);
+    const [top, middle, bottom] = state.objects;
+    assert.ok(Math.abs((top.y + top.height) - middle.y) < 1e-9, 'the top crate sits on the middle one');
+    assert.ok(Math.abs((middle.y + middle.height) - bottom.y) < 1e-9, 'the middle crate sits on the bottom one');
+  });
+
+  test('an object over a gap is not at rest', () => {
+    assert.deepEqual(restingOf(['..c..', 'P...G', '#####']), [false]);
+  });
+
+  test('an object over a pit (in the bottom row, above nothing) is not at rest', () => {
+    assert.deepEqual(restingOf(['P...G', '##c##']), [false]);
+  });
+
+  test('a non-stackable object is not a surface: a crate on a coconut is not at rest', () => {
+    assert.deepEqual(restingOf(['..c..', 'P.o.G', '#####']), [false, true]);
+  });
+
+  test('a crate on a crate that is not at rest is not at rest either', () => {
+    assert.deepEqual(restingOf(['..c..', '..c..', 'P...G', '#####']), [false, false]);
+  });
+
+  test('a crate touching the crate below only at a corner is not at rest', () => {
+    // The upper crate is in column 2, the lower one in column 3: they share only a corner.
+    assert.deepEqual(restingOf(['P.c..G', '...c..', '######']), [false, true]);
+  });
+
+  test('stackable objects shorter than a tile, one above the other, leave a gap: the upper one is not at rest', () => {
+    const data = buildData(['..s..', 'P.s.G', '#####'], { legend: { s: { object: 'smallCrate' } } });
+    data.objects.smallCrate = { ...data.objects.crate, size: { width: 0.5, height: 0.5 } };
+    const [upper, lower] = createLevelState(data, TEST_LEVEL).objects;
+    assert.equal(lower.resting, true);
+    assert.equal(upper.resting, false);
+  });
+});
+
 describe('goal, rewards, and time', () => {
   test('the goal is the box of its grid cell', () => {
     // 'G' in GRID is in column 6 of row 1; a cell is 1 × 1 tile.
@@ -101,9 +203,22 @@ describe('goal, rewards, and time', () => {
 });
 
 describe('level-start snapshot (req 27)', () => {
-  test('records the player and reward count as they were when the level started', () => {
-    const state = stateFor();
-    assert.deepEqual(state.levelStart, { player: state.player, rewardCount: 0 });
+  test('records the player, objects, and reward count as they were when the level started', () => {
+    const state = stateFor(['P.c.o.G', '#######']);
+    assert.deepEqual(state.levelStart, { player: state.player, objects: state.objects, rewardCount: 0 });
+  });
+
+  test('the snapshot\'s objects are CarriableObjects, separate from the live ones', () => {
+    const state = stateFor(['P.c.G', '#####']);
+    const [live] = state.objects;
+    const [snapshot] = state.levelStart.objects;
+    assert.ok(snapshot instanceof CarriableObject);
+    assert.ok(Object.isSealed(snapshot));
+    assert.notEqual(snapshot, live);
+
+    const startingX = live.x;
+    live.x = startingX + 10;
+    assert.equal(snapshot.x, startingX);
   });
 
   test('the snapshot\'s player is a Player too', () => {
@@ -357,6 +472,14 @@ describe('invalid levels fail with an explanation', () => {
     delete data.characters.player;
     assert.deepEqual(what(levelErrorFor(data)),
       { levelName: TEST_LEVEL, task: 'creating the player', part: 'the player definition (characters/player.json)' });
+  });
+
+  test('an object placement naming an object definition that doesn\'t exist', () => {
+    const err = levelErrorFor(buildData(['P.x.G', '#####'], { legend: { x: { object: 'barrel' } } }));
+    assert.deepEqual(what(err), {
+      levelName: TEST_LEVEL, task: 'placing the objects', part: "the level's legend and the object definitions (data/objects/)",
+    });
+    assert.match(err.message, /no object definition named "barrel"/);
   });
 
   test('an unexpected failure inside a step is reported with that step, and keeps the original error', () => {

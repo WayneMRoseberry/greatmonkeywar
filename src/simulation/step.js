@@ -10,19 +10,23 @@
 
 import { updatePlayer } from './player.js';
 
+const copyObjects = (objects) => objects.map((o) => o.copy());
+
 /**
  * A copy of `state` that shares nothing changeable with it. The loaded game
  * data is read-only and the same for every state, so it is shared, not copied.
- * Players are copied with Player.copy(), which keeps them sealed Player objects
- * (structuredClone would turn them into plain objects).
+ * Players and objects are copied with their copy() methods, which keep them
+ * sealed Player and CarriableObject instances (structuredClone would turn them
+ * into plain objects).
  */
-function copyState({ data, player, levelStart, ...rest }) {
-  const { player: startPlayer, ...startRest } = levelStart;
+function copyState({ data, player, objects, levelStart, ...rest }) {
+  const { player: startPlayer, objects: startObjects, ...startRest } = levelStart;
   return {
     ...structuredClone(rest),
     data,
     player: player.copy(),
-    levelStart: { ...structuredClone(startRest), player: startPlayer.copy() },
+    objects: copyObjects(objects),
+    levelStart: { ...structuredClone(startRest), player: startPlayer.copy(), objects: copyObjects(startObjects) },
   };
 }
 
@@ -34,6 +38,7 @@ function copyState({ data, player, levelStart, ...rest }) {
 function restartLevel(state) {
   const { levelStart } = state;
   state.player = levelStart.player.copy();
+  state.objects = copyObjects(levelStart.objects);
   state.rewardCount = levelStart.rewardCount;
 }
 

@@ -6,7 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveBox, overlapsSolid } from '../../src/simulation/collision.js';
+import { moveBox, overlapsSolid, isSupported } from '../../src/simulation/collision.js';
 
 const TILE_TYPES = {
   '#': { solid: true, color: '#000000' },
@@ -674,5 +674,34 @@ describe('extra solid boxes (for stacking later)', () => {
     const before = { ...start };
     moveBox(level, start, 1, 1);
     assert.deepEqual(start, before);
+  });
+});
+
+describe('isSupported: something solid directly under a box', () => {
+  test('a box resting exactly on a solid tile is supported', () => {
+    const level = levelFrom(['...', '###']);
+    assert.equal(isSupported(level, box(1, 0, 1, 1)), true);
+  });
+
+  test('a box with a gap under it is not supported', () => {
+    const level = levelFrom(['...', '...', '###']);
+    const gap = 0.01;
+    assert.equal(isSupported(level, box(1, 1 - gap, 1, 1)), false);
+  });
+
+  test('a box in open space is not supported', () => {
+    assert.equal(isSupported(levelFrom(['...', '...']), box(1, 0, 1, 1)), false);
+  });
+
+  test('a box resting exactly on a solid box passed in is supported', () => {
+    const level = levelFrom(['...', '...', '...']);
+    const crate = box(1, 1, 1, 1);
+    assert.equal(isSupported(level, box(1, crate.y - 1, 1, 1), [crate]), true);
+  });
+
+  test('a solid box touched only at a corner does not support', () => {
+    const level = levelFrom(['...', '...', '...']);
+    const crate = box(2, 1, 1, 1);   // its top-left corner touches the box's bottom-right
+    assert.equal(isSupported(level, box(1, crate.y - 1, 1, 1), [crate]), false);
   });
 });

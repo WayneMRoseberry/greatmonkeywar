@@ -139,3 +139,15 @@ export function moveBox(level, box, dx, dy, solidBoxes = []) {
     onGround: dy > 0 && alongY.blocked,
   };
 }
+
+// How far below a box to look when deciding whether it is supported. Tiny, so
+// only something actually touching the box's bottom edge counts.
+const SUPPORT_PROBE = 1e-6;
+
+/**
+ * True if something solid (a solid tile or one of `solidBoxes`) is directly
+ * under `box`, touching its bottom edge: it is standing or resting on it.
+ */
+export function isSupported(level, box, solidBoxes = []) {
+  return moveBox(level, box, 0, SUPPORT_PROBE, solidBoxes).onGround;
+}

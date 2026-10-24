@@ -10,7 +10,7 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { moveBox } from './collision.js';
+import { moveBox, isSupported } from './collision.js';
 
 /**
  * The player's changing state: the one central declaration of its properties.
@@ -72,13 +72,9 @@ export function damagePlayer(state, source) {
   return true;
 }
 
-// How far below the player to look for ground when deciding if they're standing.
-// Tiny, so only ground actually touching the player's feet counts.
-const GROUND_PROBE = 1e-6;
-
 /** True if there is something solid directly under the player's feet. */
 function isStanding(state) {
-  return moveBox(state.level, state.player, 0, GROUND_PROBE).onGround;
+  return isSupported(state.level, state.player);
 }
 
 /**

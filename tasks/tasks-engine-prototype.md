@@ -23,7 +23,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `src/simulation/step.js` - The single `step(state, input, dt)` update function.
 - `src/simulation/collision.js` - AABB collision against tiles and resting stackable objects.
 - `src/simulation/player.js` - The `Player` class (the one declaration of the player's properties, sealed so unknown properties throw), and running, jumping, health, damage, knockback, invincibility, pits.
-- `src/simulation/objects.js` - Pick up, drop, throw, stacking, objects falling when support is removed.
+- `src/simulation/objects.js` - The `CarriableObject` class (sealed, like `Player`), and pick up, drop, throw, stacking, objects falling when support is removed.
 - `src/simulation/punch.js` - Punch area, damage, and rules.
 - `src/simulation/enemies.js` - Patrol, turning at edges, stomp, being hit.
 - `src/simulation/rewards.js` - Collecting reward items.
@@ -241,9 +241,10 @@ These were completed before this approach was adopted: their tests were written 
     - Test: `tests/simulation/step.test.js` ("restart")
     - Code: `src/simulation/step.js`, `src/simulation/state.js`
 - [ ] 4.0 Build objects and stacking: pick up, drop, throw, stack, and rewards
-  - [ ] 4.1 Objects in the initial state, from level placements and object definitions; objects placed one above another start stacked (req 28).
-    - Test: `tests/simulation/state.test.js` ("objects")
-    - Code: `src/simulation/state.js`
+  - [x] 4.1 Objects in the initial state, from level placements and object definitions; objects placed one above another start stacked (req 28).
+    - Decided: objects are placed in their cells by the usual bottom-centre rule and start `resting` if a solid tile, or a stackable object that is itself resting, is directly under them; otherwise they start not resting and fall once object gravity exists (4.5). Non-stackable objects are never a support. Objects are part of the level-start snapshot and are restored on restart (req 27).
+    - Test: `tests/simulation/state.test.js` ("objects", "objects that start at rest", snapshot), `tests/simulation/step.test.js` ("objects across steps"), `tests/simulation/collision.test.js` ("isSupported")
+    - Code: `src/simulation/objects.js` (`CarriableObject`), `src/simulation/state.js`, `src/simulation/step.js`, `src/simulation/collision.js` (`isSupported`, now also used by the player's standing check)
   - [ ] 4.2 Pick up with **action** when touching an object and empty-handed. The held object follows above the player's head. One object at a time (reqs 29–30).
     - Test: `tests/simulation/objects.test.js` ("pick up")
     - Code: `src/simulation/objects.js`, `src/simulation/step.js`
