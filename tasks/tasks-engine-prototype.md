@@ -257,14 +257,20 @@ These were completed before this approach was adopted: their tests were written 
     - Decided: 4.3 is the launch only. A new press of action while holding lets go of the object from above the head, with speed (`throwSpeed.x` forward in the facing direction after this step's move, `throwSpeed.y` upward), whatever the player's own speed. The object becomes `thrown` and can't be picked up until it lands. Objects don't move on their own until 4.5, which tests the arc.
     - Test: `tests/simulation/objects.test.js` ("throw", "the CarriableObject structure")
     - Code: `src/simulation/objects.js`
-  - [ ] 4.4 Drop with **down + action** at the player's feet, using drop speed from tuning (req 32).
-    - Test: `tests/simulation/objects.test.js` ("drop")
+  - [x] 4.4 Drop with **down + action** at the player's feet, using drop speed from tuning (req 32).
+    - Decided: the object goes down beside the player's feet, flush against the side they face, with its bottom level with their feet. If it doesn't fit there (tiles or the level's edge), it goes on the other side. If neither fits, the player keeps holding it. `dropSpeed` follows `throwSpeed`'s convention: x away from the player (toward the side the object went down on), y upward. A dropped object isn't `thrown`, so it can be picked up again at once. Down + action with empty hands picks up as usual. Throw and drop speeds of 0 come out as exactly 0, never -0, so equal states compare as equal.
+    - Test: `tests/simulation/objects.test.js` ("drop", plus a zero-speed case in "throw")
     - Code: `src/simulation/objects.js`
   - [ ] 4.5 Object gravity and tile collision, so thrown and dropped objects come to rest (req 34).
     - Carried over from 4.3: test the thrown object's arc (forward and up, then falling under gravity), and clear `thrown` when it lands so it can be picked up again. Decide what a wall hit does to a thrown object's sideways speed.
+    - Carried over from 4.4: dropped objects stay where they were put down until this task. Test that a dropped object falls and comes to rest in each case: dropped on the ground (at rest at once, with a drop speed of 0), dropped in mid-air (falls from beside the player's feet), and dropped with a non-zero `dropSpeed` (moves away from the player and upward, then falls). A dropped object is never `thrown`, so it can be picked up while still falling.
     - Test: `tests/simulation/objects.test.js` ("falling and resting")
     - Code: `src/simulation/objects.js`
   - [ ] 4.6 Stacking: stackable objects at rest are solid surfaces that objects land on and the player stands, walks, and jumps on (req 35).
+    - Carried over from 4.2a and 4.4: the "does it fit" checks only look at tiles and the level's edges, so an object can be dropped overlapping a crate, or picked up into a crate above the player's head. Once resting stackable objects are solid, include them in every such check, but never the held object itself:
+      - the drop's placement beside the feet (front, then the other side, else keep holding);
+      - the pick-up's room-above-the-head check;
+      - the player and held object moving together (`moveBoxes` gets the resting stackable objects as `solidBoxes`), so a carried crate stops at a stack just as it stops at a wall.
     - Test: `tests/simulation/objects.test.js` ("stacking"), `tests/simulation/collision.test.js` ("stackable boxes")
     - Code: `src/simulation/objects.js`, `src/simulation/collision.js`, `src/simulation/player.js`
   - [ ] 4.7 Picking up an object that others rest on makes them fall (req 36).
@@ -284,9 +290,11 @@ These were completed before this approach was adopted: their tests were written 
     - Test: `tests/simulation/enemies.test.js` ("patrol")
     - Code: `src/simulation/enemies.js`, `src/simulation/step.js`
   - [ ] 5.3 Contact damage when the player touches an enemy from the side or below (req 51).
-    - Test: `tests/simulation/enemies.test.js` ("contact")
-    - Code: `src/simulation/enemies.js`
+    - Carried over from 4.4: `damagePlayer` (player.js, task 3.10), which this task is the first to call in play, gives a speed of -0 when the knockback in tuning is 0 (`-knockback.y`, and `away * knockback.x` when knocked to the left). -0 makes equal states compare as different (`deepEqual` tells 0 and -0 apart). Test-first: knockback of 0 gives exactly 0 in both directions, then fix it the way throw and drop do (`withoutNegativeZero` in objects.js; move it somewhere both files can share).
+    - Test: `tests/simulation/enemies.test.js` ("contact"), `tests/simulation/player.test.js` ("damage", the zero-knockback case)
+    - Code: `src/simulation/enemies.js`, `src/simulation/player.js`
   - [ ] 5.4 Stomping: landing on an enemy while falling defeats it regardless of health and bounces the player (req 52).
+    - Same -0 rule as 5.3: the bounce speed (`-stompBounceSpeed`) must come out as exactly 0, not -0, when `stompBounceSpeed` is 0. Include that case in the tests.
     - Test: `tests/simulation/enemies.test.js` ("stomp")
     - Code: `src/simulation/enemies.js`
   - [ ] 5.5 A thrown object defeats the enemy it hits, then falls so it can be picked up again (req 33).

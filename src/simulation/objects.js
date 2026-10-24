@@ -108,6 +108,8 @@ function placeAboveHead(object, player) {
  *    and upward, at throwSpeed (tuning), whatever the player's own speed.
  *    It is then `thrown` and can't be picked up until it lands (task 4.5).
  *    The press that picks an object up never throws it: only a later press.
+ *  - Dropping (req 32): with down held, a new press of action drops the held
+ *    object beside the player's feet instead of throwing it (dropObject).
  */
 export function updateObjects(state, input) {
   const { player } = state;
@@ -117,7 +119,8 @@ export function updateObjects(state, input) {
   const held = heldObject(state);
   if (held) {
     placeAboveHead(held, player);
-    if (actionPressed) throwObject(held, player, state.data.tuning.throwSpeed);
+    if (actionPressed && input[Input.DOWN]) dropObject(state, held);
+    else if (actionPressed) throwObject(held, player, state.data.tuning.throwSpeed);
   } else if (actionPressed) {
     const chosen = objectToPickUp(state);
     if (chosen && fitsIn(state.level, aboveHead(chosen, player))) {
@@ -130,10 +133,43 @@ export function updateObjects(state, input) {
   }
 }
 
+/**
+ * `speed`, with -0 (from negating or flipping a speed of 0) turned into 0, so
+ * states that are equal also compare as equal (deepEqual tells 0 and -0 apart).
+ */
+const withoutNegativeZero = (speed) => speed + 0;
+
+/** Where `object` goes down beside the player's feet on `side` (+1 right, -1 left): flush against the player, bottoms level. */
+function besideFeet(object, player, side) {
+  const x = side > 0 ? player.x + player.width : player.x - object.width;
+  return { ...object, x, y: player.y + player.height - object.height };
+}
+
+/**
+ * Drops the held object beside the player's feet (req 32): on the side they
+ * face if it fits there, else on the other side; if neither fits, the player
+ * keeps holding it. It starts at dropSpeed (tuning), x away from the player
+ * and y upward, and isn't thrown, so it can be picked up again at once.
+ */
+function dropObject(state, object) {
+  const { player } = state;
+  const forward = player.facing === Facing.RIGHT ? 1 : -1;
+  const side = [forward, -forward].find((s) => fitsIn(state.level, besideFeet(object, player, s)));
+  if (side === undefined) return;
+
+  const { x, y } = besideFeet(object, player, side);
+  const { dropSpeed } = state.data.tuning;
+  object.held = false;
+  object.x = x;
+  object.y = y;
+  object.vx = withoutNegativeZero(side * dropSpeed.x);
+  object.vy = withoutNegativeZero(-dropSpeed.y);   // y increases downwards
+}
+
 function throwObject(object, player, throwSpeed) {
   const forward = player.facing === Facing.RIGHT ? 1 : -1;
   object.held = false;
   object.thrown = true;
-  object.vx = forward * throwSpeed.x;
-  object.vy = -throwSpeed.y;   // y increases downwards
+  object.vx = withoutNegativeZero(forward * throwSpeed.x);
+  object.vy = withoutNegativeZero(-throwSpeed.y);   // y increases downwards
 }

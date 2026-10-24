@@ -1,5 +1,5 @@
 // Tests for carriable objects: picking up (tasks 4.2, 4.2a; PRD reqs 29-30)
-// and throwing (task 4.3; req 31).
+// throwing (task 4.3; req 31), and dropping (task 4.4; req 32).
 //
 // Grids use the standard legend (level-builder.js): c is a stackable crate,
 // o a coconut. Unless a test says otherwise the player is 1 × 1 tile, so a
@@ -436,6 +436,15 @@ describe('throw (req 31)', () => {
     assertAboveHead(after.objects[0], after.player, 'when thrown');
   });
 
+  test('a throw speed of zero gives a speed of exactly 0, not -0, in either direction', () => {
+    // -0 would make otherwise equal states compare as different (deepEqual tells 0 and -0 apart).
+    const state = createLevelState(
+      buildData(THROW_GRID, { player: { size: ONE_TILE }, tuning: { throwSpeed: { x: 0, y: 0 } } }), TEST_LEVEL);
+    const [object] = step(holdingNew(withPlayer(state, { facing: Facing.LEFT }), 'crate'), PRESS_ACTION, FIXED_DT).objects;
+    assert.equal(object.vx, 0);
+    assert.equal(object.vy, 0);
+  });
+
   test('the throw speed doesn\'t depend on the player\'s own speed (running, jumping)', () => {
     const moving = throwState({ vx: 6, vy: -5 });
     const [object] = step(moving, holding(Input.RIGHT, Input.ACTION), FIXED_DT).objects;
@@ -480,5 +489,140 @@ describe('throw (req 31)', () => {
     state = step(state, NO_INPUT, FIXED_DT);
     state = step(state, PRESS_ACTION, FIXED_DT);
     assert.deepEqual(heldIndexes(state), [1]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4.4: dropping. Decided:
+//  - the object goes down beside the player's feet, flush against the side
+//    they face, its bottom level with their feet; if it doesn't fit there, the
+//    same place on the other side; if neither fits, the player keeps holding it;
+//  - dropSpeed (tuning) uses throwSpeed's convention: x away from the player
+//    (toward the side the object went down on), y upward;
+//  - a dropped object isn't thrown, so it can be picked up again at once.
+
+describe('drop (req 32)', () => {
+  const DROP_GRID = ['..........', '....P....G', '##########'];
+  const DROP_SPEED = { x: 2, y: 1 };
+  const THROW_SPEED = { x: 7, y: 3 };
+  const DOWN_ACTION = holding(Input.DOWN, Input.ACTION);
+
+  /** A state built from `grid`, with the player holding an object of `type`; `playerChanges` adjusts the player. */
+  function dropState({ grid = DROP_GRID, type = 'crate', playerChanges = {}, dropSpeed = DROP_SPEED } = {}) {
+    const state = createLevelState(
+      buildData(grid, { player: { size: ONE_TILE }, tuning: { dropSpeed, throwSpeed: THROW_SPEED } }), TEST_LEVEL);
+    return holdingNew(withPlayer(state, playerChanges), type);
+  }
+
+  /** Asserts the object is beside the player's feet: flush against the given side, bottoms level. */
+  function assertBesideFeet(object, player, side, when) {
+    if (side === Facing.RIGHT) assertNear(object.x, player.x + player.width, `object left edge ${when}`);
+    else assertNear(object.x + object.width, player.x, `object right edge ${when}`);
+    assertNear(object.y + object.height, player.y + player.height, `object bottom ${when}`);
+  }
+
+  test('pressing down + action while holding lets go of the object, without throwing it', () => {
+    const after = step(dropState(), DOWN_ACTION, FIXED_DT);
+    const [object] = after.objects;
+    assert.equal(object.held, false);
+    assert.equal(object.thrown, false);
+    assert.deepEqual(heldIndexes(after), []);
+  });
+
+  test('facing right, it goes down flush against the player\'s right side, bottom level with their feet', () => {
+    const after = step(dropState({ playerChanges: { facing: Facing.RIGHT } }), DOWN_ACTION, FIXED_DT);
+    assertBesideFeet(after.objects[0], after.player, Facing.RIGHT, 'after dropping');
+  });
+
+  test('facing left, it goes down flush against the player\'s left side', () => {
+    const after = step(dropState({ playerChanges: { facing: Facing.LEFT } }), DOWN_ACTION, FIXED_DT);
+    assertBesideFeet(after.objects[0], after.player, Facing.LEFT, 'after dropping');
+  });
+
+  test('an object shorter than the player also has its bottom level with the player\'s feet', () => {
+    const after = step(dropState({ type: 'coconut' }), DOWN_ACTION, FIXED_DT);
+    assertBesideFeet(after.objects[0], after.player, Facing.RIGHT, 'after dropping a coconut');
+  });
+
+  test('dropping in mid-air puts the object beside where the player\'s feet are then', () => {
+    const inTheAir = dropState({ grid: ['..........', '..........', '....P....G', '..........', '##########'] });
+    const after = step(inTheAir, DOWN_ACTION, FIXED_DT);
+    assert.equal(after.player.onGround, false);
+    assertBesideFeet(after.objects[0], after.player, Facing.RIGHT, 'after dropping in mid-air');
+  });
+
+  test('it starts with the drop speed in tuning: x away from the player, y upward', () => {
+    const right = step(dropState({ playerChanges: { facing: Facing.RIGHT } }), DOWN_ACTION, FIXED_DT).objects[0];
+    assert.equal(right.vx, DROP_SPEED.x);
+    assert.equal(right.vy, -DROP_SPEED.y);
+    const left = step(dropState({ playerChanges: { facing: Facing.LEFT } }), DOWN_ACTION, FIXED_DT).objects[0];
+    assert.equal(left.vx, -DROP_SPEED.x);
+    assert.equal(left.vy, -DROP_SPEED.y);
+  });
+
+  test('with a drop speed of zero (the usual setting), it starts still: exactly 0, not -0, on either side', () => {
+    for (const facing of [Facing.RIGHT, Facing.LEFT]) {
+      const [object] = step(dropState({ dropSpeed: { x: 0, y: 0 }, playerChanges: { facing } }), DOWN_ACTION, FIXED_DT).objects;
+      assert.equal(object.vx, 0, `vx facing ${facing}`);
+      assert.equal(object.vy, 0, `vy facing ${facing}`);
+    }
+  });
+
+  test('action without down still throws', () => {
+    const [object] = step(dropState(), PRESS_ACTION, FIXED_DT).objects;
+    assert.equal(object.thrown, true);
+    assert.equal(object.vx, THROW_SPEED.x);
+  });
+
+  test('only a new press of action drops: pressing down while action is still held does nothing', () => {
+    let state = stateFor(['.Pc.G', '#####']);
+    state = step(state, PRESS_ACTION, FIXED_DT);   // picks up
+    for (let i = 0; i < 10; i++) state = step(state, DOWN_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(state), [0]);
+  });
+
+  test('a wall in front: the object goes down on the other side instead, moving away from the player', () => {
+    const state = dropState({ grid: ['..........', '....P#...G', '##########'] });   // facing right, wall at column 5
+    const after = step(state, DOWN_ACTION, FIXED_DT);
+    const [object] = after.objects;
+    assertBesideFeet(object, after.player, Facing.LEFT, 'after dropping away from the wall');
+    assert.equal(object.vx, -DROP_SPEED.x);
+  });
+
+  test('the level\'s edge in front: the object goes down on the other side', () => {
+    const state = dropState({ grid: ['..........', 'P........G', '##########'], playerChanges: { facing: Facing.LEFT } });
+    const after = step(state, DOWN_ACTION, FIXED_DT);
+    assertBesideFeet(after.objects[0], after.player, Facing.RIGHT, 'after dropping away from the edge');
+  });
+
+  test('walls on both sides: nothing happens, and the player keeps holding the object', () => {
+    const state = dropState({ grid: ['..........', '...#P#...G', '##########'] });
+    const after = step(state, DOWN_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(after), [0]);
+    assertAboveHead(after.objects[0], after.player, 'after a refused drop');
+  });
+
+  test('a dropped object can be picked up again with a new press', () => {
+    let state = step(dropState(), DOWN_ACTION, FIXED_DT);
+    state = step(state, NO_INPUT, FIXED_DT);
+    state = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(state), [0]);
+  });
+
+  test('down + action with empty hands picks up as usual', () => {
+    const state = stateFor(['.Pc.G', '#####']);
+    assert.deepEqual(heldIndexes(step(state, DOWN_ACTION, FIXED_DT)), [0]);
+  });
+
+  test('a dropped object no longer follows the player', () => {
+    const dropped = step(dropState(), DOWN_ACTION, FIXED_DT);
+    let still = dropped;
+    let running = dropped;
+    for (let i = 0; i < 10; i++) {
+      still = step(still, NO_INPUT, FIXED_DT);
+      running = step(running, holding(Input.LEFT), FIXED_DT);
+    }
+    assert.notDeepEqual({ ...running.player }, { ...still.player });
+    assert.deepEqual({ ...running.objects[0] }, { ...still.objects[0] });
   });
 });
