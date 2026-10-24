@@ -29,6 +29,7 @@ export class CarriableObject {
   vy = 0;                 // vertical speed: + is falling, - is rising
   resting = false;        // true when on something solid; a resting stackable object is itself solid (req 35)
   held = false;           // true while the player carries it above their head (reqs 29-30)
+  thrown = false;         // true from being thrown until it lands; can't be picked up meanwhile (req 31)
 
   /** A CarriableObject with the given starting values; anything not given keeps its default. */
   constructor(values = {}) {
@@ -49,7 +50,8 @@ const centreX = (box) => box.x + box.width / 2;
 const centreY = (box) => box.y + box.height / 2;
 
 /**
- * The object the player would pick up: of the objects touching the player,
+ * The object the player would pick up: of the objects touching the player
+ * (other than ones thrown and still in flight),
  * those on the side they face come first, then the one whose centre is
  * nearest the player's centre, then the first in the list. Null if none.
  */
@@ -63,7 +65,7 @@ function objectToPickUp(state) {
   let best = null;
   let bestRank = null;
   for (const object of objects) {
-    if (!touches(player, object)) continue;
+    if (object.thrown || !touches(player, object)) continue;
     const r = rank(object);
     // Strictly better only, so a tie keeps the earlier object.
     if (!best || r.behind < bestRank.behind || (r.behind === bestRank.behind && r.distance < bestRank.distance)) {
@@ -101,22 +103,37 @@ function placeAboveHead(object, player) {
  *    is picked up. Together with the player moving with the held object
  *    (player.js), this keeps a held object out of solids.
  *  - A held object is carried above the player's head, still and not at rest.
+ *  - Throwing (req 31): a new press of action while holding lets go of the
+ *    object from above the head, forward in the direction the player faces
+ *    and upward, at throwSpeed (tuning), whatever the player's own speed.
+ *    It is then `thrown` and can't be picked up until it lands (task 4.5).
+ *    The press that picks an object up never throws it: only a later press.
  */
 export function updateObjects(state, input) {
   const { player } = state;
   const actionPressed = input[Input.ACTION] && !player.actionHeld;
   player.actionHeld = input[Input.ACTION];
 
-  let held = heldObject(state);
-  if (actionPressed && !held) {
+  const held = heldObject(state);
+  if (held) {
+    placeAboveHead(held, player);
+    if (actionPressed) throwObject(held, player, state.data.tuning.throwSpeed);
+  } else if (actionPressed) {
     const chosen = objectToPickUp(state);
-    held = chosen && fitsIn(state.level, aboveHead(chosen, player)) ? chosen : null;
-    if (held) {
-      held.held = true;
-      held.resting = false;
-      held.vx = 0;
-      held.vy = 0;
+    if (chosen && fitsIn(state.level, aboveHead(chosen, player))) {
+      chosen.held = true;
+      chosen.resting = false;
+      chosen.vx = 0;
+      chosen.vy = 0;
+      placeAboveHead(chosen, player);
     }
   }
-  if (held) placeAboveHead(held, player);
+}
+
+function throwObject(object, player, throwSpeed) {
+  const forward = player.facing === Facing.RIGHT ? 1 : -1;
+  object.held = false;
+  object.thrown = true;
+  object.vx = forward * throwSpeed.x;
+  object.vy = -throwSpeed.y;   // y increases downwards
 }

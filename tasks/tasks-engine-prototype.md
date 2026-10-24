@@ -253,13 +253,15 @@ These were completed before this approach was adopted: their tests were written 
     - Test: `tests/simulation/collision.test.js` ("moveBoxes", "fitsIn"), `tests/simulation/objects.test.js` ("carrying under barriers", "no room to pick up")
     - Code: `src/simulation/collision.js` (`moveBoxes`, `fitsIn`), `src/simulation/player.js`, `src/simulation/objects.js` (`heldObject`)
     - Docs (no code): `docs/guide-levels.md`, a note that carrying needs headroom of the player's height plus the object's.
-  - [ ] 4.3 Throw with **action** while holding: an arc in the facing direction, with throw speed from tuning (req 31).
-    - Test: `tests/simulation/objects.test.js` ("throw")
+  - [x] 4.3 Throw with **action** while holding: an arc in the facing direction, with throw speed from tuning (req 31).
+    - Decided: 4.3 is the launch only. A new press of action while holding lets go of the object from above the head, with speed (`throwSpeed.x` forward in the facing direction after this step's move, `throwSpeed.y` upward), whatever the player's own speed. The object becomes `thrown` and can't be picked up until it lands. Objects don't move on their own until 4.5, which tests the arc.
+    - Test: `tests/simulation/objects.test.js` ("throw", "the CarriableObject structure")
     - Code: `src/simulation/objects.js`
   - [ ] 4.4 Drop with **down + action** at the player's feet, using drop speed from tuning (req 32).
     - Test: `tests/simulation/objects.test.js` ("drop")
     - Code: `src/simulation/objects.js`
   - [ ] 4.5 Object gravity and tile collision, so thrown and dropped objects come to rest (req 34).
+    - Carried over from 4.3: test the thrown object's arc (forward and up, then falling under gravity), and clear `thrown` when it lands so it can be picked up again. Decide what a wall hit does to a thrown object's sideways speed.
     - Test: `tests/simulation/objects.test.js` ("falling and resting")
     - Code: `src/simulation/objects.js`
   - [ ] 4.6 Stacking: stackable objects at rest are solid surfaces that objects land on and the player stands, walks, and jumps on (req 35).

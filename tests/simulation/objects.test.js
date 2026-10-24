@@ -1,4 +1,5 @@
-// Tests for carriable objects: picking up (task 4.2; PRD reqs 29-30).
+// Tests for carriable objects: picking up (tasks 4.2, 4.2a; PRD reqs 29-30)
+// and throwing (task 4.3; req 31).
 //
 // Grids use the standard legend (level-builder.js): c is a stackable crate,
 // o a coconut. Unless a test says otherwise the player is 1 × 1 tile, so a
@@ -49,14 +50,16 @@ function assertAboveHead(object, player, when) {
 }
 
 describe('the CarriableObject structure', () => {
-  const PROPERTIES = ['type', 'x', 'y', 'width', 'height', 'vx', 'vy', 'resting', 'held'];
+  const PROPERTIES = ['type', 'x', 'y', 'width', 'height', 'vx', 'vy', 'resting', 'held', 'thrown'];
 
   test('has exactly the declared properties', () => {
     assert.deepEqual(Object.keys(new CarriableObject()).sort(), [...PROPERTIES].sort());
   });
 
-  test('starts not held', () => {
-    assert.equal(new CarriableObject().held, false);
+  test('starts not held and not thrown', () => {
+    const object = new CarriableObject();
+    assert.equal(object.held, false);
+    assert.equal(object.thrown, false);
   });
 });
 
@@ -381,5 +384,101 @@ describe('no room to pick up (task 4.2a)', () => {
     const state = withPlayer(stateFor(['#...G', '#P...', '#####'], NARROW), { x: awayFromWall });
     const crate = new CarriableObject({ type: 'crate', x: awayFromWall, y: state.player.y, ...ONE_TILE, resting: true });
     assert.deepEqual(heldIndexes(step({ ...state, objects: [crate] }, PRESS_ACTION, FIXED_DT)), [0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4.3: throwing. Decided:
+//  - 4.3 is the launch only: objects don't move on their own until object
+//    gravity and collision arrive (task 4.5), which also tests the arc;
+//  - the throw speed is throwSpeed from tuning, whatever the player's own speed;
+//  - a thrown object can't be picked up again until it lands (4.5 clears `thrown`).
+
+describe('throw (req 31)', () => {
+  const THROW_GRID = ['..........', '....P....G', '##########'];
+  const THROW_SPEED = { x: 7, y: 3 };
+
+  /** A state where the player stands on the ground holding a crate; `playerChanges` adjusts the player. */
+  function throwState(playerChanges = {}) {
+    const state = createLevelState(
+      buildData(THROW_GRID, { player: { size: ONE_TILE }, tuning: { throwSpeed: THROW_SPEED } }), TEST_LEVEL);
+    return holdingNew(withPlayer(state, playerChanges), 'crate');
+  }
+
+  test('pressing action while holding an object lets go of it, and it is thrown', () => {
+    const after = step(throwState(), PRESS_ACTION, FIXED_DT);
+    const [object] = after.objects;
+    assert.equal(object.held, false);
+    assert.equal(object.thrown, true);
+    assert.equal(object.resting, false);
+    assert.deepEqual(heldIndexes(after), []);
+  });
+
+  test('facing right, it is thrown forward to the right and upward, at the throw speed in tuning', () => {
+    const [object] = step(throwState({ facing: Facing.RIGHT }), PRESS_ACTION, FIXED_DT).objects;
+    assert.equal(object.vx, THROW_SPEED.x);
+    assert.equal(object.vy, -THROW_SPEED.y);   // y increases downwards, so upward is negative
+  });
+
+  test('facing left, it is thrown forward to the left and upward', () => {
+    const [object] = step(throwState({ facing: Facing.LEFT }), PRESS_ACTION, FIXED_DT).objects;
+    assert.equal(object.vx, -THROW_SPEED.x);
+    assert.equal(object.vy, -THROW_SPEED.y);
+  });
+
+  test('turning and throwing in the same step throws in the new direction', () => {
+    const [object] = step(throwState({ facing: Facing.RIGHT }), holding(Input.LEFT, Input.ACTION), FIXED_DT).objects;
+    assert.equal(object.vx, -THROW_SPEED.x);
+  });
+
+  test('the throw starts from above the player\'s head, where the player is after this step\'s move', () => {
+    const after = step(throwState(), holding(Input.RIGHT, Input.ACTION), FIXED_DT);
+    assertAboveHead(after.objects[0], after.player, 'when thrown');
+  });
+
+  test('the throw speed doesn\'t depend on the player\'s own speed (running, jumping)', () => {
+    const moving = throwState({ vx: 6, vy: -5 });
+    const [object] = step(moving, holding(Input.RIGHT, Input.ACTION), FIXED_DT).objects;
+    assert.equal(object.vx, THROW_SPEED.x);
+    assert.equal(object.vy, -THROW_SPEED.y);
+  });
+
+  test('the press that picks an object up doesn\'t also throw it, however long action is held', () => {
+    let state = stateFor(['.Pc.G', '#####']);
+    for (let i = 0; i < STEPS_PER_SECOND; i++) state = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(state), [0]);
+    assert.equal(state.objects[0].thrown, false);
+  });
+
+  test('a thrown object no longer follows the player', () => {
+    // From the moment of the throw, what the player does makes no difference to the object.
+    const thrown = step(throwState(), PRESS_ACTION, FIXED_DT);
+    let still = thrown;
+    let running = thrown;
+    for (let i = 0; i < 10; i++) {
+      still = step(still, NO_INPUT, FIXED_DT);
+      running = step(running, holding(Input.RIGHT), FIXED_DT);
+    }
+    assert.notDeepEqual({ ...running.player }, { ...still.player });
+    assert.deepEqual({ ...running.objects[0] }, { ...still.objects[0] });
+  });
+
+  test('a thrown object can\'t be caught: pressing action again while it touches the player doesn\'t pick it up', () => {
+    let state = step(throwState(), PRESS_ACTION, FIXED_DT);
+    state = step(state, NO_INPUT, FIXED_DT);
+    state = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(state), []);
+    assert.equal(state.objects[0].thrown, true);
+  });
+
+  test('after a throw, another object the player touches can be picked up with a new press', () => {
+    const holdingCrate = throwState();
+    const { player } = holdingCrate;
+    const beside = new CarriableObject({ type: 'crate', ...ONE_TILE, x: player.x + player.width, y: player.y, resting: true });
+    let state = { ...holdingCrate, objects: [...holdingCrate.objects, beside] };
+    state = step(state, PRESS_ACTION, FIXED_DT);   // throws the crate held above the head
+    state = step(state, NO_INPUT, FIXED_DT);
+    state = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(state), [1]);
   });
 });
