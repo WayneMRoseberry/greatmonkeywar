@@ -3,7 +3,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
-import { Player } from '../../src/simulation/player.js';
+import { Player, damagePlayer } from '../../src/simulation/player.js';
+import { CarriableObject } from '../../src/simulation/objects.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -104,5 +105,125 @@ describe('step', () => {
     const a = runSteps(step, newState(), script, count, FIXED_DT);
     const b = runSteps(step, newState(), script, count, FIXED_DT);
     assert.deepEqual(withoutData(a), withoutData(b));
+  });
+});
+
+describe('restart when health reaches 0 (req 27)', () => {
+  const START_HEALTH = 3;
+  const SIZE = { width: 1, height: 1 };
+  // P at column 2, above the gap in the bottom row: falling in costs 1 health.
+  const PIT_GRID = ['....G', '..P..', '##.##'];
+  // P on solid ground, for tests that damage the player directly.
+  const GROUND_GRID = ['....G', '..P..', '#####'];
+
+  function newState(grid) {
+    return createLevelState(buildData(grid, { player: { size: SIZE, health: START_HEALTH } }), TEST_LEVEL);
+  }
+
+  /** The state with the player's properties and the reward count changed, as if partway through the level. */
+  function partway(state, playerChanges, rewardCount) {
+    return { ...state, player: new Player({ ...state.player, ...playerChanges }), rewardCount };
+  }
+
+  /** Steps with no input until the player's position jumps back to the start; returns that state. */
+  function stepUntilBackAtStart(state) {
+    let current = state;
+    for (let i = 0; i < 10 * STEPS_PER_SECOND; i++) {
+      current = step(current, NO_INPUT, FIXED_DT);
+      if (current.player.y === state.start.y && current.player.vy === 0) return current;
+    }
+    assert.fail('the player never went back to the start');
+  }
+
+  test('falling into a pit with 1 health left restarts the level: health, position, and reward count as at the start', () => {
+    const start = newState(PIT_GRID);
+    const lastLife = partway(start, { health: 1 }, 5);
+    const restarted = stepUntilBackAtStart(lastLife);
+    assert.deepEqual({ ...restarted.player }, { ...start.levelStart.player });
+    assert.equal(restarted.player.health, START_HEALTH);
+    assert.equal(restarted.rewardCount, start.levelStart.rewardCount);
+  });
+
+  test('damage that brings health to 0 restarts the level on the next step', () => {
+    const start = newState(GROUND_GRID);
+    const state = partway(start, { health: 1 }, 2);
+    const enemy = { x: state.player.x - 1, y: state.player.y, width: 1, height: 1 };
+    damagePlayer(state, enemy);
+    assert.equal(state.player.health, 0);
+
+    const restarted = step(state, NO_INPUT, FIXED_DT);
+    assert.deepEqual({ ...restarted.player }, { ...start.levelStart.player });
+    assert.equal(restarted.rewardCount, start.levelStart.rewardCount);
+  });
+
+  test('a restart clears invincibility and knockback (as they were at the start)', () => {
+    const start = newState(GROUND_GRID);
+    const state = partway(start, { health: 0, invincibleTime: 0.5, knockedBack: true }, 0);
+    const restarted = step(state, NO_INPUT, FIXED_DT);
+    assert.equal(restarted.player.invincibleTime, start.levelStart.player.invincibleTime);
+    assert.equal(restarted.player.knockedBack, start.levelStart.player.knockedBack);
+  });
+
+  test('with health left, nothing is restarted', () => {
+    const start = newState(GROUND_GRID);
+    const state = partway(start, { health: 1 }, 5);
+    const after = step(state, NO_INPUT, FIXED_DT);
+    assert.equal(after.player.health, 1);
+    assert.equal(after.rewardCount, 5);
+  });
+
+  test('the snapshot itself is unchanged by a restart, so the level can restart again', () => {
+    const start = newState(PIT_GRID);
+    const firstRestart = stepUntilBackAtStart(partway(start, { health: 1 }, 0));
+    assert.deepEqual({ ...firstRestart.levelStart.player }, { ...start.levelStart.player });
+
+    const secondRestart = stepUntilBackAtStart(partway(firstRestart, { health: 1 }, 0));
+    assert.equal(secondRestart.player.health, START_HEALTH);
+  });
+
+  test('the restarted player is a separate copy of the snapshot', () => {
+    const start = newState(GROUND_GRID);
+    const restarted = step(partway(start, { health: 0 }, 0), NO_INPUT, FIXED_DT);
+    assert.notEqual(restarted.player, restarted.levelStart.player);
+    restarted.player.x += 3;
+    assert.equal(restarted.levelStart.player.x, start.levelStart.player.x);
+  });
+});
+
+describe('objects across steps (req 27)', () => {
+  // c is a stackable crate in the standard legend (level-builder.js).
+  const OBJECT_GRID = ['........', '.P.c..G.', '########'];
+
+  function newObjectState() {
+    return createLevelState(buildData(OBJECT_GRID), TEST_LEVEL);
+  }
+
+  test('the new state\'s objects are separate copies: changing them doesn\'t change the old state', () => {
+    const state = newObjectState();
+    const next = step(state, NO_INPUT, FIXED_DT);
+    const xBefore = state.objects[0].x;
+    next.objects[0].x = xBefore + 5;
+    next.levelStart.objects[0].x = xBefore + 5;
+    assert.equal(state.objects[0].x, xBefore);
+    assert.equal(state.levelStart.objects[0].x, xBefore);
+  });
+
+  test('objects stay CarriableObjects, with their structure locked, after any number of steps', () => {
+    const after = runSteps(step, newObjectState(), NO_INPUT, STEPS_PER_SECOND, FIXED_DT);
+    for (const object of [...after.objects, ...after.levelStart.objects]) {
+      assert.ok(object instanceof CarriableObject);
+      assert.ok(Object.isSealed(object));
+    }
+  });
+
+  test('a restart puts the objects back as they were when the level started, as separate copies', () => {
+    const start = newObjectState();
+    const [startObject] = start.objects;
+    const moved = new CarriableObject({ ...startObject, x: startObject.x + 2, resting: false });
+    const lastLife = { ...start, player: new Player({ ...start.player, health: 0 }), objects: [moved] };
+
+    const restarted = step(lastLife, NO_INPUT, FIXED_DT);
+    assert.deepEqual(restarted.objects.map((o) => ({ ...o })), start.levelStart.objects.map((o) => ({ ...o })));
+    assert.notEqual(restarted.objects[0], restarted.levelStart.objects[0]);
   });
 });

@@ -23,7 +23,7 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `src/simulation/step.js` - The single `step(state, input, dt)` update function.
 - `src/simulation/collision.js` - AABB collision against tiles and resting stackable objects.
 - `src/simulation/player.js` - The `Player` class (the one declaration of the player's properties, sealed so unknown properties throw), and running, jumping, health, damage, knockback, invincibility, pits.
-- `src/simulation/objects.js` - Pick up, drop, throw, stacking, objects falling when support is removed.
+- `src/simulation/objects.js` - The `CarriableObject` class (sealed, like `Player`), and pick up, drop, throw, stacking, objects falling when support is removed.
 - `src/simulation/punch.js` - Punch area, damage, and rules.
 - `src/simulation/enemies.js` - Patrol, turning at edges, stomp, being hit.
 - `src/simulation/rewards.js` - Collecting reward items.
@@ -171,7 +171,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 1.8 Confirm the hook installs automatically on a fresh clone after `npm install`.
   - [x] 1.9 Create `.github/workflows/ci.yml` that runs `npm ci` and `npm test` on every pull request to `main` (req 91).
   - [x] 1.10 Write the first version of `docs/developer-guide.md`: install, `npm test`, `npm run web`, `npm run test:ui`.
-- [ ] 2.0 Define the data formats and build the data validator
+- [x] 2.0 Define the data formats and build the data validator
   - [x] 2.1 Design the level format: tile grid as an array of strings, a tile legend, player start, goal, entity placements (enemies, objects, rewards), background layers with scroll factors, background fill colour, and an optional cut scene name (reqs 57, 61, 68, 73, 75).
   - [x] 2.2 Design the level list format (req 55).
   - [x] 2.3 Design the character definition format: size, health, speed, colour, sprite, and punch damage for the player (reqs 24, 40, 73).
@@ -186,10 +186,10 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 2.12 Write `tests/data/validate.test.js` covering every error type and checking the message wording (req 87).
   - [x] 2.13 Write `src/data/load.js`, which loads all data in the browser with `fetch`, runs the same validation, and returns either the data or a list of errors (req 85).
   - [x] 2.14 Write the designer and artist guides: `guide-levels.md`, `guide-characters-objects.md`, `guide-cutscenes.md`, and `guide-sprites.md`, each with an annotated example, for readers who have never seen JSON (reqs 74, 80).
-  - [ ] 2.15 Validator check that the player fits at each level's start, so designers see the problem when running `npm run validate` instead of only when the game builds the level. `createLevelState` already refuses to build such a level (`LevelDataError`, "fitting the player at the start"); this reports the same problem earlier, in plain language.
+  - [x] 2.15 Validator check that the player fits at each level's start, so designers see the problem when running `npm run validate` instead of only when the game builds the level. `createLevelState` already refuses to build such a level (`LevelDataError`, "fitting the player at the start"); this reports the same problem earlier, in plain language.
     - Test: `tests/data/validate.test.js`: a player too tall for the space at the start (head inside a ceiling), too wide (inside walls beside it), and one that exactly fits (no error). The error names the level, the player's size, and the overlapping tile's row and column. Plus a wording test for the new problem code.
     - Code: `src/data/validate.js`. Reuse the simulation's placement rule (bottom-centre on the start cell) and `overlapsSolid` (`src/simulation/collision.js`) rather than writing them a second time, so the validator and the game can't disagree. Data code may import from the simulation (the architecture guard only restricts the other direction).
-- [ ] 3.0 Build the simulation core: time step, collision, player movement, and health
+- [x] 3.0 Build the simulation core: time step, collision, player movement, and health
   - [x] 3.1 Architecture guard: simulation code must not import presentation, platform, or Electron code, or use browser globals (`window`, `document`, `requestAnimationFrame`, `Image`, `fetch`) (req 71).
     - Test: `tests/architecture.test.js`. For the red step, temporarily add a forbidden import to a stub simulation file and confirm the test fails; then remove it.
     - Code: `tools/architecture.js` (the checker, unit-tested with source samples). Simulation files may only import other simulation files, and may not use `Math.random`, `Date.now`, or `performance.now` (determinism).
@@ -231,22 +231,28 @@ These were completed before this approach was adopted: their tests were written 
       - running and jumping together (both inputs held).
     - Rules to decide and test: `vy` becomes 0 on landing and on hitting a ceiling; arriving exactly on the ground isn't `onGround` until the next step pulls the player down (the existing collision rule), and must not stop the player from jumping on that next step.
     - Code: `src/simulation/player.js`
-  - [ ] 3.10 Taking damage: lose 1 health, knockback away from the source (from tuning), and invincibility for the time in tuning, with a flag the renderer can use to flash (reqs 24–25).
+  - [x] 3.10 Taking damage (decided: `damagePlayer(state, source)` for enemies to call; knockback takes control away until the player lands; hit dead-centre pushes backwards): lose 1 health, knockback away from the source (from tuning), and invincibility for the time in tuning, with a flag the renderer can use to flash (reqs 24–25).
     - Test: `tests/simulation/player.test.js` ("damage")
     - Code: `src/simulation/player.js`
-  - [ ] 3.11 Falling into a pit: below the bottom of the level, lose 1 health and respawn at the start point (req 26).
+  - [x] 3.11 Falling into a pit (decided: "below the bottom" means entirely below it; invincibility doesn't protect against pits; respawning resets speed and ends knockback): below the bottom of the level, lose 1 health and respawn at the start point (req 26).
     - Test: `tests/simulation/player.test.js` ("pits")
     - Code: `src/simulation/player.js`, `src/simulation/step.js`
-  - [ ] 3.12 Restart at 0 health: the level returns to its starting snapshot, including health and reward count (req 27).
+  - [x] 3.12 Restart at 0 health: the level returns to its starting snapshot, including health and reward count (req 27).
     - Test: `tests/simulation/step.test.js` ("restart")
     - Code: `src/simulation/step.js`, `src/simulation/state.js`
 - [ ] 4.0 Build objects and stacking: pick up, drop, throw, stack, and rewards
-  - [ ] 4.1 Objects in the initial state, from level placements and object definitions; objects placed one above another start stacked (req 28).
-    - Test: `tests/simulation/state.test.js` ("objects")
-    - Code: `src/simulation/state.js`
-  - [ ] 4.2 Pick up with **action** when touching an object and empty-handed. The held object follows above the player's head. One object at a time (reqs 29–30).
-    - Test: `tests/simulation/objects.test.js` ("pick up")
-    - Code: `src/simulation/objects.js`, `src/simulation/step.js`
+  - [x] 4.1 Objects in the initial state, from level placements and object definitions; objects placed one above another start stacked (req 28).
+    - Decided: objects are placed in their cells by the usual bottom-centre rule and start `resting` if a solid tile, or a stackable object that is itself resting, is directly under them; otherwise they start not resting and fall once object gravity exists (4.5). Non-stackable objects are never a support. Objects are part of the level-start snapshot and are restored on restart (req 27).
+    - Test: `tests/simulation/state.test.js` ("objects", "objects that start at rest", snapshot), `tests/simulation/step.test.js` ("objects across steps"), `tests/simulation/collision.test.js` ("isSupported")
+    - Code: `src/simulation/objects.js` (`CarriableObject`), `src/simulation/state.js`, `src/simulation/step.js`, `src/simulation/collision.js` (`isSupported`, now also used by the player's standing check)
+  - [x] 4.2 Pick up with **action** when touching an object and empty-handed. The held object follows above the player's head. One object at a time (reqs 29–30).
+    - Decided: "touching" means the boxes overlap or share an edge (a corner alone doesn't count); of several touched objects, those on the side the player faces come first, then the nearest by centre, then the first in grid order; only a new press of action picks up (`Player.actionHeld`, like `jumpHeld`). A held object (`CarriableObject.held`) sits with its bottom-centre at the player's top-centre, still and not resting, and is placed after the player moves each step.
+    - Test: `tests/simulation/objects.test.js` ("pick up", "the CarriableObject structure"), `tests/simulation/collision.test.js` ("touches"), `tests/simulation/player.test.js` ("the Player structure")
+    - Code: `src/simulation/objects.js` (`updateObjects`), `src/simulation/collision.js` (`touches`), `src/simulation/player.js` (`actionHeld`), `src/simulation/step.js`
+  - [x] 4.2a Amendment to 4.2: the held object collides. Found after 4.2: only the player's box collided, so a held object passed through low overhangs, ceilings, and walls, and a later throw or drop could start inside a solid. Decided: the player and the held object move together as two boxes. On each axis both move by the shorter of their two allowed moves, so a barrier either one meets stops both (not one merged rectangle, which would stop a narrow player early at walls the object doesn't reach). Hitting something sideways, landing, and hitting a ceiling apply to the player whichever box was stopped, and a held object caught on a ledge holds the player up (standing). Picking up fails when the object, placed above the head, would overlap a solid tile or stick out past the level's sides. Rule: a held object is never inside a solid.
+    - Test: `tests/simulation/collision.test.js` ("moveBoxes", "fitsIn"), `tests/simulation/objects.test.js` ("carrying under barriers", "no room to pick up")
+    - Code: `src/simulation/collision.js` (`moveBoxes`, `fitsIn`), `src/simulation/player.js`, `src/simulation/objects.js` (`heldObject`)
+    - Docs (no code): `docs/guide-levels.md`, a note that carrying needs headroom of the player's height plus the object's.
   - [ ] 4.3 Throw with **action** while holding: an arc in the facing direction, with throw speed from tuning (req 31).
     - Test: `tests/simulation/objects.test.js` ("throw")
     - Code: `src/simulation/objects.js`

@@ -6,11 +6,12 @@
 // createLevelState is the gate between data and simulation. Data is validated
 // when loaded (src/data/validate.js); this file then checks what building a
 // level needs (the level exists, exactly one start and goal, a player
-// definition) and throws a LevelDataError if not. The rest of the simulation
+// definition, a definition for each object) and throws a LevelDataError if not. The rest of the simulation
 // (step.js, player.js, collision.js, ...) relies on that and doesn't check again.
 
 import { Player } from './player.js';
-import { overlapsSolid } from './collision.js';
+import { CarriableObject } from './objects.js';
+import { overlapsSolid, isSupported } from './collision.js';
 
 const GRID_AND_LEGEND = "the level's grid and legend";
 
@@ -52,19 +53,36 @@ function step(levelName, task, part, run) {
  * The box of an entity of the given size placed in grid cell (column, row):
  * its bottom-centre sits at the bottom-centre of the cell.
  */
-function placeInCell(column, row, width, height) {
+export function placeInCell(column, row, width, height) {
   return { x: column + 0.5 - width / 2, y: row + 1 - height, width, height };
 }
 
-/** Finds the cells whose legend entry matches `test`, as [{ column, row }]. */
+/**
+ * Finds the cells whose legend entry matches `test`, in grid order (rows top
+ * to bottom, then left to right), as [{ column, row, entry }].
+ */
 function findCells(grid, legend, test) {
   const cells = [];
   grid.forEach((line, row) => {
     [...line].forEach((ch, column) => {
-      if (legend[ch] && test(legend[ch])) cells.push({ column, row });
+      if (legend[ch] && test(legend[ch])) cells.push({ column, row, entry: legend[ch] });
     });
   });
   return cells;
+}
+
+/**
+ * Marks which objects start at rest: those with a solid tile, or a stackable
+ * object that is itself at rest, directly under them. Objects are checked from
+ * the lowest up, so each one's supports are decided before it is.
+ */
+function markResting(level, objects, definitions) {
+  const supports = [];
+  const lowestFirst = [...objects].sort((a, b) => (b.y + b.height) - (a.y + a.height));
+  for (const object of lowestFirst) {
+    object.resting = isSupported(level, object, supports);
+    if (object.resting && definitions[object.type].stackable) supports.push(object);
+  }
 }
 
 /** The one cell matching `test`; fails if there are none or several. */
@@ -124,6 +142,20 @@ export function createLevelState(data, levelName) {
   const goalCell = step(levelName, 'placing the goal', GRID_AND_LEGEND, (fail) =>
     findOneCell(source, (e) => e.goal, 'goal', fail));
 
+  // Objects placed one above another start stacked (req 28): placement puts
+  // each on its cell's bottom edge, so a 1-tile crate rests on the one below.
+  const objects = step(levelName, 'placing the objects', "the level's legend and the object definitions (data/objects/)", (fail) => {
+    const placed = findCells(source.grid, source.legend, (e) => e.object).map(({ column, row, entry }) => {
+      const definition = data.objects[entry.object] ?? fail(`there is no object definition named "${entry.object}"`);
+      return new CarriableObject({
+        type: entry.object,
+        ...placeInCell(column, row, definition.size.width, definition.size.height),
+      });
+    });
+    markResting(level, placed, data.objects);
+    return placed;
+  });
+
   const state = {
     data,
     levelName,
@@ -131,9 +163,14 @@ export function createLevelState(data, levelName) {
     start: { x: player.x, y: player.y },
     goal: { x: goalCell.column, y: goalCell.row, width: 1, height: 1 },
     player,
+    objects,
     rewardCount: 0,
     time: 0,
   };
-  state.levelStart = { player: player.copy(), rewardCount: state.rewardCount };
+  state.levelStart = {
+    player: player.copy(),
+    objects: objects.map((o) => o.copy()),
+    rewardCount: state.rewardCount,
+  };
   return state;
 }

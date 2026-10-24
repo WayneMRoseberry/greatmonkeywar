@@ -272,6 +272,48 @@ describe('req 83: exactly one player start and goal', () => {
   });
 });
 
+describe('the player must fit at the start', () => {
+  // In level2.json the player start (P) is at row 2, column 1 (counting from 1),
+  // with open space above it. The fixture player is 0.8 × 1.4 tiles.
+
+  test('a player too tall for the space (head inside a ceiling)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '#'.repeat(level.grid[0].length);   // a ceiling just above the start row
+    const player = fixture('characters/player.json');
+    assertErrors({ 'levels/level2.json': level }, [
+      { file: 'levels/level2.json', code: 'player-does-not-fit',
+        details: { width: player.size.width, height: player.size.height, row: 1, column: 1 } },   // the ceiling tile above P
+    ]);
+  });
+
+  test('a player too wide for the space (inside the walls beside it)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[1] = '#P#' + level.grid[1].slice(3);   // walls either side of P
+    const player = fixture('characters/player.json');
+    player.size.width = 2.5;
+    assertErrors({ 'levels/level2.json': level, 'characters/player.json': player }, [
+      { file: 'levels/level2.json', code: 'player-does-not-fit',
+        details: { width: 2.5, height: player.size.height, row: 2, column: 1 } },   // the wall left of P
+    ]);
+  });
+
+  test('a player that exactly fills the space fits', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '#'.repeat(level.grid[0].length);
+    const player = fixture('characters/player.json');
+    player.size = { width: 1, height: 1 };
+    assertErrors({ 'levels/level2.json': level, 'characters/player.json': player }, []);
+  });
+
+  test('isn\'t checked when the player definition itself is broken (that is reported instead)', () => {
+    const player = fixture('characters/player.json');
+    delete player.size;
+    assertErrors({ 'characters/player.json': player }, [
+      { file: 'characters/player.json', code: 'missing-field', details: { path: [], field: 'size' } },
+    ]);
+  });
+});
+
 describe('req 83: legend entries', () => {
   test('an entry that is two things at once', () => {
     const level = fixture('levels/level2.json');
@@ -549,6 +591,8 @@ describe('describeProblem: plain-language messages', () => {
     'missing-object': [{ key: 'o', name: 'barrel' }, 'legend "o" is the object "barrel", but there is no file data/objects/barrel.json.'],
     'unused-legend': [{ key: 'z' }, 'legend "z" is not used anywhere in the grid.'],
     'missing-cutscene': [{ name: 'ending' }, '"cutscene" is "ending", but there is no file data/cutscenes/ending.json.'],
+    'player-does-not-fit': [{ width: 0.8, height: 1.4, row: 1, column: 2 },
+      'the player (0.8 × 1.4 tiles, set in characters/player.json) doesn\'t fit at the start: it would overlap the solid tile at row 1, column 2. Make more room around the start, or make the player smaller.'],
     'missing-layer-image': [{ layer: 2, image: 'images/mid.png' },
       'background layer 2 uses the image "images/mid.png", but there is no file data/images/mid.png.'],
     'level-list-self': [{ item: 2 }, 'levels, item 2: "levels" is the level list itself, not a level.'],

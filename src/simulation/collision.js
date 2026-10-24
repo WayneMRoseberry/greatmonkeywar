@@ -139,3 +139,79 @@ export function moveBox(level, box, dx, dy, solidBoxes = []) {
     onGround: dy > 0 && alongY.blocked,
   };
 }
+
+// How far below a box to look when deciding whether it is supported. Tiny, so
+// only something actually touching the box's bottom edge counts.
+const SUPPORT_PROBE = 1e-6;
+
+/**
+ * True if something solid (a solid tile or one of `solidBoxes`) is directly
+ * under `box`, touching its bottom edge: it is standing or resting on it.
+ */
+export function isSupported(level, box, solidBoxes = []) {
+  return moveBox(level, box, 0, SUPPORT_PROBE, solidBoxes).onGround;
+}
+
+/** True if spans [aStart, aEnd] and [bStart, bEnd] overlap or share an end. */
+function meets(aStart, aEnd, bStart, bEnd) {
+  return aStart <= bEnd + EPS && aEnd >= bStart - EPS;
+}
+
+/**
+ * True if boxes `a` and `b` overlap or share an edge: side by side or one on
+ * top of the other. Boxes that meet only at a corner don't touch.
+ */
+export function touches(a, b) {
+  const meetX = meets(a.x, a.x + a.width, b.x, b.x + b.width);
+  const meetY = meets(a.y, a.y + a.height, b.y, b.y + b.height);
+  const overlapX = overlaps(a.x, a.x + a.width, b.x, b.x + b.width);
+  const overlapY = overlaps(a.y, a.y + a.height, b.y, b.y + b.height);
+  return meetX && meetY && (overlapX || overlapY);
+}
+
+/**
+ * The shortest move along one axis that every box in `boxes` is allowed, as
+ * { moved, blocked }: `blocked` is true if any box was stopped.
+ */
+function sweepAll(level, boxes, delta, solidBoxes, along) {
+  let moved = delta;
+  let blocked = false;
+  for (const box of boxes) {
+    const result = sweep(level, box, delta, solidBoxes, along);
+    const allowed = result.position - (along === 'x' ? box.x : box.y);
+    if (Math.abs(allowed) < Math.abs(moved)) moved = allowed;
+    blocked ||= result.blocked;
+  }
+  return { moved, blocked };
+}
+
+/**
+ * Moves several boxes together by the same amount, such as the player and the
+ * object they carry: on each axis (X, then Y) all of them move by the shortest
+ * move any one of them is allowed, so whatever stops one stops them all.
+ * Returns { dx, dy, hitLeft, hitRight, hitCeiling, onGround }: the distances
+ * actually moved, and each hit true if any box was stopped that way. The
+ * boxes passed in are not changed.
+ */
+export function moveBoxes(level, boxes, dx, dy, solidBoxes = []) {
+  const alongX = sweepAll(level, boxes, dx, solidBoxes, 'x');
+  const movedX = boxes.map((box) => ({ ...box, x: box.x + alongX.moved }));
+  const alongY = sweepAll(level, movedX, dy, solidBoxes, 'y');
+  return {
+    dx: alongX.moved,
+    dy: alongY.moved,
+    hitLeft: dx < 0 && alongX.blocked,
+    hitRight: dx > 0 && alongX.blocked,
+    hitCeiling: dy < 0 && alongY.blocked,
+    onGround: dy > 0 && alongY.blocked,
+  };
+}
+
+/**
+ * True if `box` can be placed where it is: it overlaps no solid tile and
+ * doesn't stick out past the level's left or right edge. The top and bottom
+ * are open, as for movement.
+ */
+export function fitsIn(level, box) {
+  return box.x >= -EPS && box.x + box.width <= level.width + EPS && overlapsSolid(level, box) === null;
+}

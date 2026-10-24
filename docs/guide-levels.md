@@ -153,6 +153,7 @@ Colours are written as `"#"` followed by six letters and numbers, for example `"
 - **Things stand on the tile below them.** To put an enemy on the ground, put its letter in the row just above a `#`. If there's nothing below, it falls when the level starts.
 - **Big things grow upwards.** The hero is taller than one tile. Put `P` in the row above the ground, and the hero stands on the ground with their head poking into the row above.
 - **Stacking:** put crates one above the other in the grid, and they start as a stack. (Only objects marked "stackable" stack; see the [characters and objects guide](guide-characters-objects.md).)
+- **Carrying needs headroom.** The hero carries an object above their head, and the object bumps into things just as the hero does. To carry an object through a gap, the gap must be at least as tall as the hero plus the object. For example, with the hero (1.4 tiles tall) and crate (1 tile tall) from the [characters and objects guide](guide-characters-objects.md), the hero needs a gap of 3 rows to carry a crate through. (A gap of 2 rows is 2 tiles, which is less than 2.4.) The hero also can't pick an object up where there's no room above their head, such as in a low tunnel or right up against a wall when the object is wider than the hero. Use this on purpose, for example a low tunnel the hero must cross without the crate.
 - **Pits:** leave a gap in the bottom rows. Falling off the bottom of the level is falling into a pit.
 - **Edges:** the left and right edges of the level act as walls. The top is open, so the hero can jump above the top row.
 
@@ -218,6 +219,7 @@ VS Code will then underline mistakes as you type and suggest field names. The ga
 | "row N has … tiles but row 1 has …" | A row is longer or shorter than the first row. Pad with `.` so every row is the same length. |
 | "is not in the legend" | You used a character in the grid that has no legend entry, or a typo (for example `O` instead of `o`). |
 | "the level has no player start" / "has 2 goals" | Each level needs exactly one `P`-type and one `G`-type character. |
+| "the player ... doesn't fit at the start" | The hero is bigger than the space around the start. The hero stands on the bottom of the start's square and is about 1½ tiles tall, so leave open space above the start, and beside it if the hero is wide. |
 | "is not a field that belongs here" | A field name is misspelled, for example `"colour"` instead of `"color"`. |
 | "there is no file data/…" | A name or image path doesn't match a real file. Check the spelling, and that names don't include `.json`. |
 

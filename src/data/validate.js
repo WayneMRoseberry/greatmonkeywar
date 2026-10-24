@@ -19,6 +19,8 @@
 // The formats are specified in docs/data-formats.md.
 
 import { checkSchema, typeOf } from './schema-check.js';
+import { placeInCell } from '../simulation/state.js';
+import { overlapsSolid } from '../simulation/collision.js';
 import levelSchema from './schemas/level.schema.json' with { type: 'json' };
 import levelListSchema from './schemas/level-list.schema.json' with { type: 'json' };
 import characterSchema from './schemas/character.schema.json' with { type: 'json' };
@@ -108,7 +110,8 @@ export function validateData({ files, images = {} }) {
   }
 
   const data = groupByKind(parsed);
-  const context = { names, images, data, error, warn };
+  const validFiles = new Set(parsed.filter((f) => f.valid).map((f) => f.path));
+  const context = { names, images, data, validFiles, error, warn };
   for (const file of parsed.filter((f) => f.valid)) {
     CUSTOM_CHECKS[file.kind]?.(file, context);
   }
@@ -341,6 +344,9 @@ const MESSAGES = {
   'missing-object': ({ key, name }) => `legend "${key}" is the object "${name}", but there is no file data/objects/${name}.json.`,
   'unused-legend': ({ key }) => `legend "${key}" is not used anywhere in the grid.`,
   'missing-cutscene': ({ name }) => `"cutscene" is "${name}", but there is no file data/cutscenes/${name}.json.`,
+  'player-does-not-fit': ({ width, height, row, column }) =>
+    `the player (${width} × ${height} tiles, set in characters/player.json) doesn't fit at the start: ` +
+    `it would overlap the solid tile at row ${row}, column ${column}. Make more room around the start, or make the player smaller.`,
   'missing-layer-image': ({ layer, image }) => `background layer ${layer} uses the image "${image}", but there is no file data/${image}.`,
 
   // Level list
@@ -392,7 +398,7 @@ const CUSTOM_CHECKS = {
   sprite: checkSprite,
 };
 
-function checkLevel({ path, value: level }, { names, images, error, warn }) {
+function checkLevel({ path, value: level }, { names, images, data, validFiles, error, warn }) {
   const { grid, legend } = level;
 
   // Row lengths
@@ -423,6 +429,9 @@ function checkLevel({ path, value: level }, { names, images, error, warn }) {
   });
   for (const details of unknown.values()) error(path, 'unknown-character', details);
   if (starts.length !== 1) error(path, 'player-start-count', { count: starts.length, positions: starts });
+  if (starts.length === 1 && validFiles.has('characters/player.json')) {
+    checkPlayerFits(path, level, starts[0], data.characters.player, error);
+  }
   if (goals.length !== 1) error(path, 'goal-count', { count: goals.length, positions: goals });
 
   // Legend entries
@@ -447,6 +456,23 @@ function checkLevel({ path, value: level }, { names, images, error, warn }) {
   level.background.layers.forEach((layer, i) => {
     if (!(layer.image in images)) error(path, 'missing-layer-image', { layer: i + 1, image: layer.image });
   });
+}
+
+/**
+ * The player must not start inside something solid. Uses the game's own
+ * placement rule and overlap test, so the validator and the game agree
+ * (createLevelState refuses to build such a level too).
+ * `start` counts rows and columns from 1, as in messages.
+ */
+function checkPlayerFits(path, level, start, player, error) {
+  const tileTypes = {};
+  for (const [ch, entry] of Object.entries(level.legend)) if (entry.tile) tileTypes[ch] = entry.tile;
+  // Non-tile characters (P, G, enemies, ...) have no tile type, so they count as empty space.
+  const tiles = { width: level.grid[0].length, height: level.grid.length, grid: level.grid, tileTypes };
+  const { width, height } = player.size;
+  const box = placeInCell(start.column - 1, start.row - 1, width, height);
+  const tile = overlapsSolid(tiles, box);
+  if (tile) error(path, 'player-does-not-fit', { width, height, row: tile.row + 1, column: tile.column + 1 });
 }
 
 function checkLevelList({ path, value }, { names, error }) {

@@ -10,7 +10,8 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { moveBox } from './collision.js';
+import { moveBoxes, isSupported } from './collision.js';
+import { heldObject } from './objects.js';
 
 /**
  * The player's changing state: the one central declaration of its properties.
@@ -30,6 +31,9 @@ export class Player {
   facing = Facing.RIGHT;  // the direction the player is trying to run (Facing)
   health = 0;             // starts at the player definition's health
   jumpHeld = false;       // whether jump was held last step: only a new press jumps
+  invincibleTime = 0;     // seconds of invincibility left after being damaged; the renderer flashes while > 0
+  knockedBack = false;    // true from being damaged until landing: running input is ignored meanwhile
+  actionHeld = false;     // whether action was held last step: only a new press picks up (objects.js)
 
   /** A Player with the given starting values; anything not given keeps its default. */
   constructor(values = {}) {
@@ -46,13 +50,45 @@ export class Player {
   }
 }
 
-// How far below the player to look for ground when deciding if they're standing.
-// Tiny, so only ground actually touching the player's feet counts.
-const GROUND_PROBE = 1e-6;
+/**
+ * Damages the player (reqs 24-25), e.g. when an enemy touches them. `source` is
+ * the box of whatever did it. Unless invincible, the player loses 1 health
+ * (never below 0), becomes invincible for invincibilitySeconds (tuning), and is
+ * knocked back: away from the source's centre (backwards, opposite to their
+ * facing, if hit dead-centre) and upwards, at the knockback speeds in tuning.
+ * Returns true if the player was damaged, false if they were invincible.
+ */
+export function damagePlayer(state, source) {
+  const { player } = state;
+  if (player.invincibleTime > 0) return false;
+  const { invincibilitySeconds, knockback } = state.data.tuning;
 
-/** True if there is something solid directly under the player's feet. */
+  player.health = Math.max(0, player.health - 1);
+  player.invincibleTime = invincibilitySeconds;
+
+  const offset = (player.x + player.width / 2) - (source.x + source.width / 2);
+  const away = offset !== 0 ? Math.sign(offset) : (player.facing === Facing.RIGHT ? -1 : 1);
+  player.vx = away * knockback.x;
+  player.vy = -knockback.y;
+  player.knockedBack = true;
+  return true;
+}
+
+/**
+ * The boxes that move as the player: the player's, plus the held object's
+ * when carrying one (task 4.2a), so that whatever stops either stops both.
+ */
+function carriedBoxes(state) {
+  const held = heldObject(state);
+  return held ? [state.player, held] : [state.player];
+}
+
+/**
+ * True if there is something solid directly under the player's feet, or under
+ * the object they carry (a wide object caught on a ledge holds the player up).
+ */
 function isStanding(state) {
-  return moveBox(state.level, state.player, 0, GROUND_PROBE).onGround;
+  return carriedBoxes(state).some((box) => isSupported(state.level, box));
 }
 
 /**
@@ -65,17 +101,23 @@ function isStanding(state) {
  *    Only a new press jumps: holding jump doesn't jump again on landing.
  *    "Standing" is checked directly, so a player who arrived exactly on the
  *    ground last step (onGround still false) can jump at once.
- *  - Collision (req 23): the move goes through moveBox. A wall stops the
- *    player and makes vx 0; landing or hitting a ceiling makes vy 0.
+ *  - Collision (req 23): the move goes through moveBoxes, together with any
+ *    held object (task 4.2a). A wall either one meets stops the player and
+ *    makes vx 0; landing or hitting a ceiling, by either one, makes vy 0.
  */
 export function updatePlayer(state, input, dt) {
   const { player } = state;
   const { speed } = state.data.characters.player;
   const { gravity, jumpSpeed, maxFallSpeed } = state.data.tuning;
 
-  const direction = (input[Input.RIGHT] ? 1 : 0) - (input[Input.LEFT] ? 1 : 0);
-  if (direction !== 0) player.facing = direction > 0 ? Facing.RIGHT : Facing.LEFT;
-  player.vx = direction * speed;
+  player.invincibleTime = Math.max(0, player.invincibleTime - dt);
+
+  // While knocked back, the knockback carries the player: running input is ignored.
+  if (!player.knockedBack) {
+    const direction = (input[Input.RIGHT] ? 1 : 0) - (input[Input.LEFT] ? 1 : 0);
+    if (direction !== 0) player.facing = direction > 0 ? Facing.RIGHT : Facing.LEFT;
+    player.vx = direction * speed;
+  }
 
   const standing = isStanding(state);
   player.vy = Math.min(player.vy + gravity * dt, maxFallSpeed);
@@ -83,10 +125,29 @@ export function updatePlayer(state, input, dt) {
   if (jumpPressed && standing) player.vy = -jumpSpeed;
   player.jumpHeld = input[Input.JUMP];
 
-  const moved = moveBox(state.level, player, player.vx * dt, player.vy * dt);
-  player.x = moved.x;
-  player.y = moved.y;
+  const moved = moveBoxes(state.level, carriedBoxes(state), player.vx * dt, player.vy * dt);
+  player.x += moved.dx;   // the held object is put back above the player's head in updateObjects
+  player.y += moved.dy;
   player.onGround = moved.onGround;
   if (moved.hitLeft || moved.hitRight) player.vx = 0;
   if (moved.onGround || moved.hitCeiling) player.vy = 0;
+  if (moved.onGround) player.knockedBack = false;
+
+  if (player.y >= state.level.height) fallIntoPit(state);
+}
+
+/**
+ * Falling into a pit (req 26): once the player is entirely below the bottom of
+ * the level, they lose 1 health (never below 0; invincibility doesn't protect
+ * against this) and respawn at the start, at rest.
+ */
+function fallIntoPit(state) {
+  const { player, start } = state;
+  player.health = Math.max(0, player.health - 1);
+  player.x = start.x;
+  player.y = start.y;
+  player.vx = 0;
+  player.vy = 0;
+  player.onGround = false;
+  player.knockedBack = false;
 }

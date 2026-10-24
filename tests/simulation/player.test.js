@@ -3,7 +3,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
-import { Player } from '../../src/simulation/player.js';
+import { Player, damagePlayer } from '../../src/simulation/player.js';
 import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -25,7 +25,8 @@ function assertMotion(player, expected, when) {
 
 describe('the Player structure', () => {
   // The one central declaration of the player's properties is the Player class.
-  const PROPERTIES = ['x', 'y', 'width', 'height', 'vx', 'vy', 'onGround', 'facing', 'health', 'jumpHeld'];
+  const PROPERTIES = ['x', 'y', 'width', 'height', 'vx', 'vy', 'onGround', 'facing', 'health', 'jumpHeld',
+    'invincibleTime', 'knockedBack', 'actionHeld'];
 
   test('has exactly the declared properties', () => {
     assert.deepEqual(Object.keys(new Player()).sort(), [...PROPERTIES].sort());
@@ -36,6 +37,7 @@ describe('the Player structure', () => {
     assert.deepEqual({ ...player }, {
       x: 0, y: 0, width: 0, height: 0, vx: 0, vy: 0,
       onGround: false, facing: Facing.RIGHT, health: 0, jumpHeld: false,
+      invincibleTime: 0, knockedBack: false, actionHeld: false,
     });
   });
 
@@ -453,6 +455,197 @@ describe('gravity and jumping (reqs 21-23)', () => {
       assertNear(after.player.y, stepTop - SIZE.height, 'y on the platform');
       assert.equal(after.player.onGround, true);
     });
+  });
+});
+
+describe('taking damage (reqs 24-25)', () => {
+  const HEALTH = 3;
+  const INVINCIBILITY_SECONDS = 1;
+  const KNOCKBACK = { x: 5, y: 7 };   // tiles/s: x away from the source, y upwards
+  const SPEED = 4;
+  const SIZE = { width: 1, height: 1 };
+  // Open ground, P in the middle (column 6), room to be knocked either way.
+  const GRID = ['............G', '......P......', '#############'];
+
+  function newState() {
+    return createLevelState(buildData(GRID, {
+      player: { size: SIZE, speed: SPEED, health: HEALTH },
+      tuning: { invincibilitySeconds: INVINCIBILITY_SECONDS, knockback: KNOCKBACK },
+    }), TEST_LEVEL);
+  }
+
+  /** A 1 × 1 source box (e.g. an enemy) whose centre is `offset` tiles right of the player's centre. */
+  function sourceAt(state, offset) {
+    const centre = state.player.x + state.player.width / 2;
+    return { x: centre + offset - 0.5, y: state.player.y, width: 1, height: 1 };
+  }
+
+  test('loses 1 health', () => {
+    const state = newState();
+    assert.equal(damagePlayer(state, sourceAt(state, -1)), true);
+    assert.equal(state.player.health, HEALTH - 1);
+  });
+
+  test('becomes invincible for invincibilitySeconds', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, -1));
+    assert.equal(state.player.invincibleTime, INVINCIBILITY_SECONDS);
+  });
+
+  test('while invincible, more damage does nothing', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, -1));
+    assert.equal(damagePlayer(state, sourceAt(state, -1)), false);
+    assert.equal(state.player.health, HEALTH - 1);
+  });
+
+  test('invincibility counts down each step and ends after invincibilitySeconds; then damage works again', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, -1));
+    const halfway = runSteps(step, state, NO_INPUT, STEPS_PER_SECOND / 2, FIXED_DT);
+    assertNear(halfway.player.invincibleTime, INVINCIBILITY_SECONDS / 2, 'invincibleTime halfway');
+
+    const after = runSteps(step, halfway, NO_INPUT, STEPS_PER_SECOND / 2 + 1, FIXED_DT);
+    assert.equal(after.player.invincibleTime, 0);
+    assert.equal(damagePlayer(after, sourceAt(after, -1)), true);
+    assert.equal(after.player.health, HEALTH - 2);
+  });
+
+  test('health never goes below 0', () => {
+    const state = createLevelState(buildData(GRID, { player: { size: SIZE, health: 1 } }), TEST_LEVEL);
+    damagePlayer(state, sourceAt(state, -1));
+    state.player.invincibleTime = 0;
+    damagePlayer(state, sourceAt(state, -1));
+    assert.equal(state.player.health, 0);
+  });
+
+  test('hit from the left: knocked right and upwards', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, -1));
+    assert.equal(state.player.vx, KNOCKBACK.x);
+    assert.equal(state.player.vy, -KNOCKBACK.y);
+    assert.equal(state.player.knockedBack, true);
+  });
+
+  test('hit from the right: knocked left and upwards', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, 1));
+    assert.equal(state.player.vx, -KNOCKBACK.x);
+    assert.equal(state.player.vy, -KNOCKBACK.y);
+  });
+
+  test('hit dead-centre: knocked backwards, opposite to the way the player faces', () => {
+    const facingRight = newState();
+    damagePlayer(facingRight, sourceAt(facingRight, 0));
+    assert.equal(facingRight.player.vx, -KNOCKBACK.x);
+
+    const facingLeft = newState();
+    facingLeft.player.facing = Facing.LEFT;
+    damagePlayer(facingLeft, sourceAt(facingLeft, 0));
+    assert.equal(facingLeft.player.vx, KNOCKBACK.x);
+  });
+
+  test('while knocked back, running input is ignored: the knockback carries the player', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, -1));   // knocked right
+    const after = step(state, holding(Input.LEFT), FIXED_DT);
+    assert.equal(after.player.vx, KNOCKBACK.x);
+    assertNear(after.player.x, state.player.x + KNOCKBACK.x * FIXED_DT, 'x');
+    assert.equal(after.player.facing, Facing.RIGHT);   // facing isn't changed while knocked back
+  });
+
+  test('knockback ends on landing, and running works again', () => {
+    const state = newState();
+    damagePlayer(state, sourceAt(state, -1));
+    // Airborne for about 2 × KNOCKBACK.y / gravity seconds; run comfortably longer.
+    const landed = runSteps(step, state, NO_INPUT, 2 * STEPS_PER_SECOND, FIXED_DT);
+    assert.equal(landed.player.onGround, true);
+    assert.equal(landed.player.knockedBack, false);
+    const running = step(landed, holding(Input.LEFT), FIXED_DT);
+    assert.equal(running.player.vx, -SPEED);
+  });
+
+  test('a wall stops knockback like any other movement', () => {
+    // P at column 2 with a wall at column 3, right beside it.
+    const state = createLevelState(buildData(['....G', '..P#.', '#####'], {
+      player: { size: SIZE }, tuning: { knockback: KNOCKBACK },
+    }), TEST_LEVEL);
+    damagePlayer(state, sourceAt(state, -1));   // knocked right, into the wall
+    const after = step(state, NO_INPUT, FIXED_DT);
+    assertNear(after.player.x, state.player.x, 'x');
+    assert.equal(after.player.vx, 0);
+  });
+});
+
+describe('falling into a pit (req 26)', () => {
+  const HEALTH = 3;
+  const SIZE = { width: 1, height: 1 };
+  // P at column 2, directly above the gap in the bottom row: it falls straight out of the level.
+  const GRID = ['....G', '..P..', '##.##'];
+
+  function newState() {
+    return createLevelState(buildData(GRID, { player: { size: SIZE, health: HEALTH } }), TEST_LEVEL);
+  }
+
+  /** Steps with no input until the player's health changes; returns [before, after]. */
+  function stepUntilHealthChanges(state) {
+    let before = state;
+    for (let i = 0; i < 10 * STEPS_PER_SECOND; i++) {
+      const after = step(before, NO_INPUT, FIXED_DT);
+      if (after.player.health !== before.player.health) return [before, after];
+      before = after;
+    }
+    assert.fail('health never changed');
+  }
+
+  test('falling out of the level costs 1 health and puts the player back at the start, at rest', () => {
+    const start = newState();
+    const [, after] = stepUntilHealthChanges(start);
+    assert.equal(after.player.health, HEALTH - 1);
+    assertMotion(after.player, { x: start.start.x, y: start.start.y, vx: 0, vy: 0, onGround: false }, 'after respawning');
+  });
+
+  test('the step that falls out is the first with the player entirely below the level', () => {
+    const start = newState();
+    const [before] = stepUntilHealthChanges(start);
+    assert.ok(before.player.y < start.level.height, 'the step before, part of the player was still in the level');
+  });
+
+  test('partly below the bottom is still falling, not yet in the pit', () => {
+    const state = newState();
+    const partlyOut = { ...state, player: new Player({ ...state.player, y: state.level.height - 0.5, vy: 0 }) };
+    const after = step(partlyOut, NO_INPUT, FIXED_DT);
+    assert.equal(after.player.health, HEALTH);
+    assert.ok(after.player.y > partlyOut.player.y);
+  });
+
+  test('a top edge exactly at the bottom of the level counts as fallen in', () => {
+    const state = newState();
+    // Placed just above the boundary, falling: this step's fall reaches it exactly, or beyond.
+    const atEdge = { ...state, player: new Player({ ...state.player, y: state.level.height, vy: 0 }) };
+    const after = step(atEdge, NO_INPUT, FIXED_DT);
+    assert.equal(after.player.health, HEALTH - 1);
+  });
+
+  test('invincibility doesn\'t protect against pits', () => {
+    const state = newState();
+    const invincible = { ...state, player: new Player({ ...state.player, invincibleTime: 5 }) };
+    const [, after] = stepUntilHealthChanges(invincible);
+    assert.equal(after.player.health, HEALTH - 1);
+  });
+
+  test('respawning ends any knockback', () => {
+    const state = newState();
+    const knocked = { ...state, player: new Player({ ...state.player, knockedBack: true }) };
+    const [, after] = stepUntilHealthChanges(knocked);
+    assert.equal(after.player.knockedBack, false);
+  });
+
+  test('a player with no health left doesn\'t go below 0', () => {
+    const state = newState();
+    const noHealth = { ...state, player: new Player({ ...state.player, health: 0, y: state.level.height }) };
+    const after = step(noHealth, NO_INPUT, FIXED_DT);
+    assert.ok(after.player.health >= 0);
   });
 });
 
