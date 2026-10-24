@@ -6,7 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveBox, overlapsSolid, isSupported } from '../../src/simulation/collision.js';
+import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn } from '../../src/simulation/collision.js';
 
 const TILE_TYPES = {
   '#': { solid: true, color: '#000000' },
@@ -703,5 +703,184 @@ describe('isSupported: something solid directly under a box', () => {
     const level = levelFrom(['...', '...', '...']);
     const crate = box(2, 1, 1, 1);   // its top-left corner touches the box's bottom-right
     assert.equal(isSupported(level, box(1, crate.y - 1, 1, 1), [crate]), false);
+  });
+});
+
+describe('touches: two boxes overlap or share an edge', () => {
+  test('boxes side by side, sharing an edge, touch', () => {
+    const left = box(1, 0, 1, 1);
+    assert.equal(touches(left, box(left.x + left.width, 0, 1, 1)), true);
+  });
+
+  test('a box on top of another, sharing an edge, touches it', () => {
+    const below = box(1, 1, 1, 1);
+    assert.equal(touches(box(1, below.y - 1, 1, 1), below), true);
+  });
+
+  test('overlapping boxes touch', () => {
+    assert.equal(touches(box(1, 0, 1, 1), box(1.5, 0.5, 1, 1)), true);
+  });
+
+  test('boxes that meet only at a corner do not touch', () => {
+    const a = box(1, 0, 1, 1);
+    assert.equal(touches(a, box(a.x + a.width, a.y + a.height, 1, 1)), false);
+  });
+
+  test('boxes with a gap between them do not touch', () => {
+    const left = box(1, 0, 1, 1);
+    const gap = 0.01;
+    assert.equal(touches(left, box(left.x + left.width + gap, 0, 1, 1)), false);
+  });
+
+  test('a shared edge that is off by rounding error still touches', () => {
+    const left = box(0.1 + 0.2, 0, 1, 1);   // 0.30000000000000004
+    assert.equal(touches(left, box(1.3, 0, 1, 1)), true);
+  });
+
+  test('the order of the two boxes does not matter', () => {
+    const a = box(1, 0, 1, 1);
+    const b = box(a.x + a.width, 0, 1, 1);
+    assert.equal(touches(b, a), true);
+  });
+});
+
+describe('moveBoxes: several boxes moved together (a player and the object they carry)', () => {
+  // moveBoxes(level, boxes, dx, dy, solidBoxes) moves every box by the same
+  // amount: on each axis, the shortest move any one box is allowed. Returns
+  // { dx, dy, hitLeft, hitRight, hitCeiling, onGround }, where dx and dy are
+  // the amounts actually moved and each hit is true if any box was stopped.
+
+  /** A box of the player's size with a box of the object's size on top. */
+  function carrying(x, playerY, objectWidth = 1) {
+    const player = box(x, playerY, 1, 1);
+    const object = box(x + 0.5 - objectWidth / 2, playerY - 1, objectWidth, 1);
+    return [player, object];
+  }
+
+  test('one box moves exactly as moveBox moves it', () => {
+    const level = levelFrom(['......', '...#..', '######']);
+    const start = box(0, 1, 0.8, 1);
+    const single = moveBox(level, start, 5, 0.5);
+    const together = moveBoxes(level, [start], 5, 0.5);
+    assertNear(start.x + together.dx, single.x, 'x');
+    assertNear(start.y + together.dy, single.y, 'y');
+    assert.deepEqual(hits(together), hits(single));
+  });
+
+  test('in open space, all boxes move the full distance', () => {
+    const level = levelFrom(['......', '......', '......']);
+    const result = moveBoxes(level, carrying(0, 2), 2, 0);
+    assertNear(result.dx, 2, 'dx');
+    assertNear(result.dy, 0, 'dy');
+    assert.deepEqual(hits(result), NO_HITS);
+  });
+
+  test('a wall only the upper box meets stops both, with the upper box flush against it', () => {
+    const overhangColumn = 4;
+    const level = levelFrom(['....##', '......', '######']);
+    const [player, object] = carrying(0, 1);
+    const result = moveBoxes(level, [player, object], 5, 0);
+    assertNear(object.x + result.dx + object.width, overhangColumn, 'object right edge');
+    assertNear(player.x + result.dx + player.width, overhangColumn, 'player right edge');
+    assert.deepEqual(hits(result), { ...NO_HITS, hitRight: true });
+  });
+
+  test('a wall only the lower box meets stops both', () => {
+    const wallColumn = 3;
+    const level = levelFrom(['......', '...#..', '######']);
+    const [player, object] = carrying(0, 1);
+    const result = moveBoxes(level, [player, object], 5, 0);
+    assertNear(player.x + result.dx + player.width, wallColumn, 'player right edge');
+    assert.deepEqual(hits(result), { ...NO_HITS, hitRight: true });
+  });
+
+  test('moving left, the box stopped first decides for both', () => {
+    const level = levelFrom(['#.....', '......', '######']);
+    const [player, object] = carrying(4, 1);
+    const result = moveBoxes(level, [player, object], -5, 0);
+    assertNear(object.x + result.dx, 1, 'object left edge');   // flush against the tile in column 0
+    assert.deepEqual(hits(result), { ...NO_HITS, hitLeft: true });
+  });
+
+  test('a ceiling the upper box hits stops both moving up', () => {
+    const level = levelFrom(['###', '...', '...', '...', '###']);
+    const [player, object] = carrying(1, 3);
+    const result = moveBoxes(level, [player, object], 0, -3);
+    assertNear(object.y + result.dy, 1, 'object top');   // just below the ceiling row
+    assertNear(player.y + result.dy, 2, 'player top');
+    assert.deepEqual(hits(result), { ...NO_HITS, hitCeiling: true });
+  });
+
+  test('landing: the lower box stops on the ground and the upper one stops with it', () => {
+    const level = levelFrom(['...', '...', '...', '...', '###']);
+    const [player, object] = carrying(1, 1);
+    const result = moveBoxes(level, [player, object], 0, 5);
+    assertNear(player.y + result.dy + player.height, 4, 'player bottom');
+    assertNear(object.y + result.dy + object.height, player.y + result.dy, 'object still on top');
+    assert.deepEqual(hits(result), { ...NO_HITS, onGround: true });
+  });
+
+  test('a wide upper box caught on a ledge stops the fall of both, and counts as landing', () => {
+    // The 3-wide object spans columns 0-2; the ledge in column 2 is beside the player, under the object's overhang.
+    const ledgeTop = 2;
+    const level = levelFrom(['...', '...', '..#', '...', '...', '###']);
+    const [player, object] = carrying(1, 1, 3);
+    const result = moveBoxes(level, [player, object], 0, 5);
+    assertNear(object.y + result.dy + object.height, ledgeTop, 'object bottom');
+    assert.deepEqual(hits(result), { ...NO_HITS, onGround: true });
+  });
+
+  test('X is resolved before Y, using the positions after the X move', () => {
+    // Moving right puts the upper box under the overhang, which then stops the upward move.
+    const level = levelFrom(['...#', '....', '....', '....', '####']);
+    const [player, object] = carrying(1, 3);
+    const result = moveBoxes(level, [player, object], 2, -2);
+    assertNear(result.dx, 2, 'dx');
+    assertNear(object.y + result.dy, 1, 'object top');   // just below the overhang in row 0
+    assert.deepEqual(hits(result), { ...NO_HITS, hitCeiling: true });
+  });
+
+  test('the boxes passed in are not changed', () => {
+    const level = levelFrom(['....##', '......', '######']);
+    const boxes = carrying(0, 1);
+    const before = structuredClone(boxes);
+    moveBoxes(level, boxes, 5, -1);
+    assert.deepEqual(boxes, before);
+  });
+});
+
+describe('fitsIn: a box placed without overlapping solid tiles or crossing the side edges', () => {
+  test('a box in open space fits', () => {
+    assert.equal(fitsIn(levelFrom(['...', '###']), box(1, 0, 1, 1)), true);
+  });
+
+  test('a box resting on the ground, touching it, fits', () => {
+    assert.equal(fitsIn(levelFrom(['...', '###']), box(0, 0, 3, 1)), true);
+  });
+
+  test('a box overlapping a solid tile does not fit', () => {
+    assert.equal(fitsIn(levelFrom(['.#.', '###']), box(0.5, 0, 1, 1)), false);
+  });
+
+  test('a box overlapping only non-solid tiles fits', () => {
+    assert.equal(fitsIn(levelFrom(['~~~', '###']), box(0.5, 0, 1, 1)), true);
+  });
+
+  test('a box sticking out past the left or right edge does not fit', () => {
+    const level = levelFrom(['...', '###']);
+    const overhang = 0.2;
+    assert.equal(fitsIn(level, box(-overhang, 0, 1, 1)), false);
+    assert.equal(fitsIn(level, box(level.width - 1 + overhang, 0, 1, 1)), false);
+  });
+
+  test('a box exactly against a side edge, off by rounding error, fits', () => {
+    const level = levelFrom(['...', '###']);
+    const roundingError = 1e-12;
+    assert.equal(fitsIn(level, box(-roundingError, 0, 1, 1)), true);
+    assert.equal(fitsIn(level, box(level.width - 1 + roundingError, 0, 1, 1)), true);
+  });
+
+  test('a box above the top of the level fits (the top is open)', () => {
+    assert.equal(fitsIn(levelFrom(['...', '###']), box(1, -2, 1, 1)), true);
   });
 });

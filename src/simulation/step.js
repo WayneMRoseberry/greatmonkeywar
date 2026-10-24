@@ -9,6 +9,7 @@
 // broken level, so the update functions called here don't check the data again.
 
 import { updatePlayer } from './player.js';
+import { updateObjects } from './objects.js';
 
 const copyObjects = (objects) => objects.map((o) => o.copy());
 
@@ -46,6 +47,7 @@ export function step(state, input, dt) {
   const next = copyState(state);
   next.time += dt;
   updatePlayer(next, input, dt);
+  updateObjects(next, input);   // after the player moves, so a held object follows them
   // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.
   if (next.player.health <= 0) restartLevel(next);
   return next;

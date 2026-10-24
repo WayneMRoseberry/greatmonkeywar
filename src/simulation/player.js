@@ -10,7 +10,8 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { moveBox, isSupported } from './collision.js';
+import { moveBoxes, isSupported } from './collision.js';
+import { heldObject } from './objects.js';
 
 /**
  * The player's changing state: the one central declaration of its properties.
@@ -32,6 +33,7 @@ export class Player {
   jumpHeld = false;       // whether jump was held last step: only a new press jumps
   invincibleTime = 0;     // seconds of invincibility left after being damaged; the renderer flashes while > 0
   knockedBack = false;    // true from being damaged until landing: running input is ignored meanwhile
+  actionHeld = false;     // whether action was held last step: only a new press picks up (objects.js)
 
   /** A Player with the given starting values; anything not given keeps its default. */
   constructor(values = {}) {
@@ -72,9 +74,21 @@ export function damagePlayer(state, source) {
   return true;
 }
 
-/** True if there is something solid directly under the player's feet. */
+/**
+ * The boxes that move as the player: the player's, plus the held object's
+ * when carrying one (task 4.2a), so that whatever stops either stops both.
+ */
+function carriedBoxes(state) {
+  const held = heldObject(state);
+  return held ? [state.player, held] : [state.player];
+}
+
+/**
+ * True if there is something solid directly under the player's feet, or under
+ * the object they carry (a wide object caught on a ledge holds the player up).
+ */
 function isStanding(state) {
-  return isSupported(state.level, state.player);
+  return carriedBoxes(state).some((box) => isSupported(state.level, box));
 }
 
 /**
@@ -87,8 +101,9 @@ function isStanding(state) {
  *    Only a new press jumps: holding jump doesn't jump again on landing.
  *    "Standing" is checked directly, so a player who arrived exactly on the
  *    ground last step (onGround still false) can jump at once.
- *  - Collision (req 23): the move goes through moveBox. A wall stops the
- *    player and makes vx 0; landing or hitting a ceiling makes vy 0.
+ *  - Collision (req 23): the move goes through moveBoxes, together with any
+ *    held object (task 4.2a). A wall either one meets stops the player and
+ *    makes vx 0; landing or hitting a ceiling, by either one, makes vy 0.
  */
 export function updatePlayer(state, input, dt) {
   const { player } = state;
@@ -110,9 +125,9 @@ export function updatePlayer(state, input, dt) {
   if (jumpPressed && standing) player.vy = -jumpSpeed;
   player.jumpHeld = input[Input.JUMP];
 
-  const moved = moveBox(state.level, player, player.vx * dt, player.vy * dt);
-  player.x = moved.x;
-  player.y = moved.y;
+  const moved = moveBoxes(state.level, carriedBoxes(state), player.vx * dt, player.vy * dt);
+  player.x += moved.dx;   // the held object is put back above the player's head in updateObjects
+  player.y += moved.dy;
   player.onGround = moved.onGround;
   if (moved.hitLeft || moved.hitRight) player.vx = 0;
   if (moved.onGround || moved.hitCeiling) player.vy = 0;
