@@ -240,7 +240,7 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 3.12 Restart at 0 health: the level returns to its starting snapshot, including health and reward count (req 27).
     - Test: `tests/simulation/step.test.js` ("restart")
     - Code: `src/simulation/step.js`, `src/simulation/state.js`
-- [ ] 4.0 Build objects and stacking: pick up, drop, throw, stack, and rewards
+- [x] 4.0 Build objects and stacking: pick up, drop, throw, stack, and rewards
   - [x] 4.1 Objects in the initial state, from level placements and object definitions; objects placed one above another start stacked (req 28).
     - Decided: objects are placed in their cells by the usual bottom-centre rule and start `resting` if a solid tile, or a stackable object that is itself resting, is directly under them; otherwise they start not resting and fall once object gravity exists (4.5). Non-stackable objects are never a support. Objects are part of the level-start snapshot and are restored on restart (req 27).
     - Test: `tests/simulation/state.test.js` ("objects", "objects that start at rest", snapshot), `tests/simulation/step.test.js` ("objects across steps"), `tests/simulation/collision.test.js` ("isSupported")
@@ -275,14 +275,17 @@ These were completed before this approach was adopted: their tests were written 
       - the player and held object moving together (`moveBoxes` gets the resting stackable objects as `solidBoxes`), so a carried crate stops at a stack just as it stops at a wall.
     - Test: `tests/simulation/objects.test.js` ("stacking"), `tests/simulation/collision.test.js` ("stackable boxes": `overlapsBox`, `fitsIn` with solid boxes)
     - Code: `src/simulation/objects.js` (`solidObjects`, `updateFalling`), `src/simulation/collision.js` (`overlapsBox`), `src/simulation/player.js`, `src/simulation/step.js`
-  - [ ] 4.7 Picking up an object that others rest on makes them fall (req 36).
+  - [x] 4.7 Picking up an object that others rest on makes them fall (req 36).
+    - Decided: every step, before objects move, each resting object checks (lowest first) for a solid tile or a resting stackable object directly under it. One with nothing under it stops resting and falls that same step, and so do any resting on it, so a stack above a removed crate falls together and settles again. An object still partly supported stays at rest. The check is `settleResting` (objects.js), which also decides which objects start at rest when a level is built (task 4.1).
     - Test: `tests/simulation/objects.test.js` ("support removed")
-    - Code: `src/simulation/objects.js`
-  - [ ] 4.8 The player can't pick up the object they're standing on (req 37).
-    - Test: `tests/simulation/objects.test.js` ("standing on")
-    - Code: `src/simulation/objects.js`
-  - [ ] 4.9 Rewards: touching one removes it and adds its value to the reward count (reqs 42–43).
-    - Test: `tests/simulation/rewards.test.js`
+    - Code: `src/simulation/objects.js` (`settleResting`), `src/simulation/state.js`
+  - [x] 4.8 The player can't pick up the object they're standing on (req 37).
+    - Decided: objects the player stands on (their feet on its top, overlapping sideways: `isOnTopOf` in collision.js) are left out when choosing what to pick up. Another object they touch, such as a crate beside them on the stack, is still picked up by the usual ranking.
+    - Test: `tests/simulation/objects.test.js` ("standing on"), `tests/simulation/collision.test.js` ("isOnTopOf")
+    - Code: `src/simulation/objects.js`, `src/simulation/collision.js` (`isOnTopOf`)
+  - [x] 4.9 Rewards: touching one removes it and adds its value to the reward count (reqs 42–43).
+    - Decided: a reward is a plain box filling its grid cell (1 × 1), with `value` (default 1) and `color` from its legend entry. The player collects it by overlapping it (sharing an edge isn't enough). Only the player collects rewards; objects pass through them. Rewards are part of the level-start snapshot and come back on restart (req 27).
+    - Test: `tests/simulation/rewards.test.js`, `tests/simulation/state.test.js` (snapshot)
     - Code: `src/simulation/rewards.js`, `src/simulation/state.js`, `src/simulation/step.js`
 - [ ] 5.0 Build enemies and punching
   - [ ] 5.1 Enemies in the initial state, from level placements and character definitions, with health and patrol speed (reqs 40, 48).

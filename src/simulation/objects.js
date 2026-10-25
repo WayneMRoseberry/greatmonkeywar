@@ -9,7 +9,7 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { touches, fitsIn, moveBox } from './collision.js';
+import { touches, fitsIn, moveBox, isSupported, isOnTopOf } from './collision.js';
 
 /**
  * An object's changing state: the one central declaration of its properties.
@@ -52,7 +52,8 @@ const bottom = (box) => box.y + box.height;
 
 /**
  * The object the player would pick up: of the objects touching the player
- * (other than ones thrown and still in flight),
+ * (other than ones thrown and still in flight, and ones the player is standing
+ * on, task 4.8),
  * those on the side they face come first, then the one whose centre is
  * nearest the player's centre, then the first in the list. Null if none.
  */
@@ -66,7 +67,7 @@ function objectToPickUp(state) {
   let best = null;
   let bestRank = null;
   for (const object of objects) {
-    if (object.thrown || !touches(player, object)) continue;
+    if (object.thrown || isOnTopOf(player, object) || !touches(player, object)) continue;
     const r = rank(object);
     // Strictly better only, so a tie keeps the earlier object.
     if (!best || r.behind < bestRank.behind || (r.behind === bestRank.behind && r.distance < bestRank.distance)) {
@@ -82,14 +83,32 @@ export function heldObject(state) {
   return state.objects.find((o) => o.held) ?? null;
 }
 
-const isStackable = (state, object) => state.data.objects[object.type].stackable === true;
+/** True if `object` is stackable, from its definition in `definitions` (data.objects). */
+const isStackable = (definitions, object) => definitions[object.type].stackable === true;
+
+/**
+ * Decides which of `objects` are at rest: those with a solid tile, or a
+ * stackable object from `objects` that is itself at rest, directly under
+ * them. They are checked lowest first, so each one's supports are decided
+ * before it is. Sets each one's `resting` and returns the resting stackable
+ * ones (the solid objects among them). `definitions` is data.objects.
+ * Used when a level is built (state.js) and each step (updateFalling).
+ */
+export function settleResting(level, objects, definitions) {
+  const supports = [];
+  for (const object of [...objects].sort((a, b) => bottom(b) - bottom(a))) {
+    object.resting = isSupported(level, object, supports);
+    if (object.resting && isStackable(definitions, object)) supports.push(object);
+  }
+  return supports;
+}
 
 /**
  * The objects that are solid surfaces (req 35): stackable objects at rest.
  * Objects land on them, and the player stands, walks, and jumps on them.
  */
 export function solidObjects(state) {
-  return state.objects.filter((o) => o.resting && isStackable(state, o));
+  return state.objects.filter((o) => o.resting && isStackable(state.data.objects, o));
 }
 
 /** Where `object` goes above the player's head: its bottom-centre at the player's top-centre. */
@@ -202,12 +221,13 @@ function throwObject(object, player, throwSpeed) {
  *    when the level started, still and not thrown, and falls or comes to rest
  *    from there on the following steps.
  * Objects are moved lowest first, so a falling stack settles in one piece.
- * Resting objects don't move: they stay as they are until something picks
- * them up (task 4.7 makes them fall when what is under them goes).
+ * First, support is checked (task 4.7, req 36): a resting object with
+ * nothing solid left under it (such as a crate on one just picked up) stops
+ * resting and falls this same step, and so do any resting on it in turn.
  */
 export function updateFalling(state, dt) {
   const { gravity, maxFallSpeed } = state.data.tuning;
-  const solids = solidObjects(state);
+  const solids = settleResting(state.level, state.objects.filter((o) => o.resting), state.data.objects);
   const moving = state.objects
     .map((object, index) => ({ object, index }))
     .filter(({ object }) => !object.held && !object.resting)
@@ -225,7 +245,7 @@ export function updateFalling(state, dt) {
       object.vy = 0;
       object.resting = true;
       object.thrown = false;
-      if (isStackable(state, object)) solids.push(object);
+      if (isStackable(state.data.objects, object)) solids.push(object);
     }
     if (object.y >= state.level.height) returnToStart(object, state.levelStart.objects[index]);
   }

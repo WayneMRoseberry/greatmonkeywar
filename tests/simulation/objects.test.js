@@ -1049,3 +1049,90 @@ describe('stacking (task 4.6, req 35)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 4.7: support removed. Decided: every step, each resting object checks
+// (lowest first) for something solid directly under it: a solid tile or a
+// resting stackable object. One with nothing under it stops resting and falls.
+
+describe('support removed (task 4.7, req 36)', () => {
+  test('picking up the bottom crate of a stack of two: the top one falls and comes to rest on the ground', () => {
+    const groundTop = 3;
+    const state = physicsState(['.....', '..c..', '.Pc.G', '#####']);   // the stack is in column 2, beside the player
+    let current = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(current), [1]);
+    const [top] = current.objects;
+    assert.equal(top.resting, false, 'the top crate has lost its support');
+    assert.ok(top.y > state.objects[0].y, 'and has started falling');
+    current = stepUntil(current, NO_INPUT, (s) => s.objects[0].resting);
+    assertNear(bottom(current.objects[0]), groundTop, 'top crate bottom');
+  });
+
+  test('picking up the bottom of a stack of three: the two above fall together and settle into a stack of two', () => {
+    const groundTop = 3;
+    const state = physicsState(['..c..', '..c..', '.Pc.G', '#####']);
+    let current = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(current), [2]);
+    current = stepUntil(current, NO_INPUT, (s) => s.objects[0].resting && s.objects[1].resting);
+    const [top, middle] = current.objects;
+    assertNear(bottom(middle), groundTop, 'middle crate bottom');
+    assertNear(bottom(top), middle.y, 'top crate bottom');
+  });
+
+  test('a coconut resting on a crate falls when the crate is picked up', () => {
+    const state = physicsState(['.....', '..o..', '.Pc.G', '#####']);
+    const after = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(after), [1]);
+    assert.equal(after.objects[0].resting, false);
+  });
+
+  test('objects not resting on the picked-up one stay exactly where they are', () => {
+    // The last crate sits on the ground in column 4, away from the stack the player picks from.
+    const state = physicsState(['.....G', '..c...', '.Pc.c.', '######']);
+    const after = step(state, PRESS_ACTION, FIXED_DT);
+    const untouched = state.objects.at(-1);
+    assert.deepEqual({ ...after.objects.at(-1) }, { ...untouched });
+  });
+
+  test('an object still partly supported stays at rest', () => {
+    // A 2-wide plank rests across crates in columns 2 and 3; the player, right of them, picks up the crate in column 3.
+    const plank = { formatVersion: 1, name: 'Plank', size: { width: 2, height: 0.5 }, stackable: true, color: '#8b5a2b' };
+    const state = physicsState(['.....G', '..p...', '..ccP.', '######'], { objects: { plank }, legend: { p: { object: 'plank' } } });
+    assert.equal(state.objects[0].resting, true);
+    const after = step(withPlayer(state, { facing: Facing.LEFT }), PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(after), [2]);
+    assert.equal(after.objects[0].resting, true, 'the plank is still on the crate in column 2');
+    assert.deepEqual({ ...after.objects[0] }, { ...state.objects[0] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4.8: standing on. Decided: objects the player is standing on (their
+// feet on its top, overlapping sideways) are left out when choosing what to
+// pick up; another object they touch can still be picked up.
+
+describe('standing on (task 4.8, req 37)', () => {
+  test('standing on a crate, pressing action doesn\'t pick it up', () => {
+    const state = physicsState(['.P..G', '.c...', '#####']);
+    const after = step(state, PRESS_ACTION, FIXED_DT);
+    assert.deepEqual(heldIndexes(after), []);
+    assert.equal(after.objects[0].resting, true);
+  });
+
+  test('standing on a crate, a crate beside the player is picked up instead', () => {
+    // The player stands on crate 1 (column 1); crate 0 (column 2, top row) is beside them, on crate 2.
+    const state = physicsState(['.Pc..', '.cc.G', '#####']);
+    assert.deepEqual(heldIndexes(step(state, PRESS_ACTION, FIXED_DT)), [0]);
+  });
+
+  test('standing across two crates, neither is picked up', () => {
+    const state = physicsState(['.P..G', '.cc..', '#####']);
+    const straddling = withPlayer(state, { x: 1.5 });   // over the edge between the crates in columns 1 and 2
+    assert.deepEqual(heldIndexes(step(straddling, PRESS_ACTION, FIXED_DT)), []);
+  });
+
+  test('a crate the player stands beside, on the ground, can still be picked up', () => {
+    const state = physicsState(['.....', '.Pc.G', '#####']);
+    assert.deepEqual(heldIndexes(step(state, PRESS_ACTION, FIXED_DT)), [0]);
+  });
+});

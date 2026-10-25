@@ -203,9 +203,10 @@ describe('goal, rewards, and time', () => {
 });
 
 describe('level-start snapshot (req 27)', () => {
-  test('records the player, objects, and reward count as they were when the level started', () => {
-    const state = stateFor(['P.c.o.G', '#######']);
-    assert.deepEqual(state.levelStart, { player: state.player, objects: state.objects, rewardCount: 0 });
+  test('records the player, objects, rewards, and reward count as they were when the level started', () => {
+    const state = stateFor(['P.c.o.b.G', '#########']);
+    assert.deepEqual(state.levelStart,
+      { player: state.player, objects: state.objects, rewards: state.rewards, rewardCount: 0 });
   });
 
   test('the snapshot\'s objects are CarriableObjects, separate from the live ones', () => {

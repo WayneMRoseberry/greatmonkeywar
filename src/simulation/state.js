@@ -10,8 +10,9 @@
 // (step.js, player.js, collision.js, ...) relies on that and doesn't check again.
 
 import { Player } from './player.js';
-import { CarriableObject } from './objects.js';
-import { overlapsSolid, isSupported } from './collision.js';
+import { CarriableObject, settleResting } from './objects.js';
+import { rewardInCell } from './rewards.js';
+import { overlapsSolid } from './collision.js';
 
 const GRID_AND_LEGEND = "the level's grid and legend";
 
@@ -69,20 +70,6 @@ function findCells(grid, legend, test) {
     });
   });
   return cells;
-}
-
-/**
- * Marks which objects start at rest: those with a solid tile, or a stackable
- * object that is itself at rest, directly under them. Objects are checked from
- * the lowest up, so each one's supports are decided before it is.
- */
-function markResting(level, objects, definitions) {
-  const supports = [];
-  const lowestFirst = [...objects].sort((a, b) => (b.y + b.height) - (a.y + a.height));
-  for (const object of lowestFirst) {
-    object.resting = isSupported(level, object, supports);
-    if (object.resting && definitions[object.type].stackable) supports.push(object);
-  }
 }
 
 /** The one cell matching `test`; fails if there are none or several. */
@@ -152,9 +139,12 @@ export function createLevelState(data, levelName) {
         ...placeInCell(column, row, definition.size.width, definition.size.height),
       });
     });
-    markResting(level, placed, data.objects);
+    settleResting(level, placed, data.objects);   // which start at rest
     return placed;
   });
+
+  const rewards = step(levelName, 'placing the rewards', GRID_AND_LEGEND, () =>
+    findCells(source.grid, source.legend, (e) => e.reward).map(({ column, row, entry }) => rewardInCell(column, row, entry.reward)));
 
   const state = {
     data,
@@ -164,12 +154,14 @@ export function createLevelState(data, levelName) {
     goal: { x: goalCell.column, y: goalCell.row, width: 1, height: 1 },
     player,
     objects,
+    rewards,
     rewardCount: 0,
     time: 0,
   };
   state.levelStart = {
     player: player.copy(),
     objects: objects.map((o) => o.copy()),
+    rewards: structuredClone(rewards),
     rewardCount: state.rewardCount,
   };
   return state;

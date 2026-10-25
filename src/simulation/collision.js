@@ -221,3 +221,12 @@ export function fitsIn(level, box, solidBoxes = []) {
   return box.x >= -EPS && box.x + box.width <= level.width + EPS && overlapsSolid(level, box) === null
     && !solidBoxes.some((solid) => overlapsBox(box, solid));
 }
+
+/**
+ * True if box `upper` stands on box `lower`: its bottom edge is on lower's top
+ * edge and they overlap sideways (a corner alone doesn't count).
+ */
+export function isOnTopOf(upper, lower) {
+  return Math.abs(upper.y + upper.height - lower.y) < EPS
+    && overlaps(upper.x, upper.x + upper.width, lower.x, lower.x + lower.width);
+}

@@ -6,7 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn, overlapsBox } from '../../src/simulation/collision.js';
+import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn, overlapsBox, isOnTopOf } from '../../src/simulation/collision.js';
 
 const TILE_TYPES = {
   '#': { solid: true, color: '#000000' },
@@ -928,5 +928,38 @@ describe('stackable boxes (task 4.6)', () => {
     test('with no solid boxes passed in, only tiles and edges count', () => {
       assert.equal(fitsIn(level, box(1, 0, 1, 1)), true);
     });
+  });
+});
+
+describe('isOnTopOf: a box standing on another (task 4.8)', () => {
+  test('a box whose bottom is on the other\'s top, overlapping sideways, is on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    assert.equal(isOnTopOf(box(1.2, lower.y - 1, 0.8, 1), lower), true);
+  });
+
+  test('a box overlapping the other\'s top only partly is still on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    assert.equal(isOnTopOf(box(1.5, lower.y - 1, 1, 1), lower), true);
+  });
+
+  test('a box beside the other, touching only at a corner, is not on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    assert.equal(isOnTopOf(box(lower.x + lower.width, lower.y - 1, 1, 1), lower), false);
+  });
+
+  test('a box above the other with a gap is not on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    const gap = 0.01;
+    assert.equal(isOnTopOf(box(1, lower.y - 1 - gap, 1, 1), lower), false);
+  });
+
+  test('a box under the other is not on top of it', () => {
+    const upper = box(1, 0, 1, 1);
+    assert.equal(isOnTopOf(box(1, upper.y + upper.height, 1, 1), upper), false);
+  });
+
+  test('a bottom off from the other\'s top by rounding error is still on top', () => {
+    const lower = box(1, 0.1 + 0.2, 1, 1);   // y is 0.30000000000000004
+    assert.equal(isOnTopOf(box(1, 0.3 - 1, 1, 1), lower), true);
   });
 });

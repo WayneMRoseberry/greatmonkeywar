@@ -10,6 +10,7 @@
 
 import { updatePlayer } from './player.js';
 import { updateObjects, updateFalling } from './objects.js';
+import { collectRewards } from './rewards.js';
 
 const copyObjects = (objects) => objects.map((o) => o.copy());
 
@@ -40,6 +41,7 @@ function restartLevel(state) {
   const { levelStart } = state;
   state.player = levelStart.player.copy();
   state.objects = copyObjects(levelStart.objects);
+  state.rewards = structuredClone(levelStart.rewards);
   state.rewardCount = levelStart.rewardCount;
 }
 
@@ -49,6 +51,7 @@ export function step(state, input, dt) {
   updatePlayer(next, input, dt);
   updateObjects(next, input);   // after the player moves, so a held object follows them
   updateFalling(next, dt);      // after updateObjects, so thrown and dropped objects move at once
+  collectRewards(next);
   // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.
   if (next.player.health <= 0) restartLevel(next);
   return next;
