@@ -6,6 +6,7 @@ import { createLevelState, LevelDataError } from '../../src/simulation/state.js'
 import { Facing } from '../../src/simulation/constants.js';
 import { Player } from '../../src/simulation/player.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
+import { Enemy } from '../../src/simulation/enemies.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 
 const GRID = [
@@ -189,6 +190,71 @@ describe('objects that start at rest (req 28; decided: an object rests if someth
   });
 });
 
+describe('enemies (reqs 40, 48)', () => {
+  // Grids use the standard legend (level-builder.js): e is a "beetle" enemy.
+
+  test('each enemy placement becomes an Enemy of that type, at the bottom-centre of its cell, with health from its definition', () => {
+    const column = 3;
+    const row = 0;
+    const health = 4;
+    const state = stateFor(['P..e.G', '######'], { enemy: { health } });
+    const { beetle } = state.data.characters;
+    assert.equal(state.enemies.length, 1);
+    const [enemy] = state.enemies;
+    assert.equal(enemy.type, 'beetle');
+    assertBoxNear(enemy, expectedBox(column, row, beetle.size));
+    assert.equal(enemy.health, health);
+    assert.equal(enemy.vy, 0);
+  });
+
+  test('by default an enemy starts facing left, walking left at its patrol speed', () => {
+    const speed = 3;
+    const [enemy] = stateFor(['P..e.G', '######'], { enemy: { speed } }).enemies;
+    assert.equal(enemy.facing, Facing.LEFT);
+    assert.equal(enemy.vx, -speed);
+  });
+
+  test('a placement with "facing": "right" starts facing right, walking right at its patrol speed', () => {
+    const speed = 3;
+    const state = stateFor(['P..r.G', '######'], { enemy: { speed }, legend: { r: { enemy: 'beetle', facing: Facing.RIGHT } } });
+    const [enemy] = state.enemies;
+    assert.equal(enemy.facing, Facing.RIGHT);
+    assert.equal(enemy.vx, speed);
+  });
+
+  test('a placement with "facing": "left" starts facing left', () => {
+    const state = stateFor(['P..l.G', '######'], { legend: { l: { enemy: 'beetle', facing: Facing.LEFT } } });
+    assert.equal(state.enemies[0].facing, Facing.LEFT);
+  });
+
+  test('enemies are listed in grid order: rows top to bottom, then left to right', () => {
+    const state = stateFor(['..e.e', 'Pe..G', '#####']);
+    assert.deepEqual(state.enemies.map(({ x, y }) => ({ column: Math.floor(x), row: Math.floor(y) })),
+      [{ column: 2, row: 0 }, { column: 4, row: 0 }, { column: 1, row: 1 }]);
+  });
+
+  test('a level with no enemies has an empty list', () => {
+    assert.deepEqual(stateFor().enemies, []);
+  });
+
+  test('enemies are Enemy objects, with their structure locked', () => {
+    const [enemy] = stateFor(['P.e.G', '#####']).enemies;
+    assert.ok(enemy instanceof Enemy);
+    assert.ok(Object.isSealed(enemy));
+  });
+
+  test('the Enemy structure has exactly the declared properties', () => {
+    const PROPERTIES = ['type', 'x', 'y', 'width', 'height', 'vx', 'vy', 'facing', 'health'];
+    assert.deepEqual(Object.keys(new Enemy()).sort(), [...PROPERTIES].sort());
+  });
+
+  test('an Enemy rejects a property it doesn\'t have, such as a typo', () => {
+    assert.throws(() => new Enemy({ helth: 1 }), /"helth" is not an Enemy property/);
+    const enemy = new Enemy();
+    assert.throws(() => { enemy.helth = 1; }, TypeError);
+  });
+});
+
 describe('goal, rewards, and time', () => {
   test('the goal is the box of its grid cell', () => {
     // 'G' in GRID is in column 6 of row 1; a cell is 1 × 1 tile.
@@ -203,10 +269,22 @@ describe('goal, rewards, and time', () => {
 });
 
 describe('level-start snapshot (req 27)', () => {
-  test('records the player, objects, rewards, and reward count as they were when the level started', () => {
-    const state = stateFor(['P.c.o.b.G', '#########']);
+  test('records the player, enemies, objects, rewards, and reward count as they were when the level started', () => {
+    const state = stateFor(['P.e.c.o.b.G', '###########']);
     assert.deepEqual(state.levelStart,
-      { player: state.player, objects: state.objects, rewards: state.rewards, rewardCount: 0 });
+      { player: state.player, enemies: state.enemies, objects: state.objects, rewards: state.rewards, rewardCount: 0 });
+  });
+
+  test('the snapshot\'s enemies are Enemy objects, separate from the live ones', () => {
+    const state = stateFor(['P.e.G', '#####']);
+    const [live] = state.enemies;
+    const [snapshot] = state.levelStart.enemies;
+    assert.ok(snapshot instanceof Enemy);
+    assert.ok(Object.isSealed(snapshot));
+    assert.notEqual(snapshot, live);
+    const startingHealth = live.health;
+    live.health = startingHealth + 5;
+    assert.equal(snapshot.health, startingHealth);
   });
 
   test('the snapshot\'s objects are CarriableObjects, separate from the live ones', () => {
@@ -481,6 +559,20 @@ describe('invalid levels fail with an explanation', () => {
       levelName: TEST_LEVEL, task: 'placing the objects', part: "the level's legend and the object definitions (data/objects/)",
     });
     assert.match(err.message, /no object definition named "barrel"/);
+  });
+
+  const ENEMY_PART = "the level's legend and the character definitions (data/characters/)";
+
+  test('an enemy placement naming a character definition that doesn\'t exist', () => {
+    const err = levelErrorFor(buildData(['P.x.G', '#####'], { legend: { x: { enemy: 'snake' } } }));
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'placing the enemies', part: ENEMY_PART });
+    assert.match(err.message, /no character definition named "snake"/);
+  });
+
+  test('an enemy placement naming the player\'s definition', () => {
+    const err = levelErrorFor(buildData(['P.x.G', '#####'], { legend: { x: { enemy: 'player' } } }));
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'placing the enemies', part: ENEMY_PART });
+    assert.match(err.message, /"player" is the player, not an enemy/);
   });
 
   test('an unexpected failure inside a step is reported with that step, and keeps the original error', () => {

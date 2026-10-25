@@ -140,7 +140,7 @@ Every other character you use in the grid needs a legend entry. Pick any charact
 | Tile | A square of ground, wall, or platform. `"solid": true` means things can't pass through it. | `"#": { "tile": { "solid": true, "color": "#6b4f2a" } }` |
 | Player start | Where the hero starts, and where they come back after falling in a pit. **Exactly one per level.** | `"P": { "playerStart": true }` |
 | Goal | Touching it finishes the level. Needs a colour. **Exactly one per level.** | `"G": { "goal": true, "color": "#ff3030" }` |
-| Enemy | An enemy. The name refers to a file in `data/characters/`. | `"e": { "enemy": "beetle" }` |
+| Enemy | An enemy. The name refers to a file in `data/characters/`. It starts walking left. Add `"facing": "right"` to start it walking right instead. | `"e": { "enemy": "beetle" }` or `"r": { "enemy": "beetle", "facing": "right" }` |
 | Object | Something the hero can pick up and throw. The name refers to a file in `data/objects/`. | `"c": { "object": "crate" }` |
 | Reward | A collectable, such as a banana. `value` is how many points it's worth (leave it out for 1). | `"b": { "reward": { "value": 1, "color": "#ffe135" } }` |
 

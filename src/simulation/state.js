@@ -6,12 +6,14 @@
 // createLevelState is the gate between data and simulation. Data is validated
 // when loaded (src/data/validate.js); this file then checks what building a
 // level needs (the level exists, exactly one start and goal, a player
-// definition, a definition for each object) and throws a LevelDataError if not. The rest of the simulation
+// definition, an enemy definition for each enemy, a definition for each
+// object) and throws a LevelDataError if not. The rest of the simulation
 // (step.js, player.js, collision.js, ...) relies on that and doesn't check again.
 
 import { Player } from './player.js';
 import { CarriableObject, settleResting } from './objects.js';
 import { rewardInCell } from './rewards.js';
+import { createEnemy } from './enemies.js';
 import { overlapsSolid } from './collision.js';
 
 const GRID_AND_LEGEND = "the level's grid and legend";
@@ -129,6 +131,13 @@ export function createLevelState(data, levelName) {
   const goalCell = step(levelName, 'placing the goal', GRID_AND_LEGEND, (fail) =>
     findOneCell(source, (e) => e.goal, 'goal', fail));
 
+  const enemies = step(levelName, 'placing the enemies', "the level's legend and the character definitions (data/characters/)", (fail) =>
+    findCells(source.grid, source.legend, (e) => e.enemy).map(({ column, row, entry }) => {
+      const definition = data.characters[entry.enemy] ?? fail(`there is no character definition named "${entry.enemy}"`);
+      if (definition.kind !== 'enemy') fail(`"${entry.enemy}" is the player, not an enemy`);
+      return createEnemy(placeInCell(column, row, definition.size.width, definition.size.height), entry, definition);
+    }));
+
   // Objects placed one above another start stacked (req 28): placement puts
   // each on its cell's bottom edge, so a 1-tile crate rests on the one below.
   const objects = step(levelName, 'placing the objects', "the level's legend and the object definitions (data/objects/)", (fail) => {
@@ -153,6 +162,7 @@ export function createLevelState(data, levelName) {
     start: { x: player.x, y: player.y },
     goal: { x: goalCell.column, y: goalCell.row, width: 1, height: 1 },
     player,
+    enemies,
     objects,
     rewards,
     rewardCount: 0,
@@ -160,6 +170,7 @@ export function createLevelState(data, levelName) {
   };
   state.levelStart = {
     player: player.copy(),
+    enemies: enemies.map((e) => e.copy()),
     objects: objects.map((o) => o.copy()),
     rewards: structuredClone(rewards),
     rewardCount: state.rewardCount,

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player, damagePlayer } from '../../src/simulation/player.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
+import { Enemy } from '../../src/simulation/enemies.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -225,5 +226,42 @@ describe('objects across steps (req 27)', () => {
     const restarted = step(lastLife, NO_INPUT, FIXED_DT);
     assert.deepEqual(restarted.objects.map((o) => ({ ...o })), start.levelStart.objects.map((o) => ({ ...o })));
     assert.notEqual(restarted.objects[0], restarted.levelStart.objects[0]);
+  });
+});
+
+describe('enemies across steps (req 27)', () => {
+  // e is a "beetle" enemy in the standard legend (level-builder.js).
+  const ENEMY_GRID = ['........', '.P..e.G.', '########'];
+
+  function newEnemyState() {
+    return createLevelState(buildData(ENEMY_GRID), TEST_LEVEL);
+  }
+
+  test('the new state has separate copies of the enemies: changing them leaves the old state alone', () => {
+    const state = newEnemyState();
+    const next = step(state, NO_INPUT, FIXED_DT);
+    const healthBefore = state.enemies[0].health;
+    next.enemies[0].health = healthBefore + 5;
+    next.levelStart.enemies[0].health = healthBefore + 5;
+    assert.equal(state.enemies[0].health, healthBefore);
+    assert.equal(state.levelStart.enemies[0].health, healthBefore);
+  });
+
+  test('enemies stay Enemy objects, with their structure locked, after any number of steps', () => {
+    const after = runSteps(step, newEnemyState(), NO_INPUT, STEPS_PER_SECOND, FIXED_DT);
+    for (const enemy of [...after.enemies, ...after.levelStart.enemies]) {
+      assert.ok(enemy instanceof Enemy);
+      assert.ok(Object.isSealed(enemy));
+    }
+  });
+
+  test('a restart puts the enemies back as they were when the level started, as separate copies', () => {
+    const start = newEnemyState();
+    const [startEnemy] = start.enemies;
+    const hurt = new Enemy({ ...startEnemy, x: startEnemy.x + 2, health: 0 });
+    const lastLife = { ...start, player: new Player({ ...start.player, health: 0 }), enemies: [hurt] };
+    const restarted = step(lastLife, NO_INPUT, FIXED_DT);
+    assert.deepEqual(restarted.enemies.map((e) => ({ ...e })), start.levelStart.enemies.map((e) => ({ ...e })));
+    assert.notEqual(restarted.enemies[0], restarted.levelStart.enemies[0]);
   });
 });

@@ -92,7 +92,7 @@ Each legend entry has **exactly one** of these keys:
 | `{ "tile": { ... } }` | A tile. | `solid` (boolean, required): the player, enemies, and objects collide with it. `color` (required): its colour. |
 | `{ "playerStart": true }` | Where the player starts and respawns (reqs 26, 57). | None. |
 | `{ "goal": true }` | The goal; touching it completes the level (req 58). | `color` (required). |
-| `{ "enemy": "<name>" }` | An enemy of this type, defined in `data/characters/<name>.json`. | None. Everything about the enemy comes from its definition. |
+| `{ "enemy": "<name>" }` | An enemy of this type, defined in `data/characters/<name>.json`. | `facing` (`"left"` or `"right"`, optional, default `"left"`): which way the enemy starts facing and walking. Everything else about the enemy comes from its definition. |
 | `{ "object": "<name>" }` | A carriable object of this type, defined in `data/objects/<name>.json`. | None. |
 | `{ "reward": { ... } }` | A reward item (req 42). | `value` (number, optional, default 1): how much the reward count goes up (req 43). `color` (required). |
 
@@ -131,6 +131,7 @@ Errors:
 - a grid character (other than `.`) is not in the legend;
 - a legend key is not exactly one character, or is `.`;
 - a legend entry has zero or more than one of `tile`, `playerStart`, `goal`, `enemy`, `object`, `reward`;
+- a legend entry that isn't an enemy has `facing`, or an enemy's `facing` is not `"left"` or `"right"`;
 - not exactly one `playerStart` or exactly one `goal` in the grid;
 - the player (sized by `characters/player.json`, placed bottom-centre on the start cell) would overlap a solid tile;
 - `enemy` names a character file that doesn't exist, or `object` names an object file that doesn't exist;
