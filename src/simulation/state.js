@@ -132,12 +132,25 @@ export function createLevelState(data, levelName) {
   const goalCell = step(levelName, 'placing the goal', GRID_AND_LEGEND, (fail) =>
     findOneCell(source, (e) => e.goal, 'goal', fail));
 
+  const enemyCells = findCells(source.grid, source.legend, (e) => e.enemy);
   const enemies = step(levelName, 'placing the enemies', "the level's legend and the character definitions (data/characters/)", (fail) =>
-    findCells(source.grid, source.legend, (e) => e.enemy).map(({ column, row, entry }) => {
+    enemyCells.map(({ column, row, entry }) => {
       const definition = data.characters[entry.enemy] ?? fail(`there is no character definition named "${entry.enemy}"`);
       if (definition.kind !== CharacterKind.ENEMY) fail(`"${entry.enemy}" is the player, not an enemy`);
       return createEnemy(placeInCell(column, row, definition.size.width, definition.size.height), entry, definition);
     }));
+
+  // As for the player: an enemy placed inside something solid could pass through it.
+  step(levelName, 'fitting the enemies', "the level's grid and legend, or the enemy's size in its character definition (data/characters/)", (fail) => {
+    enemies.forEach((enemy, i) => {
+      const tile = overlapsSolid(level, enemy);
+      const { row, column } = enemyCells[i];
+      if (tile) {
+        fail(`the enemy "${enemy.type}" at row ${row + 1}, column ${column + 1} (${enemy.width} × ${enemy.height} tiles) ` +
+          `would overlap the solid tile at row ${tile.row + 1}, column ${tile.column + 1}`);
+      }
+    });
+  });
 
   // Objects placed one above another start stacked (req 28): placement puts
   // each on its cell's bottom edge, so a 1-tile crate rests on the one below.

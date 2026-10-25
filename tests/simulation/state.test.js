@@ -605,6 +605,28 @@ describe('invalid levels fail with an explanation', () => {
     assert.doesNotThrow(() => createLevelState(data, TEST_LEVEL));
   });
 
+  const ENEMY_FIT_PART = "the level's grid and legend, or the enemy's size in its character definition (data/characters/)";
+
+  test('an enemy too wide for the space where it is placed (inside the wall beside it)', () => {
+    const data = buildData(['P...#e.G', '########'], { enemy: { size: { width: 2.5, height: 0.7 } } });
+    const err = levelErrorFor(data);
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the enemies', part: ENEMY_FIT_PART });
+    assert.match(err.message, /"beetle" at row 1, column 6/);   // where the enemy is placed (counting from 1)
+    assert.match(err.message, /solid tile at row 1, column 5/);   // the wall left of it
+  });
+
+  test('an enemy too tall for the space where it is placed (inside the ceiling above it)', () => {
+    const data = buildData(['.....#..', 'P....e.G', '########'], { enemy: { size: { width: 0.9, height: 1.5 } } });
+    const err = levelErrorFor(data);
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the enemies', part: ENEMY_FIT_PART });
+    assert.match(err.message, /solid tile at row 1, column 6/);   // the ceiling above it
+  });
+
+  test('an enemy that exactly fills the space where it is placed fits', () => {
+    const data = buildData(['.....#.G', 'P...#e#.', '########'], { enemy: { size: { width: 1, height: 1 } } });
+    assert.doesNotThrow(() => createLevelState(data, TEST_LEVEL));
+  });
+
   test('the message says which level, what was being done, why, and what to check', () => {
     assert.equal(levelErrorFor(buildData(['G'])).message,
       'Can\'t build level "test" while placing the player start: the level has no player start. ' +

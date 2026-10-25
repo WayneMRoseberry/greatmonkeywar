@@ -297,6 +297,53 @@ describe('the player must fit at the start', () => {
     ]);
   });
 
+  // Level 2's row 2 is "P..o..eG": the beetle "e" is in column 7 (counting from 1).
+  test('an enemy too wide for the space beside it (inside a wall)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[1] = 'P..o.#eG';   // a wall left of the beetle, in column 6
+    const beetle = fixture('characters/beetle.json');
+    beetle.size.width = 2.5;
+    assertErrors({ 'levels/level2.json': level, 'characters/beetle.json': beetle }, [
+      { file: 'levels/level2.json', code: 'enemy-does-not-fit',
+        details: { key: 'e', name: 'beetle', width: 2.5, height: beetle.size.height, at: { row: 2, column: 7 }, row: 2, column: 6 } },
+    ]);
+  });
+
+  /** A tall enemy, "stilt", used only by level 2's "e" (so level 1's beetle is unaffected). */
+  function withTallEnemy(level) {
+    const stilt = { ...fixture('characters/beetle.json'), name: 'Stilt', size: { width: 0.9, height: 1.5 } };
+    level.legend.e = { enemy: 'stilt' };
+    return { 'levels/level2.json': level, 'characters/stilt.json': stilt };
+  }
+
+  test('an enemy too tall for the space above it (head inside a ceiling)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '......#.';   // a ceiling tile over the enemy only, clear of the player
+    const files = withTallEnemy(level);
+    const { size } = files['characters/stilt.json'];
+    assertErrors(files, [
+      { file: 'levels/level2.json', code: 'enemy-does-not-fit',
+        details: { key: 'e', name: 'stilt', width: size.width, height: size.height, at: { row: 2, column: 7 }, row: 1, column: 7 } },
+    ]);
+  });
+
+  test('every placement of an enemy that doesn\'t fit is reported', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '.#....#.';   // ceiling tiles over both enemies
+    level.grid[1] = 'Pe.o..eG';
+    const errors = errorsFor(withTallEnemy(level));
+    assert.deepEqual(errors.map((e) => e.details.at), [{ row: 2, column: 2 }, { row: 2, column: 7 }]);
+  });
+
+  test('an enemy that exactly fills the space fits', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '......#G';   // a ceiling over the beetle
+    level.grid[1] = 'P..o.#e#';   // walls either side of it
+    const beetle = fixture('characters/beetle.json');
+    beetle.size = { width: 1, height: 1 };
+    assertErrors({ 'levels/level2.json': level, 'characters/beetle.json': beetle }, []);
+  });
+
   test('a player that exactly fills the space fits', () => {
     const level = fixture('levels/level2.json');
     level.grid[0] = '#'.repeat(level.grid[0].length);
@@ -616,6 +663,8 @@ describe('describeProblem: plain-language messages', () => {
     'missing-object': [{ key: 'o', name: 'barrel' }, 'legend "o" is the object "barrel", but there is no file data/objects/barrel.json.'],
     'unused-legend': [{ key: 'z' }, 'legend "z" is not used anywhere in the grid.'],
     'missing-cutscene': [{ name: 'ending' }, '"cutscene" is "ending", but there is no file data/cutscenes/ending.json.'],
+    'enemy-does-not-fit': [{ key: 'e', name: 'beetle', width: 2.5, height: 0.7, at: { row: 2, column: 7 }, row: 2, column: 6 },
+      'the enemy "beetle" (legend "e", at row 2, column 7) doesn\'t fit there: at 2.5 × 0.7 tiles (set in characters/beetle.json) it would overlap the solid tile at row 2, column 6. Make more room around it, or make the enemy smaller.'],
     'player-does-not-fit': [{ width: 0.8, height: 1.4, row: 1, column: 2 },
       'the player (0.8 × 1.4 tiles, set in characters/player.json) doesn\'t fit at the start: it would overlap the solid tile at row 1, column 2. Make more room around the start, or make the player smaller.'],
     'missing-layer-image': [{ layer: 2, image: 'images/mid.png' },

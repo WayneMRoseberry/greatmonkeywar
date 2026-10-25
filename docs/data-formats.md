@@ -134,6 +134,7 @@ Errors:
 - a legend entry that isn't an enemy has `facing`, or an enemy's `facing` is not `"left"` or `"right"`;
 - not exactly one `playerStart` or exactly one `goal` in the grid;
 - the player (sized by `characters/player.json`, placed bottom-centre on the start cell) would overlap a solid tile;
+- an enemy (sized by its character file, placed bottom-centre on its cell) would overlap a solid tile; every placement is checked;
 - `enemy` names a character file that doesn't exist, or `object` names an object file that doesn't exist;
 - `cutscene` names a cut scene file that doesn't exist;
 - a layer `image` file doesn't exist;

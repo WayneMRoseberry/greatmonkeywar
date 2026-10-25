@@ -349,6 +349,10 @@ const MESSAGES = {
   'player-does-not-fit': ({ width, height, row, column }) =>
     `the player (${width} × ${height} tiles, set in characters/player.json) doesn't fit at the start: ` +
     `it would overlap the solid tile at row ${row}, column ${column}. Make more room around the start, or make the player smaller.`,
+  'enemy-does-not-fit': ({ key, name, width, height, at, row, column }) =>
+    `the enemy "${name}" (legend "${key}", at row ${at.row}, column ${at.column}) doesn't fit there: ` +
+    `at ${width} × ${height} tiles (set in characters/${name}.json) it would overlap the solid tile at row ${row}, column ${column}. ` +
+    'Make more room around it, or make the enemy smaller.',
   'missing-layer-image': ({ layer, image }) => `background layer ${layer} uses the image "${image}", but there is no file data/${image}.`,
 
   // Level list
@@ -414,6 +418,7 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
   const used = new Set();
   const starts = [];
   const goals = [];
+  const enemyPlacements = [];
   grid.forEach((row, r) => {
     [...row].forEach((ch, c) => {
       if (ch === '.') return;
@@ -427,6 +432,7 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
       used.add(ch);
       if (entry.playerStart) starts.push({ row: r + 1, column: c + 1 });
       if (entry.goal) goals.push({ row: r + 1, column: c + 1 });
+      if (entry.enemy) enemyPlacements.push({ key: ch, name: entry.enemy, at: { row: r + 1, column: c + 1 } });
     });
   });
   for (const details of unknown.values()) error(path, 'unknown-character', details);
@@ -435,6 +441,13 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
     checkPlayerFits(path, level, starts[0], data.characters.player, error);
   }
   if (goals.length !== 1) error(path, 'goal-count', { count: goals.length, positions: goals });
+  for (const placement of enemyPlacements) {
+    const definition = data.characters[placement.name];
+    // A missing, broken, or non-enemy definition is reported elsewhere; there is no size to check then.
+    if (validFiles.has(`characters/${placement.name}.json`) && definition.kind === CharacterKind.ENEMY) {
+      checkEnemyFits(path, level, placement, definition, error);
+    }
+  }
 
   // Legend entries
   for (const [key, entry] of Object.entries(legend)) {
@@ -468,14 +481,31 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
  * `start` counts rows and columns from 1, as in messages.
  */
 function checkPlayerFits(path, level, start, player, error) {
+  const tile = overlappedTile(level, start, player.size);
+  if (tile) error(path, 'player-does-not-fit', { ...player.size, ...tile });
+}
+
+/**
+ * Likewise, an enemy must not start inside something solid (createLevelState
+ * refuses to build such a level too). Every placement is checked.
+ */
+function checkEnemyFits(path, level, { key, name, at }, enemy, error) {
+  const tile = overlappedTile(level, at, enemy.size);
+  if (tile) error(path, 'enemy-does-not-fit', { key, name, ...enemy.size, at, ...tile });
+}
+
+/**
+ * The first solid tile that something of `size`, placed in the cell `at` by
+ * the game's own placement rule, would overlap, as { row, column } counting
+ * from 1; or null. `at` counts from 1 too, as in messages.
+ */
+function overlappedTile(level, at, { width, height }) {
   const tileTypes = {};
   for (const [ch, entry] of Object.entries(level.legend)) if (entry.tile) tileTypes[ch] = entry.tile;
   // Non-tile characters (P, G, enemies, ...) have no tile type, so they count as empty space.
   const tiles = { width: level.grid[0].length, height: level.grid.length, grid: level.grid, tileTypes };
-  const { width, height } = player.size;
-  const box = placeInCell(start.column - 1, start.row - 1, width, height);
-  const tile = overlapsSolid(tiles, box);
-  if (tile) error(path, 'player-does-not-fit', { width, height, row: tile.row + 1, column: tile.column + 1 });
+  const tile = overlapsSolid(tiles, placeInCell(at.column - 1, at.row - 1, width, height));
+  return tile && { row: tile.row + 1, column: tile.column + 1 };
 }
 
 function checkLevelList({ path, value }, { names, error }) {
