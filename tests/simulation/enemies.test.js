@@ -58,11 +58,11 @@ function stepWatching(state, count, check) {
   return current;
 }
 
-/** Steps with no input until `done(state)`, and returns that state; fails after `maxSteps`. */
-function stepUntil(state, done, maxSteps = 10 * STEPS_PER_SECOND) {
+/** Steps with `input` (none by default) until `done(state)`, and returns that state; fails after `maxSteps`. */
+function stepUntil(state, done, maxSteps = 10 * STEPS_PER_SECOND, input = NO_INPUT) {
   let current = state;
   for (let i = 0; i < maxSteps; i++) {
-    current = step(current, NO_INPUT, FIXED_DT);
+    current = step(current, input, FIXED_DT);
     if (done(current)) return current;
   }
   assert.fail(`not done after ${maxSteps} steps`);
@@ -493,6 +493,120 @@ describe('stomp (req 52)', () => {
     assert.equal(after.enemies.length, 1);
     assertNear(after.enemies[0].x, side.x, 'the enemy left is the one beside the player');   // in the air, it doesn't move sideways
     assert.equal(after.player.health, HEALTH - 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.5: thrown objects (req 33). Decided:
+//  - a thrown object (one still `thrown`, in flight) hits an enemy when their
+//    boxes overlap; this is checked each step once objects and enemies have
+//    moved, before the player's contact with enemies;
+//  - every enemy it overlaps in that step is defeated, whatever its health;
+//  - the object then drops straight down: both speeds 0, no longer thrown, so
+//    it can be picked up again at once and can't defeat another enemy below;
+//  - only thrown objects defeat enemies: dropped, falling, resting, and held
+//    ones don't.
+
+describe('thrown objects (req 33)', () => {
+  const THROW_SPEED = { x: 8, y: 2 };
+  const THROWN = { tuning: { throwSpeed: THROW_SPEED, dropSpeed: { x: 0, y: 0 } } };
+  // The player (column 1) throws right at the enemy (column 5), which walks towards them.
+  const THROW_GRID = ['..........G', '...........', '.P...e.....', '###########'];
+
+  /** The state with the player holding a 1 × 1 crate above their head, as well as the level's own objects. */
+  function holdingCrate(state) {
+    const { player } = state;
+    const crate = new CarriableObject({ type: 'crate', ...ONE_TILE, x: player.x, y: player.y - 1, held: true });
+    return { ...state, objects: [...state.objects, crate] };
+  }
+
+  /** A crate in flight at (x, y), thrown with speed (vx, vy). */
+  const thrownCrate = (x, y, vx, vy) => new CarriableObject({ type: 'crate', ...ONE_TILE, x, y, vx, vy, thrown: true });
+
+  test('a thrown object that hits an enemy defeats it', () => {
+    const thrown = step(holdingCrate(enemyState(THROW_GRID, THROWN)), holding(Input.ACTION), FIXED_DT);
+    assert.equal(thrown.objects[0].thrown, true, 'the crate is in flight');
+    const hit = stepUntil(thrown, (s) => s.enemies.length === 0);
+    assert.deepEqual(hit.enemies, []);
+    assert.equal(hit.player.health, thrown.player.health, 'the player wasn\'t hurt');
+  });
+
+  test('in the step it hits, the object stops (both speeds 0) and is no longer thrown', () => {
+    const thrown = step(holdingCrate(enemyState(THROW_GRID, THROWN)), holding(Input.ACTION), FIXED_DT);
+    const [object] = stepUntil(thrown, (s) => s.enemies.length === 0).objects;
+    assert.equal(object.thrown, false);
+    assert.equal(object.vx, 0);
+    assert.equal(object.vy, 0);
+    assert.equal(object.resting, false, 'it is still in the air');
+  });
+
+  test('after the hit it drops straight down, comes to rest on the ground, and can be picked up again', () => {
+    const groundTop = 3;
+    const thrown = step(holdingCrate(enemyState(THROW_GRID, THROWN)), holding(Input.ACTION), FIXED_DT);
+    const hit = stepUntil(thrown, (s) => s.enemies.length === 0);
+    const hitX = hit.objects[0].x;
+    const landed = stepUntil(hit, (s) => {
+      assertNear(s.objects[0].x, hitX, 'it drops straight down');
+      return s.objects[0].resting;
+    });
+    assertNear(bottom(landed.objects[0]), groundTop, 'it lands on the ground');
+    // The player walks up to the crate (it is solid now, so they stop flush against it) and picks it up.
+    const beside = stepUntil(landed, (s) => s.player.vx === 0 && s.player.x > landed.player.x, 10 * STEPS_PER_SECOND, holding(Input.RIGHT));
+    const picked = step(step(beside, NO_INPUT, FIXED_DT), holding(Input.ACTION), FIXED_DT);
+    assert.equal(picked.objects[0].held, true);
+  });
+
+  test('the enemy is defeated whatever its health', () => {
+    const health = 5;
+    const thrown = step(holdingCrate(enemyState(THROW_GRID, { ...THROWN, enemy: { health } })), holding(Input.ACTION), FIXED_DT);
+    const hit = stepUntil(thrown, (s) => s.enemies.length === 0);
+    assert.deepEqual(hit.enemies, []);
+  });
+
+  test('a thrown object defeats every enemy it overlaps in the same step', () => {
+    const state = enemyState(['..........G', '...........', 'P..........', '###########'], THROWN);
+    const crate = thrownCrate(5, 1, THROW_SPEED.x, 0);
+    const twoEnemies = [enemyAt(state, crate.x + 0.5, crate.y), enemyAt(state, crate.x - 0.5, crate.y)];
+    const after = step({ ...state, objects: [crate], enemies: twoEnemies }, NO_INPUT, FIXED_DT);
+    assert.deepEqual(after.enemies, []);
+  });
+
+  test('after a hit, the falling object doesn\'t defeat another enemy it falls onto', () => {
+    // A thrown crate hits an enemy high up; another enemy waits on the ground straight below.
+    // Both enemies barely move, so the one below is still under the crate when it lands.
+    const crawling = 0.01;
+    const state = enemyState(['..........G', '...........', '...........', 'P..........', '###########'], { ...THROWN, enemy: { speed: crawling } });
+    const crate = thrownCrate(5, 0, THROW_SPEED.x, 0);
+    const high = enemyAt(state, crate.x + 0.5, crate.y);
+    const below = new Enemy({ ...enemyAt(state, crate.x, 3), vx: 0 });
+    const hit = step({ ...state, objects: [crate], enemies: [high, below] }, NO_INPUT, FIXED_DT);
+    assert.equal(hit.enemies.length, 1, 'the high enemy was hit');
+    const landed = stepUntil(hit, (s) => s.objects[0].resting);
+    assert.equal(landed.enemies.length, 1, 'the enemy below survives the falling crate');
+  });
+
+  test('a crate that falls onto an enemy without being thrown doesn\'t defeat it', () => {
+    const crawling = 0.01;   // so the enemy stays under the falling crate
+    const state = enemyState(['..c.......G', '...........', '..e.....P..', '###########'], { enemy: { speed: crawling } });
+    const landed = stepUntil(state, (s) => s.objects[0].resting);
+    assert.equal(landed.enemies.length, 1);
+  });
+
+  test('a dropped object doesn\'t defeat an enemy it is dropped onto', () => {
+    // The enemy is right beside the player, where the drop puts the object.
+    const state = holdingCrate(enemyState(['..........G', '...........', '.P.........', '###########'], THROWN));
+    const { player } = state;
+    const besideFeet = { ...state, enemies: [new Enemy({ ...enemyAt(state, player.x + player.width, player.y), vx: 0 })] };
+    const dropped = step(besideFeet, holding(Input.DOWN, Input.ACTION), FIXED_DT);
+    assert.equal(dropped.objects[0].held, false, 'the crate was dropped');
+    assert.equal(dropped.enemies.length, 1);
+  });
+
+  test('a held object touching an enemy doesn\'t defeat it', () => {
+    const state = holdingCrate(enemyState(['..........G', '...........', '.P.........', '###########'], THROWN));
+    const crate = state.objects[0];
+    const touchingCrate = { ...state, enemies: [new Enemy({ ...enemyAt(state, crate.x + 0.5, crate.y), vx: 0 })] };
+    assert.equal(step(touchingCrate, NO_INPUT, FIXED_DT).enemies.length, 1);
   });
 });
 

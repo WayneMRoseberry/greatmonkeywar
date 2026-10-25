@@ -326,9 +326,10 @@ These were completed before this approach was adopted: their tests were written 
     - The 5.3 test "falling onto an enemy from above does no damage" now runs until the stomp defeats the enemy, and checks the player's health then.
     - Test: `tests/simulation/enemies.test.js` ("stomp", and the 5.3 test above)
     - Code: `src/simulation/enemies.js` (`defeatEnemy`, `resolveEnemyContact`), `src/simulation/step.js`
-  - [ ] 5.5 A thrown object defeats the enemy it hits, then falls so it can be picked up again (req 33).
+  - [x] 5.5 A thrown object defeats the enemy it hits, then falls so it can be picked up again (req 33).
+    - Decided: a thrown object (still `thrown`, in flight) hits an enemy when their boxes overlap. This is checked each step once objects and enemies have moved, and before the player's contact with enemies, so an enemy hit that step can't hurt the player. Every enemy it overlaps in that step is defeated (`defeatEnemy`), whatever its health. The object then drops straight down: both speeds 0 and no longer `thrown`, so it can be picked up again at once and can't defeat another enemy as it falls. Only thrown objects defeat enemies: dropped, falling, resting, and held ones don't.
     - Test: `tests/simulation/enemies.test.js` ("thrown objects")
-    - Code: `src/simulation/enemies.js`, `src/simulation/objects.js`
+    - Code: `src/simulation/enemies.js` (`hitEnemiesWithThrownObjects`), `src/simulation/step.js`
   - [ ] 5.6 Punch reach: one punch per press, in the facing direction, reaching from the player's body to the outer edge of the sprite frame, or of the shape when there's no sprite. Enemies just inside and just outside the reach (reqs 38–39).
     - Test: `tests/simulation/punch.test.js` ("reach")
     - Code: `src/simulation/punch.js`, `src/simulation/step.js`

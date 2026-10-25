@@ -148,6 +148,34 @@ export function defeatEnemy(state, enemy) {
 }
 
 /**
+ * Thrown objects hitting enemies (task 5.5, req 33), once objects and enemies
+ * have moved. A thrown object (one still in flight) hits every enemy its box
+ * overlaps, and each is defeated whatever its health. The object then drops
+ * straight down: both its speeds become 0 and it is no longer thrown, so it
+ * can be picked up again at once and can't defeat another enemy as it falls.
+ * Dropped, falling, resting, and held objects don't defeat enemies.
+ */
+export function hitEnemiesWithThrownObjects(state) {
+  for (const object of state.objects) {
+    if (!object.thrown) continue;
+    // Known limitation: hits are found by overlap where the object ends up
+    // this step, not along the path it moved. At usual throw speeds an object
+    // moves far less than an enemy's width per step, so it can't miss. But if
+    // throwSpeed.x (tuning) were high enough to carry it more than an enemy's
+    // width in one step (above about 50 tiles/s for a 0.9-wide enemy at 60
+    // steps per second), a throw could pass through a thin enemy without
+    // hitting it. To fix: test the area the object swept this step (its box
+    // before and after the move, joined) instead of only its final box.
+    const hit = state.enemies.filter((enemy) => overlapsBox(object, enemy));
+    if (hit.length === 0) continue;
+    for (const enemy of hit) defeatEnemy(state, enemy);
+    object.vx = 0;
+    object.vy = 0;
+    object.thrown = false;
+  }
+}
+
+/**
  * The player touching enemies, after everything has moved. Touching means the
  * boxes overlap (sharing an edge isn't enough), and only the player's own box
  * counts: a held object touching an enemy doesn't. `before` is the player as

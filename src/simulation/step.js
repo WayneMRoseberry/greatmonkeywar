@@ -11,7 +11,7 @@
 import { updatePlayer } from './player.js';
 import { updateObjects, updateFalling } from './objects.js';
 import { collectRewards } from './rewards.js';
-import { updateEnemies, resolveEnemyContact } from './enemies.js';
+import { updateEnemies, hitEnemiesWithThrownObjects, resolveEnemyContact } from './enemies.js';
 
 const copyObjects = (objects) => objects.map((o) => o.copy());
 const copyEnemies = (enemies) => enemies.map((e) => e.copy());
@@ -61,6 +61,7 @@ export function step(state, input, dt) {
   updateObjects(next, input);   // after the player moves, so a held object follows them
   updateFalling(next, dt);      // after updateObjects, so thrown and dropped objects move at once
   updateEnemies(next, dt);      // after objects, so they walk on crates as they now are
+  hitEnemiesWithThrownObjects(next);   // before the player's contact, so an enemy hit this step can't hurt them
   resolveEnemyContact(next, state.player);   // stomps, then contact damage, once everything has moved; state.player is where the player started
   collectRewards(next);
   // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.
