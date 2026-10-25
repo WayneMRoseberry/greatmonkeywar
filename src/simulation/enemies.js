@@ -9,6 +9,7 @@
 import { Facing } from './constants.js';
 import { moveBox, isSupported, overlapsBox } from './collision.js';
 import { solidObjects } from './objects.js';
+import { damagePlayer } from './player.js';
 
 /**
  * An enemy's changing state: the one central declaration of its properties.
@@ -121,4 +122,34 @@ function walk(state, enemy, direction, solids, dt) {
 function turn(enemy) {
   enemy.facing = enemy.facing === Facing.RIGHT ? Facing.LEFT : Facing.RIGHT;
   enemy.vx = -enemy.vx;
+}
+
+/**
+ * True if the player touches `enemy` from above: they moved down this step,
+ * and their feet were at or above the enemy's top before the move (`before`
+ * is the player as they were at the start of the step). That is a stomp
+ * (task 5.4), not contact damage.
+ */
+function touchesFromAbove(player, before, enemy) {
+  const movedDown = player.y > before.y;
+  return movedDown && before.y + before.height <= enemy.y + TOUCH_EPS;
+}
+
+// Allowance for rounding error when comparing the player's feet with an enemy's top.
+const TOUCH_EPS = 1e-9;
+
+/**
+ * Contact damage (task 5.3, req 51), after everything has moved. Each enemy
+ * whose box overlaps the player's (sharing an edge isn't enough) damages the
+ * player, unless the touch is from above (touchesFromAbove). damagePlayer
+ * (player.js) takes 1 health, knocks the player away from the enemy, and
+ * makes them invincible, so touching several enemies at once costs 1 health.
+ * Only the player's own box counts: a held object touching an enemy doesn't.
+ * `before` is the player as they were at the start of the step.
+ */
+export function hurtPlayerOnContact(state, before) {
+  const { player } = state;
+  for (const enemy of state.enemies) {
+    if (overlapsBox(player, enemy) && !touchesFromAbove(player, before, enemy)) damagePlayer(state, enemy);
+  }
 }

@@ -1,4 +1,4 @@
-// Tests for enemies: patrolling (task 5.2; PRD reqs 49-50).
+// Tests for enemies: patrolling (task 5.2; PRD reqs 49-50) and contact damage (task 5.3; req 51).
 //
 // Grids use the standard legend (level-builder.js): e is a "beetle" enemy,
 // c a stackable crate. Unless a test says otherwise the enemy is 1 × 1 tile,
@@ -23,6 +23,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
+import { Enemy } from '../../src/simulation/enemies.js';
+import { Player } from '../../src/simulation/player.js';
 import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -32,10 +34,10 @@ const ONE_TILE = { width: 1, height: 1 };
 const SPEED = 2;
 const TUNING = { gravity: 30, maxFallSpeed: 12 };
 
-/** A state from `grid` with a 1 × 1 player and enemy, the enemy's patrol speed SPEED, and TUNING. */
-function enemyState(grid, { enemy = {}, legend = {} } = {}) {
+/** A state from `grid` with a 1 × 1 player and enemy, the enemy's patrol speed SPEED, and TUNING (plus `tuning`). */
+function enemyState(grid, { enemy = {}, legend = {}, player = {}, tuning = {} } = {}) {
   return createLevelState(buildData(grid, {
-    player: { size: ONE_TILE }, enemy: { size: ONE_TILE, speed: SPEED, ...enemy }, tuning: TUNING, legend,
+    player: { size: ONE_TILE, ...player }, enemy: { size: ONE_TILE, speed: SPEED, ...enemy }, tuning: { ...TUNING, ...tuning }, legend,
   }), TEST_LEVEL);
 }
 
@@ -257,8 +259,11 @@ describe('patrol (reqs 49-50)', () => {
     });
 
     test('an enemy walks through the player without turning', () => {
+      // The player is invincible throughout, so touching the enemy doesn't knock them out of its way (task 5.3).
+      const invincibleSeconds = 100;
       const state = enemyState(['.........G', '..P..e....', '##########']);
-      const passed = stepUntil(state, (s) => right(s.enemies[0]) < s.player.x);
+      const invincible = { ...state, player: new Player({ ...state.player, invincibleTime: invincibleSeconds }) };
+      const passed = stepUntil(invincible, (s) => right(s.enemies[0]) < s.player.x);
       assert.equal(passed.enemies[0].facing, Facing.LEFT);
     });
 
@@ -279,3 +284,119 @@ describe('patrol (reqs 49-50)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 5.3: contact damage (req 51). Decided:
+//  - the player touches an enemy when their boxes overlap (sharing an edge
+//    isn't enough);
+//  - a touch is "from above" when the player moved down this step and their
+//    feet were at or above the enemy's top before the move; that is a stomp
+//    (task 5.4) and does no damage. Any other touch (from the side or below)
+//    damages the player: damagePlayer (player.js), so 1 health, knockback
+//    away from the enemy, and invincibility, which also stops more damage.
+
+describe('contact (req 51)', () => {
+  const HEALTH = 3;
+  const KNOCKBACK = { x: 5, y: 7 };
+  const INVINCIBILITY_SECONDS = 1;
+  const CONTACT = { player: { health: HEALTH }, tuning: { knockback: KNOCKBACK, invincibilitySeconds: INVINCIBILITY_SECONDS } };
+
+  /** The state with the player's properties changed. */
+  const withPlayer = (state, changes) => ({ ...state, player: new Player({ ...state.player, ...changes }) });
+
+  /** Steps with `input` until the player has lost health, and returns that state; fails after `maxSteps`. */
+  function stepUntilHurt(state, input = NO_INPUT, maxSteps = 5 * STEPS_PER_SECOND) {
+    let current = state;
+    for (let i = 0; i < maxSteps; i++) {
+      current = step(current, input, FIXED_DT);
+      if (current.player.health < state.player.health) return current;
+    }
+    assert.fail('the player was never hurt');
+  }
+
+  test('an enemy walking into the player from the side hurts them: 1 health, knocked away from it, invincible', () => {
+    const state = enemyState(['.........G', '..P..e....', '##########'], CONTACT);   // the enemy comes from the right
+    const hurt = stepUntilHurt(state);
+    assert.equal(hurt.player.health, HEALTH - 1);
+    assert.equal(hurt.player.vx, -KNOCKBACK.x, 'knocked left, away from the enemy');
+    assert.equal(hurt.player.vy, -KNOCKBACK.y, 'and upward');
+    assert.equal(hurt.player.invincibleTime, INVINCIBILITY_SECONDS);
+  });
+
+  test('the player running into an enemy from the side is hurt', () => {
+    // The enemy walks right, away from the player, but the player runs faster and catches it.
+    const state = enemyState(['.........G', '.P.r......', '##########'], { ...CONTACT, legend: { r: { enemy: 'beetle', facing: Facing.RIGHT } } });
+    const hurt = stepUntilHurt(state, holding(Input.RIGHT));
+    assert.equal(hurt.player.vx, -KNOCKBACK.x, 'knocked left, away from the enemy');
+  });
+
+  test('an enemy falling onto the player from above hurts them (the player is touched from below)', () => {
+    const state = enemyState(['.........G', '.....e....', '..........', '..........', '.....P....', '##########'], CONTACT);
+    const hurt = stepUntilHurt(state);
+    assert.equal(hurt.player.health, HEALTH - 1);
+  });
+
+  test('jumping up into an enemy from below hurts the player', () => {
+    const state = enemyState(['.........G', '.....e....', '..........', '..........', '.....P....', '##########'], CONTACT);
+    const hurt = stepUntilHurt(state, holding(Input.JUMP));
+    assert.equal(hurt.player.health, HEALTH - 1);
+  });
+
+  test('falling onto an enemy from above does no damage: in the step they first touch, the player keeps their health', () => {
+    // The enemy stands on a 1-tile pillar, so it can't walk away; the player drops onto it from above.
+    const state = enemyState(['.....P...G', '..........', '..........', '.....e....', '.....#....', '##########'], CONTACT);
+    let current = state;
+    for (let i = 0; i < 5 * STEPS_PER_SECOND; i++) {
+      current = step(current, NO_INPUT, FIXED_DT);
+      const [enemy] = current.enemies;
+      if (current.player.y + current.player.height > enemy.y) break;   // they overlap now
+    }
+    assert.ok(current.player.y + current.player.height > current.enemies[0].y, 'the player reached the enemy');
+    assert.equal(current.player.health, HEALTH);
+  });
+
+  test('standing exactly flush beside an enemy, sharing an edge, does no damage', () => {
+    // The enemy starts flush against the player's right side and walks away from them.
+    const state = enemyState(['.........G', '..Pr......', '##########'], { ...CONTACT, legend: { r: { enemy: 'beetle', facing: Facing.RIGHT } } });
+    let current = state;
+    for (let i = 0; i < STEPS_PER_SECOND; i++) current = step(current, NO_INPUT, FIXED_DT);
+    assert.equal(current.player.health, HEALTH);
+  });
+
+  test('while the player is invincible, touching an enemy does no more damage', () => {
+    const state = enemyState(['.........G', '..P......', '##########'], CONTACT);
+    const { player } = state;
+    const touching = { ...withPlayer(state, { invincibleTime: INVINCIBILITY_SECONDS }), enemies: [enemyAt(state, player.x, player.y)] };
+    assert.equal(step(touching, NO_INPUT, FIXED_DT).player.health, HEALTH);
+  });
+
+  test('touching two enemies at once costs only 1 health', () => {
+    const state = enemyState(['.........G', '..P......', '##########'], CONTACT);
+    const { player } = state;
+    const overlapping = { ...state, enemies: [enemyAt(state, player.x - 0.5, player.y), enemyAt(state, player.x + 0.5, player.y)] };
+    assert.equal(step(overlapping, NO_INPUT, FIXED_DT).player.health, HEALTH - 1);
+  });
+
+  test('a touch that brings health to 0 restarts the level', () => {
+    const state = enemyState(['.........G', '..P......', '##########'], CONTACT);
+    const { player } = state;
+    const lastLife = { ...withPlayer(state, { health: 1 }), enemies: [enemyAt(state, player.x, player.y)] };
+    const restarted = step(lastLife, NO_INPUT, FIXED_DT);
+    assert.equal(restarted.player.health, state.levelStart.player.health);
+    assert.deepEqual(restarted.enemies.map((e) => ({ ...e })), state.levelStart.enemies.map((e) => ({ ...e })));
+  });
+
+  test('an enemy touching only the object the player holds does no damage', () => {
+    const state = enemyState(['.........G', '.........', '..P......', '##########'], CONTACT);
+    const { player } = state;
+    const held = new CarriableObject({ type: 'crate', ...ONE_TILE, x: player.x, y: player.y - 1, held: true });
+    // The enemy overlaps the top half of the held crate, well clear of the player.
+    const touchingCrate = { ...state, objects: [held], enemies: [enemyAt(state, player.x, player.y - 1.5)] };
+    assert.equal(step(touchingCrate, NO_INPUT, FIXED_DT).player.health, HEALTH);
+  });
+});
+
+/** A 1 × 1 enemy of the level's beetle type at (x, y), walking left. */
+function enemyAt(state, x, y) {
+  return new Enemy({ type: 'beetle', ...ONE_TILE, x, y, facing: Facing.LEFT, health: 1, vx: -state.data.characters.beetle.speed });
+}

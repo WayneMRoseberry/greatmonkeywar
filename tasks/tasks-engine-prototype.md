@@ -17,7 +17,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `.gitignore` - Ignores `node_modules/`, Playwright reports, and build output.
 
 **Simulation (pure game logic; runs in Node)**
-- `src/simulation/constants.js` - Fixed time step and shared constants (`Facing`).
+- `src/simulation/constants.js` - Fixed time step and shared constants (`Facing`, `LegendKind`, `LegendField`, `CharacterKind`).
+- `src/simulation/numbers.js` - Small number helpers shared by simulation modules (`withoutNegativeZero`).
 - `src/simulation/input.js` - The input state: `Input` names, `NO_INPUT`, `createInput()`, `holding()`. The one definition used by the simulation, the input translation (task 7.9), and tests.
 - `src/simulation/state.js` - Creates the initial game state from loaded data; resets a level.
 - `src/simulation/step.js` - The single `step(state, input, dt)` update function.
@@ -312,10 +313,13 @@ These were completed before this approach was adopted: their tests were written 
     - Carried over from 5.1: nothing checks that an enemy doesn't start overlapping a solid tile. The player has this check in both `createLevelState` (a `LevelDataError`) and the validator (`player-does-not-fit`); enemies and objects have neither. Bottom-centre placement makes it impossible for an enemy no bigger than a tile, but an enemy wider or taller than its cell, placed beside a wall or under a ceiling, would start inside the tile, and collision only stops boxes moving *into* solids, so it could pass through. Decide whether to add the same check for enemies in both places, test-first, with a plain-language validator message naming the legend character and the cell. (Objects have the same gap; see 4.11.)
     - Test: `tests/simulation/enemies.test.js` ("patrol"), `tests/simulation/state.test.js` (invalid levels), `tests/data/validate.test.js` (enemy fit)
     - Code: `src/simulation/enemies.js` (`updateEnemies`), `src/simulation/step.js`, `src/simulation/state.js`, `src/data/validate.js` (`checkEnemyFits`, `overlappedTile`)
-  - [ ] 5.3 Contact damage when the player touches an enemy from the side or below (req 51).
+  - [x] 5.3 Contact damage when the player touches an enemy from the side or below (req 51).
+    - Decided: the player touches an enemy when their boxes overlap (sharing an edge isn't enough). A touch is "from above" when the player moved down this step and their feet were at or above the enemy's top before the move. That is a stomp (5.4) and does no damage; 5.4 adds the defeat and the bounce. Any other touch calls `damagePlayer` with the enemy as the source: 1 health, knockback away from it, and invincibility, so several enemies at once cost 1 health. Only the player's own box counts, not a held object's. `hurtPlayerOnContact` (enemies.js) runs once everything has moved in each step, with the player as they were at the start of the step, and before the health-0 restart check.
+    - Done for the carry-over: `withoutNegativeZero` moved to `src/simulation/numbers.js`, used by objects.js and `damagePlayer`.
+    - The 5.2 test "an enemy walks through the player without turning" now makes the player invincible, so contact damage doesn't knock them out of the enemy's way; it still checks that the enemy passes through without turning.
     - Carried over from 4.4: `damagePlayer` (player.js, task 3.10), which this task is the first to call in play, gives a speed of -0 when the knockback in tuning is 0 (`-knockback.y`, and `away * knockback.x` when knocked to the left). -0 makes equal states compare as different (`deepEqual` tells 0 and -0 apart). Test-first: knockback of 0 gives exactly 0 in both directions, then fix it the way throw and drop do (`withoutNegativeZero` in objects.js; move it somewhere both files can share).
     - Test: `tests/simulation/enemies.test.js` ("contact"), `tests/simulation/player.test.js` ("damage", the zero-knockback case)
-    - Code: `src/simulation/enemies.js`, `src/simulation/player.js`
+    - Code: `src/simulation/enemies.js` (`hurtPlayerOnContact`), `src/simulation/player.js`, `src/simulation/numbers.js`, `src/simulation/objects.js`, `src/simulation/step.js`
   - [ ] 5.4 Stomping: landing on an enemy while falling defeats it regardless of health and bounces the player (req 52).
     - Same -0 rule as 5.3: the bounce speed (`-stompBounceSpeed`) must come out as exactly 0, not -0, when `stompBounceSpeed` is 0. Include that case in the tests.
     - Test: `tests/simulation/enemies.test.js` ("stomp")

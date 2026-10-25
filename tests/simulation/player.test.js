@@ -486,6 +486,19 @@ describe('taking damage (reqs 24-25)', () => {
     assert.equal(state.player.health, HEALTH - 1);
   });
 
+  test('a knockback of 0 in tuning gives speeds of exactly 0, not -0, whichever way the player is knocked', () => {
+    // -0 would make otherwise equal states compare as different (deepEqual tells 0 and -0 apart).
+    for (const offset of [-1, 1]) {   // a source on the left (knocked right), then on the right (knocked left)
+      const state = createLevelState(buildData(GRID, {
+        player: { size: SIZE, speed: SPEED, health: HEALTH },
+        tuning: { invincibilitySeconds: INVINCIBILITY_SECONDS, knockback: { x: 0, y: 0 } },
+      }), TEST_LEVEL);
+      damagePlayer(state, sourceAt(state, offset));
+      assert.equal(state.player.vx, 0, `vx with the source at ${offset}`);
+      assert.equal(state.player.vy, 0, `vy with the source at ${offset}`);
+    }
+  });
+
   test('becomes invincible for invincibilitySeconds', () => {
     const state = newState();
     damagePlayer(state, sourceAt(state, -1));

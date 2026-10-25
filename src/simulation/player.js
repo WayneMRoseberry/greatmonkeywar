@@ -10,6 +10,7 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
+import { withoutNegativeZero } from './numbers.js';
 import { moveBoxes, isSupported, overlapsBox } from './collision.js';
 import { heldObject, solidObjects, letGo } from './objects.js';
 
@@ -68,8 +69,8 @@ export function damagePlayer(state, source) {
 
   const offset = (player.x + player.width / 2) - (source.x + source.width / 2);
   const away = offset !== 0 ? Math.sign(offset) : (player.facing === Facing.RIGHT ? -1 : 1);
-  player.vx = away * knockback.x;
-  player.vy = -knockback.y;
+  player.vx = withoutNegativeZero(away * knockback.x);
+  player.vy = withoutNegativeZero(-knockback.y);   // y increases downwards
   player.knockedBack = true;
   return true;
 }
