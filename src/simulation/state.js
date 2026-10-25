@@ -15,6 +15,7 @@ import { CarriableObject, settleResting } from './objects.js';
 import { rewardInCell } from './rewards.js';
 import { createEnemy } from './enemies.js';
 import { overlapsSolid } from './collision.js';
+import { CharacterKind } from './constants.js';
 
 const GRID_AND_LEGEND = "the level's grid and legend";
 
@@ -134,7 +135,7 @@ export function createLevelState(data, levelName) {
   const enemies = step(levelName, 'placing the enemies', "the level's legend and the character definitions (data/characters/)", (fail) =>
     findCells(source.grid, source.legend, (e) => e.enemy).map(({ column, row, entry }) => {
       const definition = data.characters[entry.enemy] ?? fail(`there is no character definition named "${entry.enemy}"`);
-      if (definition.kind !== 'enemy') fail(`"${entry.enemy}" is the player, not an enemy`);
+      if (definition.kind !== CharacterKind.ENEMY) fail(`"${entry.enemy}" is the player, not an enemy`);
       return createEnemy(placeInCell(column, row, definition.size.width, definition.size.height), entry, definition);
     }));
 

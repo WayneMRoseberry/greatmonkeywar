@@ -21,6 +21,7 @@
 import { checkSchema, typeOf } from './schema-check.js';
 import { placeInCell } from '../simulation/state.js';
 import { overlapsSolid } from '../simulation/collision.js';
+import { LegendKind, LegendField, CharacterKind } from '../simulation/constants.js';
 import levelSchema from './schemas/level.schema.json' with { type: 'json' };
 import levelListSchema from './schemas/level-list.schema.json' with { type: 'json' };
 import characterSchema from './schemas/character.schema.json' with { type: 'json' };
@@ -51,7 +52,7 @@ export const REQUIRED_FILES = [
   'config/display.json',
 ];
 
-const LEGEND_KINDS = ['tile', 'playerStart', 'goal', 'enemy', 'object', 'reward'];
+const LEGEND_KINDS = Object.values(LegendKind);
 
 export function formatProblem({ file, message }) {
   return `${file}: ${message}`;
@@ -440,15 +441,15 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
     const kinds = LEGEND_KINDS.filter((k) => k in entry);
     if (kinds.length === 0) error(path, 'legend-no-kind', { key });
     else if (kinds.length > 1) error(path, 'legend-many-kinds', { key, kinds });
-    if ('color' in entry && !('goal' in entry)) error(path, 'legend-stray-color', { key });
-    if ('goal' in entry && !('color' in entry)) error(path, 'goal-without-color', { key });
-    if ('facing' in entry && !('enemy' in entry)) error(path, 'legend-stray-facing', { key });
-    if ('enemy' in entry) {
+    if (LegendField.COLOR in entry && !(LegendKind.GOAL in entry)) error(path, 'legend-stray-color', { key });
+    if (LegendKind.GOAL in entry && !(LegendField.COLOR in entry)) error(path, 'goal-without-color', { key });
+    if (LegendField.FACING in entry && !(LegendKind.ENEMY in entry)) error(path, 'legend-stray-facing', { key });
+    if (LegendKind.ENEMY in entry) {
       if (!names.character.has(entry.enemy)) error(path, 'missing-enemy', { key, name: entry.enemy });
       // A wrong "kind" in another character file is reported on that file, not on every level using it.
       else if (entry.enemy === 'player') error(path, 'enemy-is-player', { key, name: entry.enemy });
     }
-    if ('object' in entry && !names.object.has(entry.object)) error(path, 'missing-object', { key, name: entry.object });
+    if (LegendKind.OBJECT in entry && !names.object.has(entry.object)) error(path, 'missing-object', { key, name: entry.object });
     if (!used.has(key)) warn(path, 'unused-legend', { key });
   }
 
@@ -489,9 +490,9 @@ function checkSpriteReference(path, owner, names, error) {
 }
 
 function checkCharacter({ path, name, value }, { names, error }) {
-  if (name === 'player' && value.kind !== 'player') error(path, 'player-kind', { kind: value.kind });
-  if (name !== 'player' && value.kind !== 'enemy') error(path, 'enemy-kind', { kind: value.kind });
-  if (value.kind === 'enemy' && 'punchDamage' in value) error(path, 'enemy-punch-damage');
+  if (name === 'player' && value.kind !== CharacterKind.PLAYER) error(path, 'player-kind', { kind: value.kind });
+  if (name !== 'player' && value.kind !== CharacterKind.ENEMY) error(path, 'enemy-kind', { kind: value.kind });
+  if (value.kind === CharacterKind.ENEMY && 'punchDamage' in value) error(path, 'enemy-punch-damage');
   checkSpriteReference(path, value, names, error);
 }
 
