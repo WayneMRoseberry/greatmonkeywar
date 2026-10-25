@@ -342,17 +342,12 @@ describe('contact (req 51)', () => {
     assert.equal(hurt.player.health, HEALTH - 1);
   });
 
-  test('falling onto an enemy from above does no damage: in the step they first touch, the player keeps their health', () => {
+  test('falling onto an enemy from above does no damage: the player keeps their health (it is a stomp, task 5.4)', () => {
     // The enemy stands on a 1-tile pillar, so it can't walk away; the player drops onto it from above.
+    // The stomp defeats it in the step they first touch (task 5.4).
     const state = enemyState(['.....P...G', '..........', '..........', '.....e....', '.....#....', '##########'], CONTACT);
-    let current = state;
-    for (let i = 0; i < 5 * STEPS_PER_SECOND; i++) {
-      current = step(current, NO_INPUT, FIXED_DT);
-      const [enemy] = current.enemies;
-      if (current.player.y + current.player.height > enemy.y) break;   // they overlap now
-    }
-    assert.ok(current.player.y + current.player.height > current.enemies[0].y, 'the player reached the enemy');
-    assert.equal(current.player.health, HEALTH);
+    const touched = stepUntil(state, (s) => s.enemies.length === 0);
+    assert.equal(touched.player.health, HEALTH);
   });
 
   test('standing exactly flush beside an enemy, sharing an edge, does no damage', () => {
@@ -393,6 +388,111 @@ describe('contact (req 51)', () => {
     // The enemy overlaps the top half of the held crate, well clear of the player.
     const touchingCrate = { ...state, objects: [held], enemies: [enemyAt(state, player.x, player.y - 1.5)] };
     assert.equal(step(touchingCrate, NO_INPUT, FIXED_DT).player.health, HEALTH);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.4: stomping (req 52). Decided:
+//  - a touch from above (as defined for 5.3) is a stomp: the enemy is
+//    defeated whatever its health, and the player bounces upward at
+//    stompBounceSpeed (tuning), whether or not jump is held;
+//  - for now a defeated enemy is removed at once (5.10 adds a short defeat
+//    state before removal, in the same one place);
+//  - stomps are resolved before side contacts in the same step; several
+//    enemies stomped at once are all defeated, with one bounce; stomping works
+//    while invincible (invincibility only protects against damage).
+
+describe('stomp (req 52)', () => {
+  const HEALTH = 3;
+  const STOMP_BOUNCE = 8;
+  const STOMP = { player: { health: HEALTH }, tuning: { stompBounceSpeed: STOMP_BOUNCE, knockback: { x: 5, y: 7 } } };
+  // The enemy stands on a 1-tile pillar (column 5), so it can't walk away; the player drops onto it from above.
+  const PILLAR_GRID = ['.....P...G', '..........', '..........', '.....e....', '.....#....', '##########'];
+
+  /** Steps with no input until there are fewer enemies than at the start, and returns that state. */
+  function stepUntilStomped(state) {
+    return stepUntil(state, (s) => s.enemies.length < state.enemies.length);
+  }
+
+  test('falling onto an enemy defeats it and bounces the player upward at stompBounceSpeed', () => {
+    const stomped = stepUntilStomped(enemyState(PILLAR_GRID, STOMP));
+    assert.deepEqual(stomped.enemies, []);
+    assert.equal(stomped.player.vy, -STOMP_BOUNCE);
+    assert.equal(stomped.player.health, HEALTH);
+  });
+
+  test('the enemy is defeated whatever its health', () => {
+    const health = 5;
+    const stomped = stepUntilStomped(enemyState(PILLAR_GRID, { ...STOMP, enemy: { health } }));
+    assert.deepEqual(stomped.enemies, []);
+  });
+
+  test('after the bounce the player rises, and is never hurt by the stomped enemy', () => {
+    const state = enemyState(PILLAR_GRID, STOMP);
+    const stomped = stepUntilStomped(state);
+    const rising = step(stomped, NO_INPUT, FIXED_DT);
+    assert.ok(rising.player.y < stomped.player.y, 'the player moves up after the bounce');
+    let current = rising;
+    for (let i = 0; i < 2 * STEPS_PER_SECOND; i++) current = step(current, NO_INPUT, FIXED_DT);
+    assert.equal(current.player.health, HEALTH);
+  });
+
+  test('a stomp bounce of 0 gives an upward speed of exactly 0, not -0', () => {
+    // -0 would make otherwise equal states compare as different (deepEqual tells 0 and -0 apart).
+    const stomped = stepUntilStomped(enemyState(PILLAR_GRID, { ...STOMP, tuning: { ...STOMP.tuning, stompBounceSpeed: 0 } }));
+    assert.equal(stomped.player.vy, 0);
+  });
+
+  test('holding jump while stomping doesn\'t change the bounce', () => {
+    // The player falls from row 0 (a jump press there does nothing: not standing), still holding jump at the stomp.
+    let holdingJump = enemyState(PILLAR_GRID, STOMP);
+    for (let i = 0; i < 10 * STEPS_PER_SECOND && holdingJump.enemies.length > 0; i++) {
+      holdingJump = step(holdingJump, holding(Input.JUMP), FIXED_DT);
+    }
+    assert.deepEqual(holdingJump.enemies, [], 'the enemy was stomped');
+    assert.equal(holdingJump.player.vy, -STOMP_BOUNCE);
+  });
+
+  test('stomping works while the player is invincible', () => {
+    const state = enemyState(PILLAR_GRID, STOMP);
+    const invincible = { ...state, player: new Player({ ...state.player, invincibleTime: 100 }) };
+    const stomped = stepUntilStomped(invincible);
+    assert.deepEqual(stomped.enemies, []);
+  });
+
+  test('an enemy touched from the side or below is not defeated', () => {
+    const state = enemyState(['.........G', '.....e....', '..........', '..........', '.....P....', '##########'], STOMP);
+    let current = state;
+    for (let i = 0; i < 5 * STEPS_PER_SECOND && current.player.health === HEALTH; i++) current = step(current, holding(Input.JUMP), FIXED_DT);
+    assert.equal(current.player.health, HEALTH - 1, 'the player was hurt');
+    assert.equal(current.enemies.length, 1, 'the enemy is still there');
+  });
+
+  /** A state where the player, falling, is just above the given enemies' tops, so the next step touches them. */
+  function fallingOnto(state, enemyBoxes) {
+    const fallSpeed = 3;
+    const player = new Player({ ...state.player, y: 1, vy: fallSpeed });
+    return { ...state, player, enemies: enemyBoxes(player).map(([x, y]) => enemyAt(state, x, y)) };
+  }
+
+  test('two enemies stomped at once are both defeated, with one bounce', () => {
+    const state = enemyState(['.........G', '..........', '..........', '..P.......', '##########'], STOMP);
+    const justBelowFeet = (player) => player.y + player.height + 0.01;
+    const twoUnder = fallingOnto(state, (p) => [[p.x - 0.5, justBelowFeet(p)], [p.x + 0.5, justBelowFeet(p)]]);
+    const after = step(twoUnder, NO_INPUT, FIXED_DT);
+    assert.deepEqual(after.enemies, []);
+    assert.equal(after.player.vy, -STOMP_BOUNCE);
+  });
+
+  test('a stomp and a side touch in the same step: the stomped enemy is defeated, and the other one still hurts', () => {
+    const state = enemyState(['.........G', '..........', '..........', '..P.......', '##########'], STOMP);
+    // One enemy just below the player's feet (a stomp); one beside the player, level with them (a side touch).
+    const both = fallingOnto(state, (p) => [[p.x, p.y + p.height + 0.01], [p.x + 0.5, p.y]]);
+    const side = both.enemies[1];
+    const after = step(both, NO_INPUT, FIXED_DT);
+    assert.equal(after.enemies.length, 1);
+    assertNear(after.enemies[0].x, side.x, 'the enemy left is the one beside the player');   // in the air, it doesn't move sideways
+    assert.equal(after.player.health, HEALTH - 1);
   });
 });
 

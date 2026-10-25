@@ -320,10 +320,12 @@ These were completed before this approach was adopted: their tests were written 
     - Carried over from 4.4: `damagePlayer` (player.js, task 3.10), which this task is the first to call in play, gives a speed of -0 when the knockback in tuning is 0 (`-knockback.y`, and `away * knockback.x` when knocked to the left). -0 makes equal states compare as different (`deepEqual` tells 0 and -0 apart). Test-first: knockback of 0 gives exactly 0 in both directions, then fix it the way throw and drop do (`withoutNegativeZero` in objects.js; move it somewhere both files can share).
     - Test: `tests/simulation/enemies.test.js` ("contact"), `tests/simulation/player.test.js` ("damage", the zero-knockback case)
     - Code: `src/simulation/enemies.js` (`hurtPlayerOnContact`), `src/simulation/player.js`, `src/simulation/numbers.js`, `src/simulation/objects.js`, `src/simulation/step.js`
-  - [ ] 5.4 Stomping: landing on an enemy while falling defeats it regardless of health and bounces the player (req 52).
-    - Same -0 rule as 5.3: the bounce speed (`-stompBounceSpeed`) must come out as exactly 0, not -0, when `stompBounceSpeed` is 0. Include that case in the tests.
-    - Test: `tests/simulation/enemies.test.js` ("stomp")
-    - Code: `src/simulation/enemies.js`
+  - [x] 5.4 Stomping: landing on an enemy while falling defeats it regardless of health and bounces the player (req 52).
+    - Decided: a touch from above (as defined in 5.3) is a stomp. The enemy is defeated whatever its health, and the player bounces upward at `stompBounceSpeed` (tuning), whether or not jump is held. For now a defeated enemy is removed at once, through one function, `defeatEnemy`, which 5.5 and 5.7 reuse and 5.10 changes to add the defeat state. Stomps are resolved before side contacts in the same step. Several enemies stomped at once are all defeated, with one bounce. Stomping works while invincible. `resolveEnemyContact` (enemies.js) replaces 5.3's `hurtPlayerOnContact`.
+    - Same -0 rule as 5.3: the bounce speed (`-stompBounceSpeed`) must come out as exactly 0, not -0, when `stompBounceSpeed` is 0. Include that case in the tests. (Done. The schema requires `stompBounceSpeed` > 0, so validated data never has 0.)
+    - The 5.3 test "falling onto an enemy from above does no damage" now runs until the stomp defeats the enemy, and checks the player's health then.
+    - Test: `tests/simulation/enemies.test.js` ("stomp", and the 5.3 test above)
+    - Code: `src/simulation/enemies.js` (`defeatEnemy`, `resolveEnemyContact`), `src/simulation/step.js`
   - [ ] 5.5 A thrown object defeats the enemy it hits, then falls so it can be picked up again (req 33).
     - Test: `tests/simulation/enemies.test.js` ("thrown objects")
     - Code: `src/simulation/enemies.js`, `src/simulation/objects.js`

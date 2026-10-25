@@ -10,6 +10,7 @@ import { Facing } from './constants.js';
 import { moveBox, isSupported, overlapsBox } from './collision.js';
 import { solidObjects } from './objects.js';
 import { damagePlayer } from './player.js';
+import { withoutNegativeZero } from './numbers.js';
 
 /**
  * An enemy's changing state: the one central declaration of its properties.
@@ -139,17 +140,37 @@ function touchesFromAbove(player, before, enemy) {
 const TOUCH_EPS = 1e-9;
 
 /**
- * Contact damage (task 5.3, req 51), after everything has moved. Each enemy
- * whose box overlaps the player's (sharing an edge isn't enough) damages the
- * player, unless the touch is from above (touchesFromAbove). damagePlayer
- * (player.js) takes 1 health, knocks the player away from the enemy, and
- * makes them invincible, so touching several enemies at once costs 1 health.
- * Only the player's own box counts: a held object touching an enemy doesn't.
- * `before` is the player as they were at the start of the step.
+ * Defeats `enemy`, whatever its health (stomps, thrown objects, punches).
+ * For now it is removed at once; task 5.10 adds a short defeat state first.
  */
-export function hurtPlayerOnContact(state, before) {
+export function defeatEnemy(state, enemy) {
+  state.enemies = state.enemies.filter((e) => e !== enemy);
+}
+
+/**
+ * The player touching enemies, after everything has moved. Touching means the
+ * boxes overlap (sharing an edge isn't enough), and only the player's own box
+ * counts: a held object touching an enemy doesn't. `before` is the player as
+ * they were at the start of the step.
+ *  - Stomping (task 5.4, req 52), first: every enemy touched from above
+ *    (touchesFromAbove) is defeated, whatever its health and even while the
+ *    player is invincible, and the player bounces upward at stompBounceSpeed
+ *    (tuning), once however many were stomped, whether or not jump is held.
+ *  - Contact damage (task 5.3, req 51): every other enemy touched (from the
+ *    side or below) damages the player. damagePlayer (player.js) takes 1
+ *    health, knocks the player away from the enemy, and makes them
+ *    invincible, so touching several enemies at once costs 1 health.
+ */
+export function resolveEnemyContact(state, before) {
   const { player } = state;
-  for (const enemy of state.enemies) {
-    if (overlapsBox(player, enemy) && !touchesFromAbove(player, before, enemy)) damagePlayer(state, enemy);
+  const touched = state.enemies.filter((enemy) => overlapsBox(player, enemy));
+  const stomped = touched.filter((enemy) => touchesFromAbove(player, before, enemy));
+  for (const enemy of stomped) defeatEnemy(state, enemy);
+  if (stomped.length > 0) {
+    player.vy = withoutNegativeZero(-state.data.tuning.stompBounceSpeed);   // y increases downwards
+    player.onGround = false;
+  }
+  for (const enemy of touched) {
+    if (!stomped.includes(enemy)) damagePlayer(state, enemy);
   }
 }
