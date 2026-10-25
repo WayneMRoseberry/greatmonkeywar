@@ -1136,3 +1136,105 @@ describe('standing on (task 4.8, req 37)', () => {
     assert.deepEqual(heldIndexes(step(state, PRESS_ACTION, FIXED_DT)), [0]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 4.10: pit respawns never put an object inside something solid. Decided:
+//  - falling into a pit makes the player let go of the held object, which is
+//    released where it is, still and not thrown, and falls on its own;
+//  - an object returning from a pit goes to the lowest free spot straight
+//    above its start place (clear of solid tiles and solid objects).
+
+describe('pit respawns (task 4.10)', () => {
+  /** Steps with `input` until `done(state)`, failing if any object is ever inside a solid tile; returns that state. */
+  function stepUntilNeverInsideSolid(state, input, done) {
+    return stepUntil(state, input, (s) => {
+      for (const object of s.objects) assert.equal(overlapsSolid(s.level, object), null, 'object inside a solid tile');
+      return done(s);
+    });
+  }
+
+  describe('falling into a pit while carrying', () => {
+    // A low ceiling over the start (columns 0-1) leaves no room above the player's head there.
+    // The player walks to the crate, picks it up, and carries it right into the pit (columns 5-6).
+    const GRID = ['##.......', 'P..c....G', '#####..##'];
+
+    function carryIntoPit() {
+      const state = physicsState(GRID);
+      let current = stepUntil(state, holding(Input.RIGHT), (s) => s.player.vx === 0);   // stopped by the crate
+      current = step(current, PRESS_ACTION, FIXED_DT);
+      assert.deepEqual(heldIndexes(current), [0]);
+      const fallen = stepUntilNeverInsideSolid(current, holding(Input.RIGHT), (s) => s.player.health < state.player.health);
+      return { state, fallen };
+    }
+
+    test('the player lets go: after respawning they hold nothing, and the object is released still and not thrown', () => {
+      const { state, fallen } = carryIntoPit();
+      assert.deepEqual({ x: fallen.player.x, y: fallen.player.y }, state.start);
+      assert.deepEqual(heldIndexes(fallen), []);
+      const [object] = fallen.objects;
+      assert.equal(object.thrown, false);
+      assert.equal(object.vx, 0);
+    });
+
+    test('the object is never inside the ceiling over the start, and goes back to its own start place', () => {
+      const { state, fallen } = carryIntoPit();
+      const [start] = state.levelStart.objects;
+      const back = stepUntilNeverInsideSolid(fallen, NO_INPUT, (s) => s.objects[0].resting);
+      assertNear(back.objects[0].x, start.x, 'x');
+      assertNear(back.objects[0].y, start.y, 'y');
+    });
+  });
+
+  describe('returning to a start place that is taken', () => {
+    const PIT_GRID = ['P.c.....G', '#####.###'];   // the crate starts in column 2; the pit is column 5
+    const pitColumn = 5;
+
+    /** The state with the level's crate falling over the pit, plus `occupants(start, definitions)` placed in the game. */
+    function returningCrate(occupants) {
+      const state = physicsState(PIT_GRID);
+      const [start] = state.levelStart.objects;
+      const overPit = new CarriableObject({ ...start, x: pitColumn, y: start.y - 2, resting: false, thrown: true });
+      return { state: { ...state, objects: [overPit, ...occupants(start, state.data.objects)] }, start };
+    }
+
+    /** Steps until the returning crate (object 0) has come back and come to rest, checking it never overlaps a crate. */
+    function stepUntilBackAndResting(state) {
+      let wentBack = false;
+      return stepUntil(state, NO_INPUT, (s) => {
+        const [returning, ...others] = s.objects;
+        const crates = others.filter((o) => o.type === 'crate');
+        for (const crate of crates) assert.ok(!overlapsBox(returning, crate), 'the returning crate is inside another crate');
+        wentBack ||= returning.x !== pitColumn;
+        return wentBack && returning.resting;
+      });
+    }
+
+    test('a crate resting on the start place: the returning crate comes back on top of it', () => {
+      const { state, start } = returningCrate((s) => [new CarriableObject({ ...s, resting: true })]);
+      const back = stepUntilBackAndResting(state);
+      const [returning, occupant] = back.objects;
+      assertNear(returning.x, start.x, 'x');
+      assertNear(bottom(returning), occupant.y, 'returning crate bottom');
+    });
+
+    test('a stack of two on the start place: the returning crate comes back on top of the stack', () => {
+      const { state, start } = returningCrate((s) => [
+        new CarriableObject({ ...s, resting: true }),
+        new CarriableObject({ ...s, y: s.y - s.height, resting: true }),
+      ]);
+      const back = stepUntilBackAndResting(state);
+      const [returning, , upper] = back.objects;
+      assertNear(returning.x, start.x, 'x');
+      assertNear(bottom(returning), upper.y, 'returning crate bottom');
+    });
+
+    test('a coconut on the start place doesn\'t take it (coconuts aren\'t solid): the crate comes back to its exact start', () => {
+      const { state, start } = returningCrate((s, { coconut }) => {
+        return [new CarriableObject({ type: 'coconut', ...coconut.size, x: s.x, y: bottom(s) - coconut.size.height, resting: true })];
+      });
+      const back = stepUntilBackAndResting(state);
+      assertNear(back.objects[0].x, start.x, 'x');
+      assertNear(back.objects[0].y, start.y, 'y');
+    });
+  });
+});

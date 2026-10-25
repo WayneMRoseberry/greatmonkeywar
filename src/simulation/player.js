@@ -11,7 +11,7 @@
 import { Facing } from './constants.js';
 import { Input } from './input.js';
 import { moveBoxes, isSupported, overlapsBox } from './collision.js';
-import { heldObject, solidObjects } from './objects.js';
+import { heldObject, solidObjects, letGo } from './objects.js';
 
 /**
  * The player's changing state: the one central declaration of its properties.
@@ -153,10 +153,13 @@ export function updatePlayer(state, input, dt) {
 /**
  * Falling into a pit (req 26): once the player is entirely below the bottom of
  * the level, they lose 1 health (never below 0; invincibility doesn't protect
- * against this) and respawn at the start, at rest.
+ * against this) and respawn at the start, at rest. They let go of any held
+ * object first (task 4.10), which falls into the pit and returns to its own
+ * start place, so it never respawns above their head without headroom.
  */
 function fallIntoPit(state) {
   const { player, start } = state;
+  letGo(state);
   player.health = Math.max(0, player.health - 1);
   player.x = start.x;
   player.y = start.y;

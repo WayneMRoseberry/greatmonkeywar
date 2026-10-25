@@ -287,6 +287,11 @@ These were completed before this approach was adopted: their tests were written 
     - Decided: a reward is a plain box filling its grid cell (1 × 1), with `value` (default 1) and `color` from its legend entry. The player collects it by overlapping it (sharing an edge isn't enough). Only the player collects rewards; objects pass through them. Rewards are part of the level-start snapshot and come back on restart (req 27).
     - Test: `tests/simulation/rewards.test.js`, `tests/simulation/state.test.js` (snapshot)
     - Code: `src/simulation/rewards.js`, `src/simulation/state.js`, `src/simulation/step.js`
+  - [x] 4.10 Amendment to 4.2a and 4.5: pit respawns never put an object inside something solid. Found after 4.9, two gaps:
+    - Respawning while carrying (from 4.2a): a player who falls into a pit while holding an object respawns at the start with it still above their head, where nothing checks there is headroom, so it can end up inside a ceiling. Decided: falling into a pit makes the player let go of the held object. It is released where it is, still and not thrown, falls into the pit, and goes back to its own start place under the 4.5 rule.
+    - Start place taken (from 4.5): an object that falls into a pit goes back to its start place even when another crate now rests there, and ends up inside it. Decided: it goes to the lowest free spot straight above its start place, clear of solid tiles and solid objects (resting stackable ones), and falls or comes to rest from there. Non-stackable objects such as coconuts aren't solid, so they don't count as taking the spot.
+    - Test: `tests/simulation/objects.test.js` ("pit respawns"), `tests/simulation/collision.test.js` ("freeYAbove")
+    - Code: `src/simulation/player.js`, `src/simulation/objects.js` (`letGo`), `src/simulation/collision.js` (`freeYAbove`)
 - [ ] 5.0 Build enemies and punching
   - [ ] 5.1 Enemies in the initial state, from level placements and character definitions, with health and patrol speed (reqs 40, 48).
     - Test: `tests/simulation/state.test.js` ("enemies")

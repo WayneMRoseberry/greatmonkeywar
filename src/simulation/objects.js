@@ -9,7 +9,7 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { touches, fitsIn, moveBox, isSupported, isOnTopOf } from './collision.js';
+import { touches, fitsIn, moveBox, isSupported, isOnTopOf, freeYAbove } from './collision.js';
 
 /**
  * An object's changing state: the one central declaration of its properties.
@@ -81,6 +81,19 @@ function objectToPickUp(state) {
 /** The object the player is holding, or null. */
 export function heldObject(state) {
   return state.objects.find((o) => o.held) ?? null;
+}
+
+/**
+ * Makes the player let go of what they hold, if anything (task 4.10): it is
+ * released where it is, still and not thrown, and falls on its own from there.
+ */
+export function letGo(state) {
+  const held = heldObject(state);
+  if (!held) return;
+  held.held = false;
+  held.thrown = false;
+  held.vx = 0;
+  held.vy = 0;
 }
 
 /** True if `object` is stackable, from its definition in `definitions` (data.objects). */
@@ -247,15 +260,18 @@ export function updateFalling(state, dt) {
       object.thrown = false;
       if (isStackable(state.data.objects, object)) solids.push(object);
     }
-    if (object.y >= state.level.height) returnToStart(object, state.levelStart.objects[index]);
+    if (object.y >= state.level.height) returnToStart(state, object, state.levelStart.objects[index], solids);
   }
 }
 
-
-/** Puts a fallen object back where it was when the level started, still, not thrown, and not yet at rest. */
-function returnToStart(object, start) {
+/**
+ * Puts a fallen object back where it was when the level started, still, not
+ * thrown, and not yet at rest. If that place is taken by a solid object (task
+ * 4.10), it goes to the lowest free spot straight above it instead.
+ */
+function returnToStart(state, object, start, solids) {
   object.x = start.x;
-  object.y = start.y;
+  object.y = freeYAbove(state.level, { ...object, x: start.x, y: start.y }, solids);
   object.vx = 0;
   object.vy = 0;
   object.thrown = false;

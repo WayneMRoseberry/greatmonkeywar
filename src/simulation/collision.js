@@ -230,3 +230,22 @@ export function isOnTopOf(upper, lower) {
   return Math.abs(upper.y + upper.height - lower.y) < EPS
     && overlaps(upper.x, upper.x + upper.width, lower.x, lower.x + lower.width);
 }
+
+/**
+ * The y of the lowest spot at or straight above `box` where it overlaps no
+ * solid tile and none of `solidBoxes`: moving up from where it is, it goes on
+ * top of whatever it overlaps until it is clear. The top of the level is
+ * open, so there is always such a spot. The box passed in is not changed.
+ */
+export function freeYAbove(level, box, solidBoxes = []) {
+  let y = box.y;
+  for (;;) {
+    const placed = { ...box, y };
+    // The highest top of anything overlapping the box here; each round moves the box above it.
+    const tile = overlapsSolid(level, placed);   // the highest overlapping row comes first
+    let top = tile ? tile.row : Infinity;
+    for (const solid of solidBoxes) if (overlapsBox(placed, solid)) top = Math.min(top, solid.y);
+    if (top === Infinity) return y;
+    y = top - box.height;
+  }
+}
