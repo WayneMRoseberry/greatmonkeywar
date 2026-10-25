@@ -9,7 +9,7 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { touches, fitsIn } from './collision.js';
+import { touches, fitsIn, moveBox } from './collision.js';
 
 /**
  * An object's changing state: the one central declaration of its properties.
@@ -48,6 +48,7 @@ export class CarriableObject {
 
 const centreX = (box) => box.x + box.width / 2;
 const centreY = (box) => box.y + box.height / 2;
+const bottom = (box) => box.y + box.height;
 
 /**
  * The object the player would pick up: of the objects touching the player
@@ -81,6 +82,16 @@ export function heldObject(state) {
   return state.objects.find((o) => o.held) ?? null;
 }
 
+const isStackable = (state, object) => state.data.objects[object.type].stackable === true;
+
+/**
+ * The objects that are solid surfaces (req 35): stackable objects at rest.
+ * Objects land on them, and the player stands, walks, and jumps on them.
+ */
+export function solidObjects(state) {
+  return state.objects.filter((o) => o.resting && isStackable(state, o));
+}
+
 /** Where `object` goes above the player's head: its bottom-centre at the player's top-centre. */
 function aboveHead(object, player) {
   return { ...object, x: centreX(player) - object.width / 2, y: player.y - object.height };
@@ -99,8 +110,8 @@ function placeAboveHead(object, player) {
  *    edge). Only a new press counts: holding action doesn't pick up again.
  *    One object at a time: while holding one, action doesn't pick up another.
  *  - No room, no pick-up (task 4.2a): if the chosen object, above the head,
- *    would overlap a solid tile or stick out past the level's sides, nothing
- *    is picked up. Together with the player moving with the held object
+ *    would overlap a solid tile or another solid object (solidObjects), or
+ *    stick out past the level's sides, nothing is picked up. Together with the player moving with the held object
  *    (player.js), this keeps a held object out of solids.
  *  - A held object is carried above the player's head, still and not at rest.
  *  - Throwing (req 31): a new press of action while holding lets go of the
@@ -123,7 +134,8 @@ export function updateObjects(state, input) {
     else if (actionPressed) throwObject(held, player, state.data.tuning.throwSpeed);
   } else if (actionPressed) {
     const chosen = objectToPickUp(state);
-    if (chosen && fitsIn(state.level, aboveHead(chosen, player))) {
+    const solids = solidObjects(state).filter((o) => o !== chosen);
+    if (chosen && fitsIn(state.level, aboveHead(chosen, player), solids)) {
       chosen.held = true;
       chosen.resting = false;
       chosen.vx = 0;
@@ -154,7 +166,8 @@ function besideFeet(object, player, side) {
 function dropObject(state, object) {
   const { player } = state;
   const forward = player.facing === Facing.RIGHT ? 1 : -1;
-  const side = [forward, -forward].find((s) => fitsIn(state.level, besideFeet(object, player, s)));
+  const solids = solidObjects(state);
+  const side = [forward, -forward].find((s) => fitsIn(state.level, besideFeet(object, player, s), solids));
   if (side === undefined) return;
 
   const { x, y } = besideFeet(object, player, side);
@@ -172,4 +185,59 @@ function throwObject(object, player, throwSpeed) {
   object.thrown = true;
   object.vx = withoutNegativeZero(forward * throwSpeed.x);
   object.vy = withoutNegativeZero(-throwSpeed.y);   // y increases downwards
+}
+
+/**
+ * Falling and resting (task 4.5, req 34), after updateObjects. Every object
+ * that isn't held or at rest moves:
+ *  - gravity: vy grows by gravity × dt, up to maxFallSpeed (tuning);
+ *  - the move goes through moveBox, stopping at solid tiles, the level's
+ *    sides, and solid objects (solidObjects). Objects that are still moving
+ *    aren't solid, and neither is the player;
+ *  - hitting a wall or the side of a stack makes vx 0, so the object falls
+ *    straight down from there; hitting a ceiling makes vy 0;
+ *  - landing stops it dead and puts it at rest; it is no longer thrown. A
+ *    stackable object that lands is at once solid for the others;
+ *  - an object entirely below the level (in a pit) goes back to where it was
+ *    when the level started, still and not thrown, and falls or comes to rest
+ *    from there on the following steps.
+ * Objects are moved lowest first, so a falling stack settles in one piece.
+ * Resting objects don't move: they stay as they are until something picks
+ * them up (task 4.7 makes them fall when what is under them goes).
+ */
+export function updateFalling(state, dt) {
+  const { gravity, maxFallSpeed } = state.data.tuning;
+  const solids = solidObjects(state);
+  const moving = state.objects
+    .map((object, index) => ({ object, index }))
+    .filter(({ object }) => !object.held && !object.resting)
+    .sort((a, b) => bottom(b.object) - bottom(a.object));
+
+  for (const { object, index } of moving) {
+    object.vy = Math.min(object.vy + gravity * dt, maxFallSpeed);
+    const moved = moveBox(state.level, object, object.vx * dt, object.vy * dt, solids);
+    object.x = moved.x;
+    object.y = moved.y;
+    if (moved.hitLeft || moved.hitRight) object.vx = 0;
+    if (moved.hitCeiling) object.vy = 0;
+    if (moved.onGround) {
+      object.vx = 0;
+      object.vy = 0;
+      object.resting = true;
+      object.thrown = false;
+      if (isStackable(state, object)) solids.push(object);
+    }
+    if (object.y >= state.level.height) returnToStart(object, state.levelStart.objects[index]);
+  }
+}
+
+
+/** Puts a fallen object back where it was when the level started, still, not thrown, and not yet at rest. */
+function returnToStart(object, start) {
+  object.x = start.x;
+  object.y = start.y;
+  object.vx = 0;
+  object.vy = 0;
+  object.thrown = false;
+  object.resting = false;
 }

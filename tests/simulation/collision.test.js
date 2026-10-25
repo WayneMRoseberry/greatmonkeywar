@@ -6,7 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn } from '../../src/simulation/collision.js';
+import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn, overlapsBox } from '../../src/simulation/collision.js';
 
 const TILE_TYPES = {
   '#': { solid: true, color: '#000000' },
@@ -882,5 +882,51 @@ describe('fitsIn: a box placed without overlapping solid tiles or crossing the s
 
   test('a box above the top of the level fits (the top is open)', () => {
     assert.equal(fitsIn(levelFrom(['...', '###']), box(1, -2, 1, 1)), true);
+  });
+});
+
+describe('stackable boxes (task 4.6)', () => {
+  describe('overlapsBox: two boxes overlap by more than a touch', () => {
+    test('overlapping boxes overlap', () => {
+      assert.equal(overlapsBox(box(0, 0, 1, 1), box(0.5, 0.5, 1, 1)), true);
+    });
+
+    test('a box inside another overlaps it', () => {
+      assert.equal(overlapsBox(box(0, 0, 2, 2), box(0.5, 0.5, 1, 1)), true);
+    });
+
+    test('boxes sharing an edge do not overlap', () => {
+      const a = box(0, 0, 1, 1);
+      assert.equal(overlapsBox(a, box(a.x + a.width, 0, 1, 1)), false);
+      assert.equal(overlapsBox(a, box(0, a.y + a.height, 1, 1)), false);
+    });
+
+    test('boxes apart do not overlap', () => {
+      assert.equal(overlapsBox(box(0, 0, 1, 1), box(3, 0, 1, 1)), false);
+    });
+
+    test('the order of the two boxes does not matter', () => {
+      const a = box(0, 0, 1, 1);
+      const b = box(0.5, 0.5, 1, 1);
+      assert.equal(overlapsBox(b, a), overlapsBox(a, b));
+    });
+  });
+
+  describe('fitsIn with solid boxes', () => {
+    const level = levelFrom(['....', '####']);
+
+    test('a box overlapping a solid box passed in does not fit', () => {
+      const crate = box(1, 0, 1, 1);
+      assert.equal(fitsIn(level, box(1.5, 0, 1, 1), [crate]), false);
+    });
+
+    test('a box only touching a solid box passed in fits', () => {
+      const crate = box(1, 0, 1, 1);
+      assert.equal(fitsIn(level, box(crate.x + crate.width, 0, 1, 1), [crate]), true);
+    });
+
+    test('with no solid boxes passed in, only tiles and edges count', () => {
+      assert.equal(fitsIn(level, box(1, 0, 1, 1)), true);
+    });
   });
 });

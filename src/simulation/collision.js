@@ -207,11 +207,17 @@ export function moveBoxes(level, boxes, dx, dy, solidBoxes = []) {
   };
 }
 
+/** True if boxes `a` and `b` overlap by more than a touch (sharing an edge isn't overlapping). */
+export function overlapsBox(a, b) {
+  return overlaps(a.x, a.x + a.width, b.x, b.x + b.width) && overlaps(a.y, a.y + a.height, b.y, b.y + b.height);
+}
+
 /**
- * True if `box` can be placed where it is: it overlaps no solid tile and
- * doesn't stick out past the level's left or right edge. The top and bottom
- * are open, as for movement.
+ * True if `box` can be placed where it is: it overlaps no solid tile and none
+ * of `solidBoxes`, and doesn't stick out past the level's left or right edge.
+ * The top and bottom are open, as for movement.
  */
-export function fitsIn(level, box) {
-  return box.x >= -EPS && box.x + box.width <= level.width + EPS && overlapsSolid(level, box) === null;
+export function fitsIn(level, box, solidBoxes = []) {
+  return box.x >= -EPS && box.x + box.width <= level.width + EPS && overlapsSolid(level, box) === null
+    && !solidBoxes.some((solid) => overlapsBox(box, solid));
 }
