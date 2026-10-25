@@ -394,6 +394,30 @@ describe('req 83: references to files that don\'t exist', () => {
     ]);
   });
 
+  test('an enemy placement may say which way the enemy starts facing: "left" or "right"', () => {
+    for (const facing of ['left', 'right']) {
+      const level = fixture('levels/level2.json');
+      level.legend.e = { enemy: 'beetle', facing };
+      assertErrors({ 'levels/level2.json': level }, []);
+    }
+  });
+
+  test('an enemy placement facing a direction other than "left" or "right"', () => {
+    const level = fixture('levels/level2.json');
+    level.legend.e = { enemy: 'beetle', facing: 'up' };
+    assertErrors({ 'levels/level2.json': level }, [
+      { file: 'levels/level2.json', code: 'not-allowed', details: { path: ['legend', 'e', 'facing'], allowed: ['left', 'right'], value: 'up' } },
+    ]);
+  });
+
+  test('a "facing" on a legend entry that isn\'t an enemy', () => {
+    const level = fixture('levels/level2.json');
+    level.legend.o = { object: 'coconut', facing: 'left' };
+    assertErrors({ 'levels/level2.json': level }, [
+      { file: 'levels/level2.json', code: 'legend-stray-facing', details: { key: 'o' } },
+    ]);
+  });
+
   test('a level that uses the player as an enemy', () => {
     const level = fixture('levels/level2.json');
     level.legend.e = { enemy: 'player' };
@@ -586,6 +610,7 @@ describe('describeProblem: plain-language messages', () => {
     'legend-stray-color': [{ key: 'o' },
       'legend "o" has a "color" directly inside it, which only goals use. For a tile or reward, put "color" inside "tile" or "reward".'],
     'goal-without-color': [{ key: 'G' }, 'legend "G" is a goal but has no "color". Add one, like "color": "#ff3030".'],
+    'legend-stray-facing': [{ key: 'o' }, 'legend "o" has a "facing", which only enemies use. Remove it, or use it on an enemy entry.'],
     'missing-enemy': [{ key: 'e', name: 'snake' }, 'legend "e" is the enemy "snake", but there is no file data/characters/snake.json.'],
     'enemy-is-player': [{ key: 'e', name: 'player' }, 'legend "e" uses "player" as an enemy, but that character is the player.'],
     'missing-object': [{ key: 'o', name: 'barrel' }, 'legend "o" is the object "barrel", but there is no file data/objects/barrel.json.'],

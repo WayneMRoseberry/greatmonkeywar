@@ -6,7 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn } from '../../src/simulation/collision.js';
+import { moveBox, moveBoxes, overlapsSolid, isSupported, touches, fitsIn, overlapsBox, isOnTopOf, freeYAbove } from '../../src/simulation/collision.js';
 
 const TILE_TYPES = {
   '#': { solid: true, color: '#000000' },
@@ -882,5 +882,141 @@ describe('fitsIn: a box placed without overlapping solid tiles or crossing the s
 
   test('a box above the top of the level fits (the top is open)', () => {
     assert.equal(fitsIn(levelFrom(['...', '###']), box(1, -2, 1, 1)), true);
+  });
+});
+
+describe('stackable boxes (task 4.6)', () => {
+  describe('overlapsBox: two boxes overlap by more than a touch', () => {
+    test('overlapping boxes overlap', () => {
+      assert.equal(overlapsBox(box(0, 0, 1, 1), box(0.5, 0.5, 1, 1)), true);
+    });
+
+    test('a box inside another overlaps it', () => {
+      assert.equal(overlapsBox(box(0, 0, 2, 2), box(0.5, 0.5, 1, 1)), true);
+    });
+
+    test('boxes sharing an edge do not overlap', () => {
+      const a = box(0, 0, 1, 1);
+      assert.equal(overlapsBox(a, box(a.x + a.width, 0, 1, 1)), false);
+      assert.equal(overlapsBox(a, box(0, a.y + a.height, 1, 1)), false);
+    });
+
+    test('boxes apart do not overlap', () => {
+      assert.equal(overlapsBox(box(0, 0, 1, 1), box(3, 0, 1, 1)), false);
+    });
+
+    test('the order of the two boxes does not matter', () => {
+      const a = box(0, 0, 1, 1);
+      const b = box(0.5, 0.5, 1, 1);
+      assert.equal(overlapsBox(b, a), overlapsBox(a, b));
+    });
+  });
+
+  describe('fitsIn with solid boxes', () => {
+    const level = levelFrom(['....', '####']);
+
+    test('a box overlapping a solid box passed in does not fit', () => {
+      const crate = box(1, 0, 1, 1);
+      assert.equal(fitsIn(level, box(1.5, 0, 1, 1), [crate]), false);
+    });
+
+    test('a box only touching a solid box passed in fits', () => {
+      const crate = box(1, 0, 1, 1);
+      assert.equal(fitsIn(level, box(crate.x + crate.width, 0, 1, 1), [crate]), true);
+    });
+
+    test('with no solid boxes passed in, only tiles and edges count', () => {
+      assert.equal(fitsIn(level, box(1, 0, 1, 1)), true);
+    });
+  });
+});
+
+describe('isOnTopOf: a box standing on another (task 4.8)', () => {
+  test('a box whose bottom is on the other\'s top, overlapping sideways, is on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    assert.equal(isOnTopOf(box(1.2, lower.y - 1, 0.8, 1), lower), true);
+  });
+
+  test('a box overlapping the other\'s top only partly is still on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    assert.equal(isOnTopOf(box(1.5, lower.y - 1, 1, 1), lower), true);
+  });
+
+  test('a box beside the other, touching only at a corner, is not on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    assert.equal(isOnTopOf(box(lower.x + lower.width, lower.y - 1, 1, 1), lower), false);
+  });
+
+  test('a box above the other with a gap is not on top of it', () => {
+    const lower = box(1, 1, 1, 1);
+    const gap = 0.01;
+    assert.equal(isOnTopOf(box(1, lower.y - 1 - gap, 1, 1), lower), false);
+  });
+
+  test('a box under the other is not on top of it', () => {
+    const upper = box(1, 0, 1, 1);
+    assert.equal(isOnTopOf(box(1, upper.y + upper.height, 1, 1), upper), false);
+  });
+
+  test('a bottom off from the other\'s top by rounding error is still on top', () => {
+    const lower = box(1, 0.1 + 0.2, 1, 1);   // y is 0.30000000000000004
+    assert.equal(isOnTopOf(box(1, 0.3 - 1, 1, 1), lower), true);
+  });
+});
+
+describe('freeYAbove: the lowest free spot straight above a box (task 4.10)', () => {
+  const level = levelFrom(['....', '....', '....', '....', '####']);
+
+  test('a box that already fits stays where it is', () => {
+    const start = box(1, 3, 1, 1);
+    assert.equal(freeYAbove(level, start), start.y);
+  });
+
+  test('a box overlapping a solid box goes on top of it', () => {
+    const crate = box(1, 3, 1, 1);
+    const height = 1;
+    assertNear(freeYAbove(level, box(1, 3, 1, height), [crate]), crate.y - height, 'y');
+  });
+
+  test('a box overlapping a stack of two goes on top of the stack', () => {
+    const lower = box(1, 3, 1, 1);
+    const upper = box(1, 2, 1, 1);
+    const height = 1;
+    for (const boxes of [[lower, upper], [upper, lower]]) {
+      assertNear(freeYAbove(level, box(1, 3, 1, height), boxes), upper.y - height, 'y');
+    }
+  });
+
+  test('it takes the lowest free spot: a gap below another box above is enough', () => {
+    const crate = box(1, 3, 1, 1);
+    const above = box(1, 1, 1, 1);   // leaves a 1-tile gap between them
+    const height = 1;
+    assertNear(freeYAbove(level, box(1, 3, 1, height), [crate, above]), crate.y - height, 'y');
+  });
+
+  test('a gap too small for the box is skipped', () => {
+    const crate = box(1, 3, 1, 1);
+    const above = box(1, 1.5, 1, 1);   // only half a tile of space between them
+    const height = 1;
+    assertNear(freeYAbove(level, box(1, 3, 1, height), [crate, above]), above.y - height, 'y');
+  });
+
+  test('a box overlapping a solid tile goes on top of the tile', () => {
+    const groundRow = 4;
+    const height = 1;
+    assertNear(freeYAbove(level, box(1, 3.5, 1, height)), groundRow - height, 'y');
+  });
+
+  test('a box overlapping only part of another goes on top of it', () => {
+    const crate = box(1, 3, 1, 1);
+    const height = 1;
+    assertNear(freeYAbove(level, box(1.5, 3, 1, height), [crate]), crate.y - height, 'y');
+  });
+
+  test('the box passed in is not changed', () => {
+    const start = box(1, 3, 1, 1);
+    const before = { ...start };
+    freeYAbove(level, start, [box(1, 3, 1, 1)]);
+    assert.deepEqual(start, before);
   });
 });

@@ -339,6 +339,7 @@ const MESSAGES = {
   'legend-stray-color': ({ key }) =>
     `legend "${key}" has a "color" directly inside it, which only goals use. For a tile or reward, put "color" inside "tile" or "reward".`,
   'goal-without-color': ({ key }) => `legend "${key}" is a goal but has no "color". Add one, like "color": "#ff3030".`,
+  'legend-stray-facing': ({ key }) => `legend "${key}" has a "facing", which only enemies use. Remove it, or use it on an enemy entry.`,
   'missing-enemy': ({ key, name }) => `legend "${key}" is the enemy "${name}", but there is no file data/characters/${name}.json.`,
   'enemy-is-player': ({ key, name }) => `legend "${key}" uses "${name}" as an enemy, but that character is the player.`,
   'missing-object': ({ key, name }) => `legend "${key}" is the object "${name}", but there is no file data/objects/${name}.json.`,
@@ -441,6 +442,7 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
     else if (kinds.length > 1) error(path, 'legend-many-kinds', { key, kinds });
     if ('color' in entry && !('goal' in entry)) error(path, 'legend-stray-color', { key });
     if ('goal' in entry && !('color' in entry)) error(path, 'goal-without-color', { key });
+    if ('facing' in entry && !('enemy' in entry)) error(path, 'legend-stray-facing', { key });
     if ('enemy' in entry) {
       if (!names.character.has(entry.enemy)) error(path, 'missing-enemy', { key, name: entry.enemy });
       // A wrong "kind" in another character file is reported on that file, not on every level using it.

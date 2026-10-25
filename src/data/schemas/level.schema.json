@@ -51,7 +51,7 @@
     "name": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
     "imagePath": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(png|jpg|jpeg)$" },
     "legendEntry": {
-      "description": "Exactly one of tile, playerStart, goal, enemy, object, reward (checked by validate.js). 'color' belongs with goal.",
+      "description": "Exactly one of tile, playerStart, goal, enemy, object, reward (checked by validate.js). 'color' belongs with goal; 'facing' belongs with enemy.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -68,6 +68,11 @@
         "goal": { "const": true },
         "color": { "$ref": "#/$defs/color" },
         "enemy": { "$ref": "#/$defs/name" },
+        "facing": {
+          "description": "Which way the enemy starts facing and walking. Only for enemies.",
+          "enum": ["left", "right"],
+          "default": "left"
+        },
         "object": { "$ref": "#/$defs/name" },
         "reward": {
           "type": "object",

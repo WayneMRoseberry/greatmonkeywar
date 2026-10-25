@@ -10,8 +10,8 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
-import { moveBoxes, isSupported } from './collision.js';
-import { heldObject } from './objects.js';
+import { moveBoxes, isSupported, overlapsBox } from './collision.js';
+import { heldObject, solidObjects, letGo } from './objects.js';
 
 /**
  * The player's changing state: the one central declaration of its properties.
@@ -84,11 +84,23 @@ function carriedBoxes(state) {
 }
 
 /**
- * True if there is something solid directly under the player's feet, or under
- * the object they carry (a wide object caught on a ledge holds the player up).
+ * The solid objects (resting stackable ones, objects.js) that block the player
+ * this step (task 4.6). One that the player or their held object already
+ * overlaps, such as a crate that fell and came to rest where the player
+ * stands, isn't solid to them until they have walked out of it.
  */
-function isStanding(state) {
-  return carriedBoxes(state).some((box) => isSupported(state.level, box));
+function solidsFor(state) {
+  const boxes = carriedBoxes(state);
+  return solidObjects(state).filter((solid) => !boxes.some((box) => overlapsBox(box, solid)));
+}
+
+/**
+ * True if there is something solid (a tile or a solid object) directly under
+ * the player's feet, or under the object they carry (a wide object caught on
+ * a ledge holds the player up).
+ */
+function isStanding(state, solids) {
+  return carriedBoxes(state).some((box) => isSupported(state.level, box, solids));
 }
 
 /**
@@ -102,8 +114,9 @@ function isStanding(state) {
  *    "Standing" is checked directly, so a player who arrived exactly on the
  *    ground last step (onGround still false) can jump at once.
  *  - Collision (req 23): the move goes through moveBoxes, together with any
- *    held object (task 4.2a). A wall either one meets stops the player and
- *    makes vx 0; landing or hitting a ceiling, by either one, makes vy 0.
+ *    held object (task 4.2a), against tiles and solid objects (task 4.6). A
+ *    wall either one meets stops the player and makes vx 0; landing or
+ *    hitting a ceiling, by either one, makes vy 0.
  */
 export function updatePlayer(state, input, dt) {
   const { player } = state;
@@ -119,13 +132,14 @@ export function updatePlayer(state, input, dt) {
     player.vx = direction * speed;
   }
 
-  const standing = isStanding(state);
+  const solids = solidsFor(state);
+  const standing = isStanding(state, solids);
   player.vy = Math.min(player.vy + gravity * dt, maxFallSpeed);
   const jumpPressed = input[Input.JUMP] && !player.jumpHeld;
   if (jumpPressed && standing) player.vy = -jumpSpeed;
   player.jumpHeld = input[Input.JUMP];
 
-  const moved = moveBoxes(state.level, carriedBoxes(state), player.vx * dt, player.vy * dt);
+  const moved = moveBoxes(state.level, carriedBoxes(state), player.vx * dt, player.vy * dt, solids);
   player.x += moved.dx;   // the held object is put back above the player's head in updateObjects
   player.y += moved.dy;
   player.onGround = moved.onGround;
@@ -139,10 +153,13 @@ export function updatePlayer(state, input, dt) {
 /**
  * Falling into a pit (req 26): once the player is entirely below the bottom of
  * the level, they lose 1 health (never below 0; invincibility doesn't protect
- * against this) and respawn at the start, at rest.
+ * against this) and respawn at the start, at rest. They let go of any held
+ * object first (task 4.10), which falls into the pit and returns to its own
+ * start place, so it never respawns above their head without headroom.
  */
 function fallIntoPit(state) {
   const { player, start } = state;
+  letGo(state);
   player.health = Math.max(0, player.health - 1);
   player.x = start.x;
   player.y = start.y;

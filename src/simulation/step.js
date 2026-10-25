@@ -9,25 +9,33 @@
 // broken level, so the update functions called here don't check the data again.
 
 import { updatePlayer } from './player.js';
-import { updateObjects } from './objects.js';
+import { updateObjects, updateFalling } from './objects.js';
+import { collectRewards } from './rewards.js';
 
 const copyObjects = (objects) => objects.map((o) => o.copy());
+const copyEnemies = (enemies) => enemies.map((e) => e.copy());
 
 /**
  * A copy of `state` that shares nothing changeable with it. The loaded game
  * data is read-only and the same for every state, so it is shared, not copied.
- * Players and objects are copied with their copy() methods, which keep them
- * sealed Player and CarriableObject instances (structuredClone would turn them
- * into plain objects).
+ * Players, enemies, and objects are copied with their copy() methods, which
+ * keep them sealed Player, Enemy, and CarriableObject instances
+ * (structuredClone would turn them into plain objects).
  */
-function copyState({ data, player, objects, levelStart, ...rest }) {
-  const { player: startPlayer, objects: startObjects, ...startRest } = levelStart;
+function copyState({ data, player, enemies, objects, levelStart, ...rest }) {
+  const { player: startPlayer, enemies: startEnemies, objects: startObjects, ...startRest } = levelStart;
   return {
     ...structuredClone(rest),
     data,
     player: player.copy(),
+    enemies: copyEnemies(enemies),
     objects: copyObjects(objects),
-    levelStart: { ...structuredClone(startRest), player: startPlayer.copy(), objects: copyObjects(startObjects) },
+    levelStart: {
+      ...structuredClone(startRest),
+      player: startPlayer.copy(),
+      enemies: copyEnemies(startEnemies),
+      objects: copyObjects(startObjects),
+    },
   };
 }
 
@@ -39,7 +47,9 @@ function copyState({ data, player, objects, levelStart, ...rest }) {
 function restartLevel(state) {
   const { levelStart } = state;
   state.player = levelStart.player.copy();
+  state.enemies = copyEnemies(levelStart.enemies);
   state.objects = copyObjects(levelStart.objects);
+  state.rewards = structuredClone(levelStart.rewards);
   state.rewardCount = levelStart.rewardCount;
 }
 
@@ -48,6 +58,8 @@ export function step(state, input, dt) {
   next.time += dt;
   updatePlayer(next, input, dt);
   updateObjects(next, input);   // after the player moves, so a held object follows them
+  updateFalling(next, dt);      // after updateObjects, so thrown and dropped objects move at once
+  collectRewards(next);
   // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.
   if (next.player.health <= 0) restartLevel(next);
   return next;

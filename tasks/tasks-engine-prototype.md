@@ -253,38 +253,69 @@ These were completed before this approach was adopted: their tests were written 
     - Test: `tests/simulation/collision.test.js` ("moveBoxes", "fitsIn"), `tests/simulation/objects.test.js` ("carrying under barriers", "no room to pick up")
     - Code: `src/simulation/collision.js` (`moveBoxes`, `fitsIn`), `src/simulation/player.js`, `src/simulation/objects.js` (`heldObject`)
     - Docs (no code): `docs/guide-levels.md`, a note that carrying needs headroom of the player's height plus the object's.
-  - [ ] 4.3 Throw with **action** while holding: an arc in the facing direction, with throw speed from tuning (req 31).
-    - Test: `tests/simulation/objects.test.js` ("throw")
+  - [x] 4.3 Throw with **action** while holding: an arc in the facing direction, with throw speed from tuning (req 31).
+    - Decided: 4.3 is the launch only. A new press of action while holding lets go of the object from above the head, with speed (`throwSpeed.x` forward in the facing direction after this step's move, `throwSpeed.y` upward), whatever the player's own speed. The object becomes `thrown` and can't be picked up until it lands. Objects don't move on their own until 4.5, which tests the arc.
+    - Test: `tests/simulation/objects.test.js` ("throw", "the CarriableObject structure")
     - Code: `src/simulation/objects.js`
-  - [ ] 4.4 Drop with **down + action** at the player's feet, using drop speed from tuning (req 32).
-    - Test: `tests/simulation/objects.test.js` ("drop")
+  - [x] 4.4 Drop with **down + action** at the player's feet, using drop speed from tuning (req 32).
+    - Decided: the object goes down beside the player's feet, flush against the side they face, with its bottom level with their feet. If it doesn't fit there (tiles or the level's edge), it goes on the other side. If neither fits, the player keeps holding it. `dropSpeed` follows `throwSpeed`'s convention: x away from the player (toward the side the object went down on), y upward. A dropped object isn't `thrown`, so it can be picked up again at once. Down + action with empty hands picks up as usual. Throw and drop speeds of 0 come out as exactly 0, never -0, so equal states compare as equal.
+    - Test: `tests/simulation/objects.test.js` ("drop", plus a zero-speed case in "throw")
     - Code: `src/simulation/objects.js`
-  - [ ] 4.5 Object gravity and tile collision, so thrown and dropped objects come to rest (req 34).
+  - [x] 4.5 Object gravity and tile collision, so thrown and dropped objects come to rest (req 34).
+    - Decided: objects that aren't held or at rest fall under `gravity` and `maxFallSpeed` (tuning, as for the player) and collide with solid tiles, the level's sides, and resting stackable objects. Hitting a wall or the side of a stack makes the sideways speed 0, so the object falls straight down, still thrown until it lands. Landing stops it dead (both speeds 0), puts it at rest, and clears `thrown`. An object entirely below the level returns to where it was when the level started, still and not thrown, and falls or comes to rest from there. Falling runs after pick-up, throw, and drop in each step, so a released object starts moving at once, and a crate dropped on the ground is at rest (and solid) before the player's next move. Objects move lowest first, so a falling stack settles in one piece. The 4.3 and 4.4 launch tests now set gravity (and, for drops, the drop speed) to 0, so they still read the launch exactly.
+    - Carried over from 4.3: test the thrown object's arc (forward and up, then falling under gravity), and clear `thrown` when it lands so it can be picked up again. Decide what a wall hit does to a thrown object's sideways speed.
+    - Carried over from 4.4: dropped objects stay where they were put down until this task. Test that a dropped object falls and comes to rest in each case: dropped on the ground (at rest at once, with a drop speed of 0), dropped in mid-air (falls from beside the player's feet), and dropped with a non-zero `dropSpeed` (moves away from the player and upward, then falls). A dropped object is never `thrown`, so it can be picked up while still falling.
     - Test: `tests/simulation/objects.test.js` ("falling and resting")
     - Code: `src/simulation/objects.js`
-  - [ ] 4.6 Stacking: stackable objects at rest are solid surfaces that objects land on and the player stands, walks, and jumps on (req 35).
-    - Test: `tests/simulation/objects.test.js` ("stacking"), `tests/simulation/collision.test.js` ("stackable boxes")
-    - Code: `src/simulation/objects.js`, `src/simulation/collision.js`, `src/simulation/player.js`
-  - [ ] 4.7 Picking up an object that others rest on makes them fall (req 36).
+  - [x] 4.6 Stacking: stackable objects at rest are solid surfaces that objects land on and the player stands, walks, and jumps on (req 35).
+    - Decided: `solidObjects(state)` (objects.js) is the resting stackable objects. Objects land on them. The player stands, walks, and jumps on them, and is stopped by their sides, except one the player or the held object already overlaps (for example a crate that fell through the player and came to rest where they stand), which the player can walk out of. Objects that are still moving, non-stackable objects, and the player are never solid to falling objects. The drop placement, the room-above-the-head check, and the player-and-held-object move all count solid objects.
+    - Carried over from 4.2a and 4.4: the "does it fit" checks only look at tiles and the level's edges, so an object can be dropped overlapping a crate, or picked up into a crate above the player's head. Once resting stackable objects are solid, include them in every such check, but never the held object itself:
+      - the drop's placement beside the feet (front, then the other side, else keep holding);
+      - the pick-up's room-above-the-head check;
+      - the player and held object moving together (`moveBoxes` gets the resting stackable objects as `solidBoxes`), so a carried crate stops at a stack just as it stops at a wall.
+    - Test: `tests/simulation/objects.test.js` ("stacking"), `tests/simulation/collision.test.js` ("stackable boxes": `overlapsBox`, `fitsIn` with solid boxes)
+    - Code: `src/simulation/objects.js` (`solidObjects`, `updateFalling`), `src/simulation/collision.js` (`overlapsBox`), `src/simulation/player.js`, `src/simulation/step.js`
+  - [x] 4.7 Picking up an object that others rest on makes them fall (req 36).
+    - Decided: every step, before objects move, each resting object checks (lowest first) for a solid tile or a resting stackable object directly under it. One with nothing under it stops resting and falls that same step, and so do any resting on it, so a stack above a removed crate falls together and settles again. An object still partly supported stays at rest. The check is `settleResting` (objects.js), which also decides which objects start at rest when a level is built (task 4.1).
     - Test: `tests/simulation/objects.test.js` ("support removed")
-    - Code: `src/simulation/objects.js`
-  - [ ] 4.8 The player can't pick up the object they're standing on (req 37).
-    - Test: `tests/simulation/objects.test.js` ("standing on")
-    - Code: `src/simulation/objects.js`
-  - [ ] 4.9 Rewards: touching one removes it and adds its value to the reward count (reqs 42–43).
-    - Test: `tests/simulation/rewards.test.js`
+    - Code: `src/simulation/objects.js` (`settleResting`), `src/simulation/state.js`
+  - [x] 4.8 The player can't pick up the object they're standing on (req 37).
+    - Decided: objects the player stands on (their feet on its top, overlapping sideways: `isOnTopOf` in collision.js) are left out when choosing what to pick up. Another object they touch, such as a crate beside them on the stack, is still picked up by the usual ranking.
+    - Test: `tests/simulation/objects.test.js` ("standing on"), `tests/simulation/collision.test.js` ("isOnTopOf")
+    - Code: `src/simulation/objects.js`, `src/simulation/collision.js` (`isOnTopOf`)
+  - [x] 4.9 Rewards: touching one removes it and adds its value to the reward count (reqs 42–43).
+    - Decided: a reward is a plain box filling its grid cell (1 × 1), with `value` (default 1) and `color` from its legend entry. The player collects it by overlapping it (sharing an edge isn't enough). Only the player collects rewards; objects pass through them. Rewards are part of the level-start snapshot and come back on restart (req 27).
+    - Test: `tests/simulation/rewards.test.js`, `tests/simulation/state.test.js` (snapshot)
     - Code: `src/simulation/rewards.js`, `src/simulation/state.js`, `src/simulation/step.js`
+  - [x] 4.10 Amendment to 4.2a and 4.5: pit respawns never put an object inside something solid. Found after 4.9, two gaps:
+    - Respawning while carrying (from 4.2a): a player who falls into a pit while holding an object respawns at the start with it still above their head, where nothing checks there is headroom, so it can end up inside a ceiling. Decided: falling into a pit makes the player let go of the held object. It is released where it is, still and not thrown, falls into the pit, and goes back to its own start place under the 4.5 rule.
+    - Start place taken (from 4.5): an object that falls into a pit goes back to its start place even when another crate now rests there, and ends up inside it. Decided: it goes to the lowest free spot straight above its start place, clear of solid tiles and solid objects (resting stackable ones), and falls or comes to rest from there. Non-stackable objects such as coconuts aren't solid, so they don't count as taking the spot.
+    - Test: `tests/simulation/objects.test.js` ("pit respawns"), `tests/simulation/collision.test.js` ("freeYAbove")
+    - Code: `src/simulation/player.js`, `src/simulation/objects.js` (`letGo`), `src/simulation/collision.js` (`freeYAbove`)
+  - [ ] 4.11 Amendment to 4.1: objects that start inside a solid tile. Found during 5.1: nothing checks that an object doesn't start overlapping a solid tile. The player has this check in both `createLevelState` (a `LevelDataError`) and the validator (`player-does-not-fit`); objects have neither. Bottom-centre placement makes it impossible for an object no bigger than a tile, but an object wider or taller than its cell (a wide plank, say), placed beside a wall or under a ceiling, would start inside the tile. A resting object there would be a solid surface inside the wall, and a falling one could pass through it, since collision only stops boxes moving *into* solids. Decide whether to add the same check for objects in both places, test-first, with a plain-language validator message naming the legend character and the cell. The same check is planned for enemies in 5.2, so the two could share it.
+    - Test: `tests/simulation/state.test.js` (invalid levels), `tests/data/validate.test.js`
+    - Code: `src/simulation/state.js`, `src/data/validate.js`
 - [ ] 5.0 Build enemies and punching
-  - [ ] 5.1 Enemies in the initial state, from level placements and character definitions, with health and patrol speed (reqs 40, 48).
-    - Test: `tests/simulation/state.test.js` ("enemies")
-    - Code: `src/simulation/state.js`
+  - [x] 5.1 Enemies in the initial state, from level placements and character definitions, with health and patrol speed (reqs 40, 48).
+    - Decided: the starting direction is set per placement. An enemy legend entry takes an optional `"facing": "left"` or `"right"` (default `"left"`), added to the level schema, the validator (a `facing` on a non-enemy entry is an error), `docs/data-formats.md`, and `docs/guide-levels.md`; a test keeps the schema's values in sync with `Facing`. An enemy (`Enemy`, enemies.js, sealed like `Player`) is placed bottom-centre in its cell, with health from its definition and `vx` set to the patrol speed in its facing direction. Building a level fails with a `LevelDataError` if an enemy's definition is missing or is the player's. Enemies are part of the level-start snapshot and are restored on restart (req 27).
+    - Test: `tests/simulation/state.test.js` ("enemies", snapshot, invalid levels), `tests/simulation/step.test.js` ("enemies across steps"), `tests/data/validate.test.js` (enemy `facing`), `tests/simulation/constants.test.js` (`Facing` and the level schema)
+    - Code: `src/simulation/enemies.js` (`Enemy`, `createEnemy`), `src/simulation/state.js`, `src/simulation/step.js`, `src/data/schemas/level.schema.json`, `src/data/validate.js`
+  - [ ] 5.1a Amendment to 5.1 (and 2.9, 3.3): shared constants for legend kinds, legend fields, and character kinds. Found after 5.1: the names of legend entry kinds (`tile`, `playerStart`, `goal`, `enemy`, `object`, `reward`), the other legend fields (`color`, `facing`), and the character kinds (`player`, `enemy`) are written as string literals in several places. They appear in `LEGEND_KINDS` and the `in` checks in `src/data/validate.js` (for example `'facing' in entry && !('enemy' in entry)`), and the character `kind` comparisons in `validate.js` and `state.js` (`'player'`, `'enemy'`). This goes against the shared-constants rule already used for `Facing`.
+    - Decided: add frozen constants `LegendKind`, `LegendField`, and `CharacterKind` to `src/simulation/constants.js`. They go there because simulation code may only import simulation files, while `validate.js` may import from the simulation. Use them for the kind list (`LEGEND_KINDS` becomes `Object.values(LegendKind)`), for every `in` check, and for every comparison of a kind value. Reading a field's value stays as plain dot access (`entry.enemy`), since the schema defines those names and `entry[LegendKind.ENEMY]` reads worse.
+    - A constant alone doesn't catch typos: reading a misspelled key of a frozen object gives `undefined` silently. So, as for `Facing`, add tests tying each constant to its schema: `LegendKind` and `LegendField` together are exactly the level schema's legend entry properties, and `CharacterKind`'s values are exactly the character schema's `kind` values.
+    - This is a refactor with no change in behaviour: test-first only for the new sync tests; all existing tests must stay green.
+    - Test: `tests/simulation/constants.test.js`
+    - Code: `src/simulation/constants.js`, `src/data/validate.js`, `src/simulation/state.js`
   - [ ] 5.2 Patrol with gravity and collision: turning at walls and at the edges of platforms and stacks, and walking on stacks (reqs 49–50).
+    - Carried over from 5.1: nothing checks that an enemy doesn't start overlapping a solid tile. The player has this check in both `createLevelState` (a `LevelDataError`) and the validator (`player-does-not-fit`); enemies and objects have neither. Bottom-centre placement makes it impossible for an enemy no bigger than a tile, but an enemy wider or taller than its cell, placed beside a wall or under a ceiling, would start inside the tile, and collision only stops boxes moving *into* solids, so it could pass through. Decide whether to add the same check for enemies in both places, test-first, with a plain-language validator message naming the legend character and the cell. (Objects have the same gap; see 4.11.)
     - Test: `tests/simulation/enemies.test.js` ("patrol")
     - Code: `src/simulation/enemies.js`, `src/simulation/step.js`
   - [ ] 5.3 Contact damage when the player touches an enemy from the side or below (req 51).
-    - Test: `tests/simulation/enemies.test.js` ("contact")
-    - Code: `src/simulation/enemies.js`
+    - Carried over from 4.4: `damagePlayer` (player.js, task 3.10), which this task is the first to call in play, gives a speed of -0 when the knockback in tuning is 0 (`-knockback.y`, and `away * knockback.x` when knocked to the left). -0 makes equal states compare as different (`deepEqual` tells 0 and -0 apart). Test-first: knockback of 0 gives exactly 0 in both directions, then fix it the way throw and drop do (`withoutNegativeZero` in objects.js; move it somewhere both files can share).
+    - Test: `tests/simulation/enemies.test.js` ("contact"), `tests/simulation/player.test.js` ("damage", the zero-knockback case)
+    - Code: `src/simulation/enemies.js`, `src/simulation/player.js`
   - [ ] 5.4 Stomping: landing on an enemy while falling defeats it regardless of health and bounces the player (req 52).
+    - Same -0 rule as 5.3: the bounce speed (`-stompBounceSpeed`) must come out as exactly 0, not -0, when `stompBounceSpeed` is 0. Include that case in the tests.
     - Test: `tests/simulation/enemies.test.js` ("stomp")
     - Code: `src/simulation/enemies.js`
   - [ ] 5.5 A thrown object defeats the enemy it hits, then falls so it can be picked up again (req 33).
