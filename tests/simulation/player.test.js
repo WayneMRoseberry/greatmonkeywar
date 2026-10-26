@@ -26,7 +26,7 @@ function assertMotion(player, expected, when) {
 describe('the Player structure', () => {
   // The one central declaration of the player's properties is the Player class.
   const PROPERTIES = ['x', 'y', 'width', 'height', 'vx', 'vy', 'onGround', 'facing', 'health', 'jumpHeld',
-    'invincibleTime', 'knockedBack', 'actionHeld'];
+    'invincibleTime', 'knockedBack', 'actionHeld', 'punchHeld', 'punchTime'];
 
   test('has exactly the declared properties', () => {
     assert.deepEqual(Object.keys(new Player()).sort(), [...PROPERTIES].sort());
@@ -37,7 +37,7 @@ describe('the Player structure', () => {
     assert.deepEqual({ ...player }, {
       x: 0, y: 0, width: 0, height: 0, vx: 0, vy: 0,
       onGround: false, facing: Facing.RIGHT, health: 0, jumpHeld: false,
-      invincibleTime: 0, knockedBack: false, actionHeld: false,
+      invincibleTime: 0, knockedBack: false, actionHeld: false, punchHeld: false, punchTime: 0,
     });
   });
 

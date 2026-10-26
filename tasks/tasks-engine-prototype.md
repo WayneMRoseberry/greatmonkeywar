@@ -330,16 +330,20 @@ These were completed before this approach was adopted: their tests were written 
     - Decided: a thrown object (still `thrown`, in flight) hits an enemy when their boxes overlap. This is checked each step once objects and enemies have moved, and before the player's contact with enemies, so an enemy hit that step can't hurt the player. Every enemy it overlaps in that step is defeated (`defeatEnemy`), whatever its health. The object then drops straight down: both speeds 0 and no longer `thrown`, so it can be picked up again at once and can't defeat another enemy as it falls. Only thrown objects defeat enemies: dropped, falling, resting, and held ones don't.
     - Test: `tests/simulation/enemies.test.js` ("thrown objects")
     - Code: `src/simulation/enemies.js` (`hitEnemiesWithThrownObjects`), `src/simulation/step.js`
-  - [ ] 5.6 Punch reach: one punch per press, in the facing direction, reaching from the player's body to the outer edge of the sprite frame, or of the shape when there's no sprite. Enemies just inside and just outside the reach (reqs 38–39).
-    - Test: `tests/simulation/punch.test.js` ("reach")
-    - Code: `src/simulation/punch.js`, `src/simulation/step.js`
+  - [x] 5.6 Punch reach: one punch per press, in the facing direction, reaching from the player's body to the outer edge of the sprite frame, or of the shape when there's no sprite. Enemies just inside and just outside the reach (reqs 38–39).
+    - Decided: the punch area (`punchArea`, punch.js) runs sideways from the player's front edge (the side they face, after this step's move) out to the edge of their sprite frame on that side. The frame is `frameWidth / pixelsPerTile` tiles wide, centred on the collision box. The area is as tall as the collision box. With no sprite, a sprite missing from the data, or a frame no wider than the body, it has no width: it is just the front edge. An enemy is in reach (`enemiesInReach`) if it overlaps or touches the area (`touches` in collision.js), so with no sprite exactly the enemies touching or overlapping the front edge are; enemies behind the player aren't. Only a new press punches (`Player.punchHeld`). A punch starts `Player.punchTime` at `punchSeconds` (tuning), which counts down each step for the renderer's flash. Punching in the air or while knocked back is allowed. `updatePunch` runs once everything has moved and before the player's contact with enemies. The hit itself (damage) is 5.7.
+    - Test: `tests/simulation/punch.test.js` ("reach", "one punch per press"), `tests/simulation/player.test.js` ("the Player structure")
+    - Code: `src/simulation/punch.js` (`punchArea`, `enemiesInReach`, `updatePunch`), `src/simulation/player.js` (`punchHeld`, `punchTime`), `src/simulation/step.js`
   - [ ] 5.7 Punch damage from the player definition reduces enemy health; the enemy is defeated at 0. Cases: damage 1 against health 1, and health greater than damage (req 40).
+    - Carried over from 5.6: `updatePunch` (punch.js) already detects a new press and starts the flash, and `enemiesInReach` gives the enemies a punch would hit. On the press step only, reduce each one's health by the player definition's `punchDamage` (default 1, docs/data-formats.md), and call `defeatEnemy` (enemies.js) for any that reach 0, so 5.10's defeat state applies to punches too. Holding the button must not damage again on later steps.
     - Test: `tests/simulation/punch.test.js` ("damage")
     - Code: `src/simulation/punch.js`
   - [ ] 5.8 No punching while carrying an object (req 41).
+    - Carried over from 5.6: stop the press in `updatePunch` while the player holds an object (`heldObject`, objects.js): no punch flash and no damage. Decide whether a press made while carrying still counts as "held" afterwards, so that letting go of the object while still holding punch doesn't punch.
     - Test: `tests/simulation/punch.test.js` ("carrying")
     - Code: `src/simulation/punch.js`
   - [ ] 5.9 A punch is resolved before contact damage in the same update (req 51).
+    - Carried over from 5.6: the order is already in place: `step()` calls `updatePunch` before `resolveEnemyContact`. This task's test checks it: an enemy that a punch defeats in the same step it would touch the player can't hurt them, and one the punch doesn't defeat still can.
     - Test: `tests/simulation/punch.test.js` ("order")
     - Code: `src/simulation/step.js`
   - [ ] 5.10 Defeated enemies are removed, after a short defeat state the renderer can flash (req 53).

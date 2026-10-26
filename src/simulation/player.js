@@ -35,6 +35,8 @@ export class Player {
   invincibleTime = 0;     // seconds of invincibility left after being damaged; the renderer flashes while > 0
   knockedBack = false;    // true from being damaged until landing: running input is ignored meanwhile
   actionHeld = false;     // whether action was held last step: only a new press picks up (objects.js)
+  punchHeld = false;      // whether punch was held last step: only a new press punches (punch.js)
+  punchTime = 0;          // seconds of punch flash left after a punch; the renderer flashes the punch area while > 0
 
   /** A Player with the given starting values; anything not given keeps its default. */
   constructor(values = {}) {
