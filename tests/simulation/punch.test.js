@@ -1,4 +1,4 @@
-// Tests for punching (task 5.6 reach, 5.7 damage; PRD reqs 38-40).
+// Tests for punching (task 5.6 reach, 5.7 damage, 5.8 carrying; PRD reqs 38-41).
 //
 // Decided for the reach:
 //  - the punch area runs sideways from the player's front edge (the side they
@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player } from '../../src/simulation/player.js';
 import { Enemy } from '../../src/simulation/enemies.js';
+import { CarriableObject } from '../../src/simulation/objects.js';
 import { punchArea, enemiesInReach } from '../../src/simulation/punch.js';
 import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
@@ -232,27 +233,29 @@ describe('one punch per press (req 38)', () => {
 // has none, docs/data-formats.md), and is defeated (defeatEnemy, enemies.js)
 // when its health reaches 0. Holding the button doesn't damage again.
 
+// Shared by the damage and carrying tests. The player has a sprite frame wider
+// than their body, so the punch reaches past their front edge; the test enemies
+// stand inside that reach, clear of the player, and barely move, so they stay in reach.
+const PUNCH = holding(Input.PUNCH);
+const WIDE_SHEET = spriteSheet(48);
+const CRAWLING = { speed: 0.0001 };
+const INSIDE_REACH = 0.1;   // tiles past the player's front edge; the WIDE_SHEET reach is wider than this
+
+/** A 1 × 1 enemy with `health`, on the ground, `offset` tiles past the player's front (they face right). */
+function enemyInFront(state, health, offset = INSIDE_REACH) {
+  const { player } = state;
+  return new Enemy({ type: 'beetle', x: right(player) + offset, y: player.y + player.height - 1, width: 1, height: 1,
+    health, facing: Facing.RIGHT });
+}
+
+/** A state facing right, with the WIDE_SHEET sprite, the player definition's punchDamage set, and one enemy of `health` in reach. */
+function oneEnemy({ punchDamage, health }) {
+  const state = punchState({ sheet: WIDE_SHEET, player: { punchDamage }, enemy: CRAWLING });
+  assert.ok(punchArea(state).width > INSIDE_REACH, 'the enemy starts inside the reach');
+  return { ...state, enemies: [enemyInFront(state, health)] };
+}
+
 describe('damage (req 40)', () => {
-  const PUNCH = holding(Input.PUNCH);
-  // The player has a sprite frame wider than their body, so the punch reaches past their front edge;
-  // the test enemies stand inside that reach, clear of the player, and barely move, so they stay in reach.
-  const WIDE = spriteSheet(48);
-  const CRAWLING = { speed: 0.0001 };
-  const INSIDE_REACH = 0.1;   // tiles past the player's front edge; the WIDE reach is wider than this
-
-  /** A 1 × 1 enemy with `health`, on the ground, `offset` tiles past the player's front (they face right). */
-  function enemyInFront(state, health, offset = INSIDE_REACH) {
-    const { player } = state;
-    return new Enemy({ type: 'beetle', x: right(player) + offset, y: player.y + player.height - 1, width: 1, height: 1,
-      health, facing: Facing.RIGHT });
-  }
-
-  /** A state facing right, with the WIDE sprite, the player definition's punchDamage set, and one enemy of `health` in reach. */
-  function oneEnemy({ punchDamage, health }) {
-    const state = punchState({ sheet: WIDE, player: { punchDamage }, enemy: CRAWLING });
-    assert.ok(punchArea(state).width > INSIDE_REACH, 'the enemy starts inside the reach');
-    return { ...state, enemies: [enemyInFront(state, health)] };
-  }
 
   test('damage 1 against health 1: the enemy is defeated', () => {
     const after = step(oneEnemy({ punchDamage: 1, health: 1 }), PUNCH, FIXED_DT);
@@ -315,11 +318,95 @@ describe('damage (req 40)', () => {
   test('every enemy in reach is damaged; enemies out of reach are not', () => {
     const punchDamage = 1;
     const health = 3;
-    const state = punchState({ sheet: WIDE, player: { punchDamage }, enemy: CRAWLING });
+    const state = punchState({ sheet: WIDE_SHEET, player: { punchDamage }, enemy: CRAWLING });
     const near = enemyInFront(state, health);
     const further = enemyInFront(state, health, 2 * INSIDE_REACH);
     const outOfReach = enemyInFront(state, health, 2);
     const after = step({ ...state, enemies: [near, further, outOfReach] }, PUNCH, FIXED_DT);
     assert.deepEqual(after.enemies.map((e) => e.health), [health - punchDamage, health - punchDamage, health]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.8: no punching while carrying (req 41). Decided:
+//  - "carrying" is judged once this step's pick-up, throw, or drop has
+//    happened: throw and punch pressed together throw and punch; pick-up and
+//    punch pressed together pick up and don't punch;
+//  - a press made while carrying is used up: the button still counts as held,
+//    so letting go of the object while holding punch doesn't punch; only a new
+//    press does.
+
+describe('carrying (req 41)', () => {
+  const HEALTH = 3;
+  const PUNCH_AND_ACTION = holding(Input.PUNCH, Input.ACTION);
+
+  /** The state with the player holding a 1 × 1 crate above their head. */
+  function holdingCrate(state) {
+    const { player } = state;
+    const crate = new CarriableObject({
+      type: 'crate', width: 1, height: 1, x: player.x + player.width / 2 - 0.5, y: player.y - 1, held: true,
+    });
+    return { ...state, objects: [...state.objects, crate] };
+  }
+
+  test('pressing punch while carrying doesn\'t punch: no flash and no damage', () => {
+    const state = holdingCrate(oneEnemy({ punchDamage: 1, health: HEALTH }));
+    const after = step(state, PUNCH, FIXED_DT);
+    assert.equal(after.player.punchTime, 0);
+    assert.equal(after.enemies[0].health, HEALTH);
+  });
+
+  test('a press made while carrying is used up: throwing while still holding punch doesn\'t punch', () => {
+    let state = holdingCrate(oneEnemy({ punchDamage: 1, health: HEALTH }));
+    state = step(state, PUNCH, FIXED_DT);              // pressed while carrying
+    assert.equal(state.player.punchTime, 0, 'no punch while carrying');
+    state = step(state, PUNCH_AND_ACTION, FIXED_DT);   // throws, punch still held
+    assert.equal(state.objects[0].held, false, 'the crate was thrown');
+    assert.equal(state.player.punchTime, 0, 'no punch on letting go');
+    for (let i = 0; i < 10; i++) {
+      state = step(state, PUNCH, FIXED_DT);
+      assert.equal(state.player.punchTime, 0, `no punch while still holding the button, step ${i}`);
+    }
+  });
+
+  test('after letting go, a new press of punch punches', () => {
+    let state = holdingCrate(oneEnemy({ punchDamage: 1, health: HEALTH }));
+    state = step(state, PUNCH, FIXED_DT);
+    state = step(state, PUNCH_AND_ACTION, FIXED_DT);   // throws
+    state = step(state, NO_INPUT, FIXED_DT);
+    state = step(state, PUNCH, FIXED_DT);
+    assert.equal(state.player.punchTime, PUNCH_SECONDS);
+  });
+
+  test('pressing throw and punch together throws and punches', () => {
+    const state = holdingCrate(oneEnemy({ punchDamage: 1, health: HEALTH }));
+    const after = step(state, PUNCH_AND_ACTION, FIXED_DT);
+    assert.equal(after.objects[0].held, false, 'the crate was thrown');
+    assert.equal(after.player.punchTime, PUNCH_SECONDS);
+  });
+
+  test('pressing drop and punch together drops and punches', () => {
+    const state = holdingCrate(oneEnemy({ punchDamage: 1, health: HEALTH }));
+    const after = step(state, holding(Input.DOWN, Input.ACTION, Input.PUNCH), FIXED_DT);
+    assert.equal(after.objects[0].held, false, 'the crate was dropped');
+    assert.equal(after.player.punchTime, PUNCH_SECONDS);
+  });
+
+  test('pressing pick-up and punch together picks up and doesn\'t punch', () => {
+    // A crate on the ground behind the player (they face right), touching their back.
+    const state = oneEnemy({ punchDamage: 1, health: HEALTH });
+    const { player } = state;
+    const crate = new CarriableObject({
+      type: 'crate', width: 1, height: 1, x: player.x - 1, y: player.y + player.height - 1, resting: true,
+    });
+    const after = step({ ...state, objects: [crate] }, PUNCH_AND_ACTION, FIXED_DT);
+    assert.equal(after.objects[0].held, true, 'the crate was picked up');
+    assert.equal(after.player.punchTime, 0);
+    assert.equal(after.enemies[0].health, HEALTH);
+  });
+
+  test('not carrying, punch works as usual', () => {
+    const after = step(oneEnemy({ punchDamage: 1, health: HEALTH }), PUNCH, FIXED_DT);
+    assert.equal(after.player.punchTime, PUNCH_SECONDS);
   });
 });

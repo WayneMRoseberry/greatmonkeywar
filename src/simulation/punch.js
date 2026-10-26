@@ -7,6 +7,7 @@ import { Facing } from './constants.js';
 import { Input } from './input.js';
 import { touches } from './collision.js';
 import { defeatEnemy } from './enemies.js';
+import { heldObject } from './objects.js';
 
 /**
  * How far the player's sprite frame reaches past their body on each side, in
@@ -57,13 +58,16 @@ const DEFAULT_PUNCH_DAMAGE = 1;
  * The punch hits on the step it is pressed (req 40): every enemy in reach
  * loses health equal to the player definition's punchDamage, and is defeated
  * (defeatEnemy) when its health reaches 0.
+ * No punching while carrying (req 41), judged after this step's pick-up,
+ * throw, or drop: a press made while carrying does nothing and is used up, so
+ * letting go of the object while still holding punch doesn't punch.
  */
 export function updatePunch(state, input, dt) {
   const { player } = state;
   player.punchTime = Math.max(0, player.punchTime - dt);
   const pressed = input[Input.PUNCH] && !player.punchHeld;
   player.punchHeld = input[Input.PUNCH];
-  if (!pressed) return;
+  if (!pressed || heldObject(state)) return;
 
   player.punchTime = state.data.tuning.punchSeconds;
   const damage = state.data.characters.player.punchDamage ?? DEFAULT_PUNCH_DAMAGE;
