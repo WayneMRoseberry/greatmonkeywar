@@ -1,4 +1,4 @@
-// Tests for punching (task 5.6 reach; PRD reqs 38-39).
+// Tests for punching (task 5.6 reach, 5.7 damage; PRD reqs 38-40).
 //
 // Decided for the reach:
 //  - the punch area runs sideways from the player's front edge (the side they
@@ -42,11 +42,13 @@ function spriteSheet(frameWidth) {
 /**
  * A state with a BODY-sized player, facing `facing`. With `sheet`, the player
  * has the sprite "hero" with that sheet; with `spriteName` but no sheet, the
- * player names a sprite that isn't in the data.
+ * player names a sprite that isn't in the data. `player` and `enemy` are
+ * fields merged into the player's and the beetle's definitions.
  */
-function punchState({ sheet, spriteName = sheet ? 'hero' : undefined, facing = Facing.RIGHT } = {}) {
+function punchState({ sheet, spriteName = sheet ? 'hero' : undefined, facing = Facing.RIGHT, player = {}, enemy = {} } = {}) {
   const data = buildData(GRID, {
-    player: { size: BODY, ...(spriteName ? { sprite: spriteName } : {}) },
+    player: { size: BODY, ...(spriteName ? { sprite: spriteName } : {}), ...player },
+    enemy,
     tuning: { punchSeconds: PUNCH_SECONDS },
   });
   if (sheet) data.sprites.hero = sheet;
@@ -221,5 +223,103 @@ describe('one punch per press (req 38)', () => {
     const after = step(punchState({ facing: Facing.RIGHT }), holding(Input.LEFT, Input.PUNCH), FIXED_DT);
     assert.equal(after.player.facing, Facing.LEFT);
     assert.ok(right(punchArea(after)) <= after.player.x + 1e-9, 'the punch area is on the player\'s left');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.7: punch damage (req 40). On the step a punch is pressed, every enemy
+// in reach loses health equal to the player definition's punchDamage (1 if it
+// has none, docs/data-formats.md), and is defeated (defeatEnemy, enemies.js)
+// when its health reaches 0. Holding the button doesn't damage again.
+
+describe('damage (req 40)', () => {
+  const PUNCH = holding(Input.PUNCH);
+  // The player has a sprite frame wider than their body, so the punch reaches past their front edge;
+  // the test enemies stand inside that reach, clear of the player, and barely move, so they stay in reach.
+  const WIDE = spriteSheet(48);
+  const CRAWLING = { speed: 0.0001 };
+  const INSIDE_REACH = 0.1;   // tiles past the player's front edge; the WIDE reach is wider than this
+
+  /** A 1 × 1 enemy with `health`, on the ground, `offset` tiles past the player's front (they face right). */
+  function enemyInFront(state, health, offset = INSIDE_REACH) {
+    const { player } = state;
+    return new Enemy({ type: 'beetle', x: right(player) + offset, y: player.y + player.height - 1, width: 1, height: 1,
+      health, facing: Facing.RIGHT });
+  }
+
+  /** A state facing right, with the WIDE sprite, the player definition's punchDamage set, and one enemy of `health` in reach. */
+  function oneEnemy({ punchDamage, health }) {
+    const state = punchState({ sheet: WIDE, player: { punchDamage }, enemy: CRAWLING });
+    assert.ok(punchArea(state).width > INSIDE_REACH, 'the enemy starts inside the reach');
+    return { ...state, enemies: [enemyInFront(state, health)] };
+  }
+
+  test('damage 1 against health 1: the enemy is defeated', () => {
+    const after = step(oneEnemy({ punchDamage: 1, health: 1 }), PUNCH, FIXED_DT);
+    assert.deepEqual(after.enemies, []);
+  });
+
+  test('health greater than damage: the enemy loses health equal to the damage and survives', () => {
+    const punchDamage = 1;
+    const health = 3;
+    const after = step(oneEnemy({ punchDamage, health }), PUNCH, FIXED_DT);
+    assert.equal(after.enemies.length, 1);
+    assert.equal(after.enemies[0].health, health - punchDamage);
+  });
+
+  test('the damage comes from the player definition', () => {
+    const punchDamage = 2;
+    const health = 3;
+    const after = step(oneEnemy({ punchDamage, health }), PUNCH, FIXED_DT);
+    assert.equal(after.enemies[0].health, health - punchDamage);
+  });
+
+  test('damage greater than the enemy\'s health defeats it', () => {
+    const after = step(oneEnemy({ punchDamage: 3, health: 2 }), PUNCH, FIXED_DT);
+    assert.deepEqual(after.enemies, []);
+  });
+
+  test('a player definition with no punchDamage deals 1', () => {
+    const defaultDamage = 1;   // docs/data-formats.md: punchDamage defaults to 1
+    const health = 3;
+    const state = oneEnemy({ punchDamage: 2, health });
+    const { punchDamage, ...withoutPunchDamage } = state.data.characters.player;
+    const data = { ...state.data, characters: { ...state.data.characters, player: withoutPunchDamage } };
+    const after = step({ ...state, data }, PUNCH, FIXED_DT);
+    assert.equal(after.enemies[0].health, health - defaultDamage);
+  });
+
+  test('not pressing punch does no damage', () => {
+    const health = 1;
+    const after = step(oneEnemy({ punchDamage: 1, health }), NO_INPUT, FIXED_DT);
+    assert.equal(after.enemies[0].health, health);
+  });
+
+  test('holding punch damages only once', () => {
+    const punchDamage = 1;
+    const health = 3;
+    let state = step(oneEnemy({ punchDamage, health }), PUNCH, FIXED_DT);
+    for (let i = 0; i < STEPS_PER_SECOND; i++) state = step(state, PUNCH, FIXED_DT);
+    assert.equal(state.enemies[0].health, health - punchDamage);
+  });
+
+  test('each new press damages again', () => {
+    const punchDamage = 1;
+    const health = 3;
+    let state = step(oneEnemy({ punchDamage, health }), PUNCH, FIXED_DT);
+    state = step(state, NO_INPUT, FIXED_DT);
+    state = step(state, PUNCH, FIXED_DT);
+    assert.equal(state.enemies[0].health, health - 2 * punchDamage);
+  });
+
+  test('every enemy in reach is damaged; enemies out of reach are not', () => {
+    const punchDamage = 1;
+    const health = 3;
+    const state = punchState({ sheet: WIDE, player: { punchDamage }, enemy: CRAWLING });
+    const near = enemyInFront(state, health);
+    const further = enemyInFront(state, health, 2 * INSIDE_REACH);
+    const outOfReach = enemyInFront(state, health, 2);
+    const after = step({ ...state, enemies: [near, further, outOfReach] }, PUNCH, FIXED_DT);
+    assert.deepEqual(after.enemies.map((e) => e.health), [health - punchDamage, health - punchDamage, health]);
   });
 });
