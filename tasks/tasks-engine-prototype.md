@@ -342,7 +342,7 @@ These were completed before this approach was adopted: their tests were written 
     - Code: `src/simulation/punch.js`
   - [x] 5.8 No punching while carrying an object (req 41).
     - Decided: carrying is judged once this step's pick-up, throw, or drop has happened. Throw (or drop) and punch pressed together throw (or drop) and punch; pick-up and punch pressed together pick up and don't punch. A press made while carrying does nothing (no flash, no damage) and is used up: the button still counts as held, so letting go of the object while holding punch doesn't punch, and only a new press does.
-    - Carried over from 5.6: stop the press in `updatePunch` while the player holds an object (`heldObject`, objects.js): no punch flash and no damage. Decide whether a press made while carrying still counts as "held" afterwards, so that letting go of the object while still holding punch doesn't punch.
+    - Carried over from 5.6: stop the press in `updatePunch` while the player holds an object (`heldObject`, objects.js): no punch flash and no damage. Decide whether a press made while carrying still counts as "held" afterwards, so that letting go of the object while still holding punch doesn't punch. 
     - Test: `tests/simulation/punch.test.js` ("carrying")
     - Code: `src/simulation/punch.js`
   - [ ] 5.9 A punch is resolved before contact damage in the same update (req 51).
