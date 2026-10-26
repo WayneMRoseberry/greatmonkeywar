@@ -14,7 +14,8 @@ import { Player } from './player.js';
 import { CarriableObject, settleResting } from './objects.js';
 import { rewardInCell } from './rewards.js';
 import { createEnemy } from './enemies.js';
-import { overlapsSolid } from './collision.js';
+import { overlapsSolid, overlapsBox } from './collision.js';
+import { CharacterKind } from './constants.js';
 
 const GRID_AND_LEGEND = "the level's grid and legend";
 
@@ -131,17 +132,31 @@ export function createLevelState(data, levelName) {
   const goalCell = step(levelName, 'placing the goal', GRID_AND_LEGEND, (fail) =>
     findOneCell(source, (e) => e.goal, 'goal', fail));
 
+  const enemyCells = findCells(source.grid, source.legend, (e) => e.enemy);
   const enemies = step(levelName, 'placing the enemies', "the level's legend and the character definitions (data/characters/)", (fail) =>
-    findCells(source.grid, source.legend, (e) => e.enemy).map(({ column, row, entry }) => {
+    enemyCells.map(({ column, row, entry }) => {
       const definition = data.characters[entry.enemy] ?? fail(`there is no character definition named "${entry.enemy}"`);
-      if (definition.kind !== 'enemy') fail(`"${entry.enemy}" is the player, not an enemy`);
+      if (definition.kind !== CharacterKind.ENEMY) fail(`"${entry.enemy}" is the player, not an enemy`);
       return createEnemy(placeInCell(column, row, definition.size.width, definition.size.height), entry, definition);
     }));
 
+  // As for the player: an enemy placed inside something solid could pass through it.
+  step(levelName, 'fitting the enemies', "the level's grid and legend, or the enemy's size in its character definition (data/characters/)", (fail) => {
+    enemies.forEach((enemy, i) => {
+      const tile = overlapsSolid(level, enemy);
+      const { row, column } = enemyCells[i];
+      if (tile) {
+        fail(`the enemy "${enemy.type}" at row ${row + 1}, column ${column + 1} (${enemy.width} × ${enemy.height} tiles) ` +
+          `would overlap the solid tile at row ${tile.row + 1}, column ${tile.column + 1}`);
+      }
+    });
+  });
+
   // Objects placed one above another start stacked (req 28): placement puts
   // each on its cell's bottom edge, so a 1-tile crate rests on the one below.
+  const objectCells = findCells(source.grid, source.legend, (e) => e.object);
   const objects = step(levelName, 'placing the objects', "the level's legend and the object definitions (data/objects/)", (fail) => {
-    const placed = findCells(source.grid, source.legend, (e) => e.object).map(({ column, row, entry }) => {
+    const placed = objectCells.map(({ column, row, entry }) => {
       const definition = data.objects[entry.object] ?? fail(`there is no object definition named "${entry.object}"`);
       return new CarriableObject({
         type: entry.object,
@@ -150,6 +165,23 @@ export function createLevelState(data, levelName) {
     });
     settleResting(level, placed, data.objects);   // which start at rest
     return placed;
+  });
+
+  // As for the player and enemies (task 4.11): an object placed inside something solid
+  // would rest inside a wall, as a solid surface there, or could fall through it. Nor may
+  // two objects start overlapping each other (touching is fine): one could get stuck inside the other.
+  step(levelName, 'fitting the objects', "the level's grid and legend, or the object's size in its definition (data/objects/)", (fail) => {
+    const where = (i) => `the object "${objects[i].type}" at row ${objectCells[i].row + 1}, column ${objectCells[i].column + 1}`;
+    objects.forEach((object, i) => {
+      const tile = overlapsSolid(level, object);
+      if (tile) {
+        fail(`${where(i)} (${object.width} × ${object.height} tiles) ` +
+          `would overlap the solid tile at row ${tile.row + 1}, column ${tile.column + 1}`);
+      }
+      for (let j = i + 1; j < objects.length; j++) {
+        if (overlapsBox(object, objects[j])) fail(`${where(i)} and ${where(j)} would overlap each other`);
+      }
+    });
   });
 
   const rewards = step(levelName, 'placing the rewards', GRID_AND_LEGEND, () =>

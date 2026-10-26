@@ -26,7 +26,7 @@ function assertMotion(player, expected, when) {
 describe('the Player structure', () => {
   // The one central declaration of the player's properties is the Player class.
   const PROPERTIES = ['x', 'y', 'width', 'height', 'vx', 'vy', 'onGround', 'facing', 'health', 'jumpHeld',
-    'invincibleTime', 'knockedBack', 'actionHeld'];
+    'invincibleTime', 'knockedBack', 'actionHeld', 'punchHeld', 'punchTime'];
 
   test('has exactly the declared properties', () => {
     assert.deepEqual(Object.keys(new Player()).sort(), [...PROPERTIES].sort());
@@ -37,7 +37,7 @@ describe('the Player structure', () => {
     assert.deepEqual({ ...player }, {
       x: 0, y: 0, width: 0, height: 0, vx: 0, vy: 0,
       onGround: false, facing: Facing.RIGHT, health: 0, jumpHeld: false,
-      invincibleTime: 0, knockedBack: false, actionHeld: false,
+      invincibleTime: 0, knockedBack: false, actionHeld: false, punchHeld: false, punchTime: 0,
     });
   });
 
@@ -484,6 +484,19 @@ describe('taking damage (reqs 24-25)', () => {
     const state = newState();
     assert.equal(damagePlayer(state, sourceAt(state, -1)), true);
     assert.equal(state.player.health, HEALTH - 1);
+  });
+
+  test('a knockback of 0 in tuning gives speeds of exactly 0, not -0, whichever way the player is knocked', () => {
+    // -0 would make otherwise equal states compare as different (deepEqual tells 0 and -0 apart).
+    for (const offset of [-1, 1]) {   // a source on the left (knocked right), then on the right (knocked left)
+      const state = createLevelState(buildData(GRID, {
+        player: { size: SIZE, speed: SPEED, health: HEALTH },
+        tuning: { invincibilitySeconds: INVINCIBILITY_SECONDS, knockback: { x: 0, y: 0 } },
+      }), TEST_LEVEL);
+      damagePlayer(state, sourceAt(state, offset));
+      assert.equal(state.player.vx, 0, `vx with the source at ${offset}`);
+      assert.equal(state.player.vy, 0, `vy with the source at ${offset}`);
+    }
   });
 
   test('becomes invincible for invincibilitySeconds', () => {

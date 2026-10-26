@@ -8,5 +8,6 @@
   "knockback": { "x": 6, "y": 6 },
   "invincibilitySeconds": 1,
   "stompBounceSpeed": 10,
-  "punchSeconds": 0.15
+  "punchSeconds": 0.15,
+  "defeatSeconds": 0.5
 }

@@ -14,3 +14,40 @@ export const Facing = Object.freeze({
   LEFT: 'left',
   RIGHT: 'right',
 });
+
+/**
+ * The kinds a level's legend entry can be: each entry has exactly one of these
+ * fields (src/data/schemas/level.schema.json, checked by src/data/validate.js).
+ * Listed in the order docs/data-formats.md and the validator's messages use.
+ * Use these names in checks such as `LegendKind.GOAL in entry`; reading a
+ * field's value stays plain (`entry.goal`). A test keeps them in sync with
+ * the schema.
+ */
+export const LegendKind = Object.freeze({
+  TILE: 'tile',
+  PLAYER_START: 'playerStart',
+  GOAL: 'goal',
+  ENEMY: 'enemy',
+  OBJECT: 'object',
+  REWARD: 'reward',
+});
+
+/**
+ * The other fields a legend entry may have, each belonging with one kind:
+ * `color` with a goal, `facing` with an enemy. With LegendKind, these are all
+ * the fields a legend entry may have; a test keeps them in sync with the schema.
+ */
+export const LegendField = Object.freeze({
+  COLOR: 'color',
+  FACING: 'facing',
+});
+
+/**
+ * The kinds of character a character definition can be (its "kind" field,
+ * src/data/schemas/character.schema.json). A test keeps them in sync with the
+ * schema.
+ */
+export const CharacterKind = Object.freeze({
+  PLAYER: 'player',
+  ENEMY: 'enemy',
+});

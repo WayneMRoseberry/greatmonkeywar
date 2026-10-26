@@ -20,7 +20,8 @@
 
 import { checkSchema, typeOf } from './schema-check.js';
 import { placeInCell } from '../simulation/state.js';
-import { overlapsSolid } from '../simulation/collision.js';
+import { overlapsSolid, overlapsBox } from '../simulation/collision.js';
+import { LegendKind, LegendField, CharacterKind } from '../simulation/constants.js';
 import levelSchema from './schemas/level.schema.json' with { type: 'json' };
 import levelListSchema from './schemas/level-list.schema.json' with { type: 'json' };
 import characterSchema from './schemas/character.schema.json' with { type: 'json' };
@@ -51,7 +52,7 @@ export const REQUIRED_FILES = [
   'config/display.json',
 ];
 
-const LEGEND_KINDS = ['tile', 'playerStart', 'goal', 'enemy', 'object', 'reward'];
+const LEGEND_KINDS = Object.values(LegendKind);
 
 export function formatProblem({ file, message }) {
   return `${file}: ${message}`;
@@ -348,6 +349,18 @@ const MESSAGES = {
   'player-does-not-fit': ({ width, height, row, column }) =>
     `the player (${width} × ${height} tiles, set in characters/player.json) doesn't fit at the start: ` +
     `it would overlap the solid tile at row ${row}, column ${column}. Make more room around the start, or make the player smaller.`,
+  'enemy-does-not-fit': ({ key, name, width, height, at, row, column }) =>
+    `the enemy "${name}" (legend "${key}", at row ${at.row}, column ${at.column}) doesn't fit there: ` +
+    `at ${width} × ${height} tiles (set in characters/${name}.json) it would overlap the solid tile at row ${row}, column ${column}. ` +
+    'Make more room around it, or make the enemy smaller.',
+  'objects-overlap': ({ first, second }) =>
+    `the object "${first.name}" (legend "${first.key}", at row ${first.at.row}, column ${first.at.column}) and ` +
+    `the object "${second.name}" (legend "${second.key}", at row ${second.at.row}, column ${second.at.column}) ` +
+    'would overlap each other. Move them apart, or make them smaller.',
+  'object-does-not-fit': ({ key, name, width, height, at, row, column }) =>
+    `the object "${name}" (legend "${key}", at row ${at.row}, column ${at.column}) doesn't fit there: ` +
+    `at ${width} × ${height} tiles (set in objects/${name}.json) it would overlap the solid tile at row ${row}, column ${column}. ` +
+    'Make more room around it, or make the object smaller.',
   'missing-layer-image': ({ layer, image }) => `background layer ${layer} uses the image "${image}", but there is no file data/${image}.`,
 
   // Level list
@@ -413,6 +426,8 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
   const used = new Set();
   const starts = [];
   const goals = [];
+  const enemyPlacements = [];
+  const objectPlacements = [];
   grid.forEach((row, r) => {
     [...row].forEach((ch, c) => {
       if (ch === '.') return;
@@ -426,6 +441,8 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
       used.add(ch);
       if (entry.playerStart) starts.push({ row: r + 1, column: c + 1 });
       if (entry.goal) goals.push({ row: r + 1, column: c + 1 });
+      if (entry.enemy) enemyPlacements.push({ key: ch, name: entry.enemy, at: { row: r + 1, column: c + 1 } });
+      if (entry.object) objectPlacements.push({ key: ch, name: entry.object, at: { row: r + 1, column: c + 1 } });
     });
   });
   for (const details of unknown.values()) error(path, 'unknown-character', details);
@@ -434,21 +451,32 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
     checkPlayerFits(path, level, starts[0], data.characters.player, error);
   }
   if (goals.length !== 1) error(path, 'goal-count', { count: goals.length, positions: goals });
+  for (const placement of enemyPlacements) {
+    const definition = data.characters[placement.name];
+    // A missing, broken, or non-enemy definition is reported elsewhere; there is no size to check then.
+    if (validFiles.has(`characters/${placement.name}.json`) && definition.kind === CharacterKind.ENEMY) {
+      checkEnemyFits(path, level, placement, definition, error);
+    }
+  }
+  // A missing or broken object definition is reported elsewhere; there is no size to check then.
+  const sizedObjects = objectPlacements.filter(({ name }) => validFiles.has(`objects/${name}.json`));
+  for (const placement of sizedObjects) checkObjectFits(path, level, placement, data.objects[placement.name], error);
+  checkObjectsApart(path, sizedObjects, data.objects, error);
 
   // Legend entries
   for (const [key, entry] of Object.entries(legend)) {
     const kinds = LEGEND_KINDS.filter((k) => k in entry);
     if (kinds.length === 0) error(path, 'legend-no-kind', { key });
     else if (kinds.length > 1) error(path, 'legend-many-kinds', { key, kinds });
-    if ('color' in entry && !('goal' in entry)) error(path, 'legend-stray-color', { key });
-    if ('goal' in entry && !('color' in entry)) error(path, 'goal-without-color', { key });
-    if ('facing' in entry && !('enemy' in entry)) error(path, 'legend-stray-facing', { key });
-    if ('enemy' in entry) {
+    if (LegendField.COLOR in entry && !(LegendKind.GOAL in entry)) error(path, 'legend-stray-color', { key });
+    if (LegendKind.GOAL in entry && !(LegendField.COLOR in entry)) error(path, 'goal-without-color', { key });
+    if (LegendField.FACING in entry && !(LegendKind.ENEMY in entry)) error(path, 'legend-stray-facing', { key });
+    if (LegendKind.ENEMY in entry) {
       if (!names.character.has(entry.enemy)) error(path, 'missing-enemy', { key, name: entry.enemy });
       // A wrong "kind" in another character file is reported on that file, not on every level using it.
       else if (entry.enemy === 'player') error(path, 'enemy-is-player', { key, name: entry.enemy });
     }
-    if ('object' in entry && !names.object.has(entry.object)) error(path, 'missing-object', { key, name: entry.object });
+    if (LegendKind.OBJECT in entry && !names.object.has(entry.object)) error(path, 'missing-object', { key, name: entry.object });
     if (!used.has(key)) warn(path, 'unused-legend', { key });
   }
 
@@ -467,14 +495,62 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
  * `start` counts rows and columns from 1, as in messages.
  */
 function checkPlayerFits(path, level, start, player, error) {
+  const tile = overlappedTile(level, start, player.size);
+  if (tile) error(path, 'player-does-not-fit', { ...player.size, ...tile });
+}
+
+/**
+ * Likewise, an enemy must not start inside something solid (createLevelState
+ * refuses to build such a level too). Every placement is checked.
+ */
+function checkEnemyFits(path, level, { key, name, at }, enemy, error) {
+  const tile = overlappedTile(level, at, enemy.size);
+  if (tile) error(path, 'enemy-does-not-fit', { key, name, ...enemy.size, at, ...tile });
+}
+
+/**
+ * Likewise for objects (task 4.11): an object must not start inside something
+ * solid, where it could rest inside a wall or fall through it
+ * (createLevelState refuses to build such a level too). Every placement is checked.
+ */
+function checkObjectFits(path, level, { key, name, at }, object, error) {
+  const tile = overlappedTile(level, at, object.size);
+  if (tile) error(path, 'object-does-not-fit', { key, name, ...object.size, at, ...tile });
+}
+
+/**
+ * No two objects may start overlapping each other (touching is fine, so
+ * stacked crates are), whatever their kinds: an object starting inside another
+ * could get stuck inside it (createLevelState refuses such a level too). Each
+ * overlapping pair is reported once, in grid order. `placements` count rows
+ * and columns from 1; `definitions` is data.objects.
+ */
+function checkObjectsApart(path, placements, definitions, error) {
+  const boxes = placements.map(({ name, at }) => {
+    const { width, height } = definitions[name].size;
+    return placeInCell(at.column - 1, at.row - 1, width, height);
+  });
+  for (let i = 0; i < placements.length; i++) {
+    for (let j = i + 1; j < placements.length; j++) {
+      if (!overlapsBox(boxes[i], boxes[j])) continue;
+      const describe = ({ key, name, at }) => ({ key, name, at });
+      error(path, 'objects-overlap', { first: describe(placements[i]), second: describe(placements[j]) });
+    }
+  }
+}
+
+/**
+ * The first solid tile that something of `size`, placed in the cell `at` by
+ * the game's own placement rule, would overlap, as { row, column } counting
+ * from 1; or null. `at` counts from 1 too, as in messages.
+ */
+function overlappedTile(level, at, { width, height }) {
   const tileTypes = {};
   for (const [ch, entry] of Object.entries(level.legend)) if (entry.tile) tileTypes[ch] = entry.tile;
   // Non-tile characters (P, G, enemies, ...) have no tile type, so they count as empty space.
   const tiles = { width: level.grid[0].length, height: level.grid.length, grid: level.grid, tileTypes };
-  const { width, height } = player.size;
-  const box = placeInCell(start.column - 1, start.row - 1, width, height);
-  const tile = overlapsSolid(tiles, box);
-  if (tile) error(path, 'player-does-not-fit', { width, height, row: tile.row + 1, column: tile.column + 1 });
+  const tile = overlapsSolid(tiles, placeInCell(at.column - 1, at.row - 1, width, height));
+  return tile && { row: tile.row + 1, column: tile.column + 1 };
 }
 
 function checkLevelList({ path, value }, { names, error }) {
@@ -489,9 +565,9 @@ function checkSpriteReference(path, owner, names, error) {
 }
 
 function checkCharacter({ path, name, value }, { names, error }) {
-  if (name === 'player' && value.kind !== 'player') error(path, 'player-kind', { kind: value.kind });
-  if (name !== 'player' && value.kind !== 'enemy') error(path, 'enemy-kind', { kind: value.kind });
-  if (value.kind === 'enemy' && 'punchDamage' in value) error(path, 'enemy-punch-damage');
+  if (name === 'player' && value.kind !== CharacterKind.PLAYER) error(path, 'player-kind', { kind: value.kind });
+  if (name !== 'player' && value.kind !== CharacterKind.ENEMY) error(path, 'enemy-kind', { kind: value.kind });
+  if (value.kind === CharacterKind.ENEMY && 'punchDamage' in value) error(path, 'enemy-punch-damage');
   checkSpriteReference(path, value, names, error);
 }
 

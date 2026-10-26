@@ -134,6 +134,9 @@ Errors:
 - a legend entry that isn't an enemy has `facing`, or an enemy's `facing` is not `"left"` or `"right"`;
 - not exactly one `playerStart` or exactly one `goal` in the grid;
 - the player (sized by `characters/player.json`, placed bottom-centre on the start cell) would overlap a solid tile;
+- an enemy (sized by its character file, placed bottom-centre on its cell) would overlap a solid tile; every placement is checked;
+- an object (sized by its object file, placed bottom-centre on its cell) would overlap a solid tile; every placement is checked;
+- two objects would overlap each other (touching is fine, so stacked crates are); each overlapping pair is reported;
 - `enemy` names a character file that doesn't exist, or `object` names an object file that doesn't exist;
 - `cutscene` names a cut scene file that doesn't exist;
 - a layer `image` file doesn't exist;
@@ -337,7 +340,8 @@ Validation: the image file must exist, and every frame number must fit inside th
   "knockback": { "x": 6, "y": 6 },
   "invincibilitySeconds": 1,
   "stompBounceSpeed": 10,
-  "punchSeconds": 0.15
+  "punchSeconds": 0.15,
+  "defeatSeconds": 0.5
 }
 ```
 
@@ -353,6 +357,7 @@ Validation: the image file must exist, and every frame number must fit inside th
 | `invincibilitySeconds` | yes | number ≥ 0 | How long after taking damage the player can't be damaged again (req 25). |
 | `stompBounceSpeed` | yes | number > 0, tiles/s | The player's upward speed after stomping an enemy (req 52). |
 | `punchSeconds` | yes | number > 0 | How long a punch's flash is shown. The hit itself happens once, on the press. |
+| `defeatSeconds` | yes | number ≥ 0 | How long a defeated enemy stays, frozen and harmless, so it can be shown flashing, before it is removed (req 53). `0` removes it at once. |
 
 In this file `y` means "upward", so every value is positive. (In world coordinates `y` increases downwards; the engine converts.)
 

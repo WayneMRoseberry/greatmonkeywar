@@ -47,7 +47,7 @@ const DEFAULT_OBJECTS = {
 const DEFAULT_TUNING = {
   formatVersion: 1, gravity: 35, maxFallSpeed: 20, jumpSpeed: 14,
   throwSpeed: { x: 10, y: 6 }, dropSpeed: { x: 0, y: 0 }, knockback: { x: 6, y: 6 },
-  invincibilitySeconds: 1, stompBounceSpeed: 10, punchSeconds: 0.15,
+  invincibilitySeconds: 1, stompBounceSpeed: 10, punchSeconds: 0.15, defeatSeconds: 0.5,
 };
 
 const DEFAULT_BINDINGS = {

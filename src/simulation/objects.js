@@ -9,6 +9,7 @@
 
 import { Facing } from './constants.js';
 import { Input } from './input.js';
+import { withoutNegativeZero } from './numbers.js';
 import { touches, fitsIn, moveBox, isSupported, isOnTopOf, freeYAbove } from './collision.js';
 
 /**
@@ -176,12 +177,6 @@ export function updateObjects(state, input) {
     }
   }
 }
-
-/**
- * `speed`, with -0 (from negating or flipping a speed of 0) turned into 0, so
- * states that are equal also compare as equal (deepEqual tells 0 and -0 apart).
- */
-const withoutNegativeZero = (speed) => speed + 0;
 
 /** Where `object` goes down beside the player's feet on `side` (+1 right, -1 left): flush against the player, bottoms level. */
 function besideFeet(object, player, side) {
