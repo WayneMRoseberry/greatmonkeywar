@@ -101,9 +101,13 @@ function buildLevel(source) {
 /**
  * The state at the start of level `levelName`. `data` is validated game data
  * (see src/data/validate.js); it is kept by reference and never changed.
+ * `carry` ({ health, rewardCount }, optional) is what the player brings from
+ * the level before (req 59): the player starts with that health and reward
+ * count instead of the definition's health and 0, and so does the level-start
+ * snapshot, so a restart goes back to them.
  * Throws a LevelDataError if the level can't be built.
  */
-export function createLevelState(data, levelName) {
+export function createLevelState(data, levelName, carry) {
   const source = step(levelName, 'finding the level', 'the level list and level files', (fail) =>
     data.levels[levelName] ?? fail(`there is no level named "${levelName}" in the data`));
 
@@ -115,7 +119,7 @@ export function createLevelState(data, levelName) {
   const player = step(levelName, 'creating the player', 'the player definition (characters/player.json)', (fail) => {
     const definition = data.characters.player ?? fail('there is no player definition');
     const box = placeInCell(startCell.column, startCell.row, definition.size.width, definition.size.height);
-    return new Player({ ...box, health: definition.health });   // everything else starts at Player's defaults
+    return new Player({ ...box, health: carry?.health ?? definition.health });   // everything else starts at Player's defaults
   });
 
   // The player must not start inside something solid: collision only stops boxes
@@ -197,7 +201,7 @@ export function createLevelState(data, levelName) {
     enemies,
     objects,
     rewards,
-    rewardCount: 0,
+    rewardCount: carry?.rewardCount ?? 0,
     time: 0,
   };
   state.levelStart = {
