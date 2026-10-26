@@ -51,9 +51,10 @@ export function enemiesInReach(state) {
 const DEFAULT_PUNCH_DAMAGE = 1;
 
 /**
- * One step of punching, once the player has moved and turned (req 38): a new
- * press of punch punches, in the direction the player now faces; holding the
- * button doesn't punch again. A punch starts the punch flash, punchTime, at
+ * One step of punching (req 38), once the player has moved and turned. step()
+ * runs it before enemies move, so a punch hits what the player could see when
+ * they pressed (task 5.9). A new press of punch punches, in the direction the
+ * player now faces; holding the button doesn't punch again. A punch starts the punch flash, punchTime, at
  * punchSeconds (tuning); it counts down each step.
  * The punch hits on the step it is pressed (req 40): every enemy in reach
  * loses health equal to the player definition's punchDamage, and is defeated

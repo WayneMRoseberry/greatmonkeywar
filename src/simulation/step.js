@@ -61,9 +61,12 @@ export function step(state, input, dt) {
   updatePlayer(next, input, dt);
   updateObjects(next, input);   // after the player moves, so a held object follows them
   updateFalling(next, dt);      // after updateObjects, so thrown and dropped objects move at once
+  // After the player moves and after pick-up, throw, and drop (no punching while carrying, req 41),
+  // but before enemies move, so a punch hits what the player saw when they pressed (task 5.9);
+  // and before the player's contact, so an enemy it defeats can't hurt them (req 51).
+  updatePunch(next, input, dt);
   updateEnemies(next, dt);      // after objects, so they walk on crates as they now are
   hitEnemiesWithThrownObjects(next);   // before the player's contact, so an enemy hit this step can't hurt them
-  updatePunch(next, input, dt);        // once everything has moved, before the player's contact (req 51)
   resolveEnemyContact(next, state.player);   // stomps, then contact damage, once everything has moved; state.player is where the player started
   collectRewards(next);
   // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.

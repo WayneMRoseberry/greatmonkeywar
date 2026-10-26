@@ -1,4 +1,4 @@
-// Tests for punching (task 5.6 reach, 5.7 damage, 5.8 carrying; PRD reqs 38-41).
+// Tests for punching (tasks 5.6 reach, 5.7 damage, 5.8 carrying, 5.9 order; PRD reqs 38-41, 51).
 //
 // Decided for the reach:
 //  - the punch area runs sideways from the player's front edge (the side they
@@ -408,5 +408,64 @@ describe('carrying (req 41)', () => {
   test('not carrying, punch works as usual', () => {
     const after = step(oneEnemy({ punchDamage: 1, health: HEALTH }), PUNCH, FIXED_DT);
     assert.equal(after.player.punchTime, PUNCH_SECONDS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.9: order (req 51). Decided: the punch is resolved after the player
+// moves (and after this step's pick-up, throw, or drop), but before enemies
+// move, so it hits what the player could see when they pressed (the last
+// frame drawn shows enemies before this step's move); and before contact
+// damage, so an enemy the punch defeats can't hurt the player that step.
+
+describe('order (req 51)', () => {
+  const PATROL = { speed: 2 };   // tiles/s: enemies here walk at a normal pace
+
+  /** A state facing right with no sprite, its enemy definition `enemy`, and one enemy of `health`. */
+  function withEnemy({ health, x, facing, enemy = PATROL, punchDamage = 1 }) {
+    const state = punchState({ player: { punchDamage }, enemy });
+    const { player } = state;
+    const placed = new Enemy({ type: 'beetle', x: x(player), y: player.y + player.height - 1, width: 1, height: 1, health, facing });
+    return { ...state, enemies: [placed] };
+  }
+
+  /** An enemy overlapping the player's front edge, walking into them. */
+  const overlappingFront = (health) => withEnemy({ health, x: (p) => right(p) - 0.5, facing: Facing.LEFT });
+
+  test('an enemy touching the player hurts them when not punched', () => {
+    const state = overlappingFront(1);
+    assert.equal(step(state, NO_INPUT, FIXED_DT).player.health, state.player.health - 1);
+  });
+
+  test('an enemy the punch defeats in the step it touches the player can\'t hurt them', () => {
+    const state = overlappingFront(1);
+    const after = step(state, PUNCH, FIXED_DT);
+    assert.deepEqual(after.enemies, [], 'the punch defeated it');
+    assert.equal(after.player.health, state.player.health);
+  });
+
+  test('an enemy the punch doesn\'t defeat still hurts the player in that step', () => {
+    const health = 3;
+    const state = overlappingFront(health);
+    const after = step(state, PUNCH, FIXED_DT);
+    assert.equal(after.enemies[0].health, health - 1, 'the punch hit it');
+    assert.equal(after.player.health, state.player.health - 1);
+  });
+
+  test('with no sprite, an enemy flush against the player\'s front and walking away is still punched', () => {
+    // At the press it touches the player's front edge; during the step it walks a little away.
+    const health = 3;
+    const state = withEnemy({ health, x: right, facing: Facing.RIGHT });
+    const after = step(state, PUNCH, FIXED_DT);
+    assert.equal(after.enemies[0].health, health - 1);
+  });
+
+  test('an enemy just out of reach that walks into reach during the step isn\'t punched by that press', () => {
+    const gap = 0.01;   // smaller than one step's walk, so it reaches the player during the step
+    const health = 3;
+    const state = withEnemy({ health, x: (p) => right(p) + gap, facing: Facing.LEFT });
+    assert.ok(PATROL.speed * FIXED_DT > gap);
+    const after = step(state, PUNCH, FIXED_DT);
+    assert.equal(after.enemies[0].health, health);
   });
 });
