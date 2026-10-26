@@ -19,7 +19,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player } from '../../src/simulation/player.js';
-import { Enemy } from '../../src/simulation/enemies.js';
+import { Enemy, liveEnemies } from '../../src/simulation/enemies.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
 import { punchArea, enemiesInReach } from '../../src/simulation/punch.js';
 import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
@@ -259,14 +259,14 @@ describe('damage (req 40)', () => {
 
   test('damage 1 against health 1: the enemy is defeated', () => {
     const after = step(oneEnemy({ punchDamage: 1, health: 1 }), PUNCH, FIXED_DT);
-    assert.deepEqual(after.enemies, []);
+    assert.deepEqual(liveEnemies(after), []);
   });
 
   test('health greater than damage: the enemy loses health equal to the damage and survives', () => {
     const punchDamage = 1;
     const health = 3;
     const after = step(oneEnemy({ punchDamage, health }), PUNCH, FIXED_DT);
-    assert.equal(after.enemies.length, 1);
+    assert.equal(liveEnemies(after).length, 1);
     assert.equal(after.enemies[0].health, health - punchDamage);
   });
 
@@ -279,7 +279,7 @@ describe('damage (req 40)', () => {
 
   test('damage greater than the enemy\'s health defeats it', () => {
     const after = step(oneEnemy({ punchDamage: 3, health: 2 }), PUNCH, FIXED_DT);
-    assert.deepEqual(after.enemies, []);
+    assert.deepEqual(liveEnemies(after), []);
   });
 
   test('a player definition with no punchDamage deals 1', () => {
@@ -440,7 +440,7 @@ describe('order (req 51)', () => {
   test('an enemy the punch defeats in the step it touches the player can\'t hurt them', () => {
     const state = overlappingFront(1);
     const after = step(state, PUNCH, FIXED_DT);
-    assert.deepEqual(after.enemies, [], 'the punch defeated it');
+    assert.deepEqual(liveEnemies(after), [], 'the punch defeated it');
     assert.equal(after.player.health, state.player.health);
   });
 

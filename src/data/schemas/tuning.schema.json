@@ -5,7 +5,7 @@
   "description": "Shared gameplay physics values (data/config/tuning.json). In this file y means upward. See docs/data-formats.md.",
   "type": "object",
   "required": ["formatVersion", "gravity", "maxFallSpeed", "jumpSpeed", "throwSpeed", "dropSpeed",
-               "knockback", "invincibilitySeconds", "stompBounceSpeed", "punchSeconds"],
+               "knockback", "invincibilitySeconds", "stompBounceSpeed", "punchSeconds", "defeatSeconds"],
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
@@ -18,7 +18,8 @@
     "knockback": { "$ref": "#/$defs/velocity" },
     "invincibilitySeconds": { "type": "number", "minimum": 0 },
     "stompBounceSpeed": { "type": "number", "exclusiveMinimum": 0 },
-    "punchSeconds": { "type": "number", "exclusiveMinimum": 0 }
+    "punchSeconds": { "type": "number", "exclusiveMinimum": 0 },
+    "defeatSeconds": { "type": "number", "minimum": 0 }
   },
   "$defs": {
     "velocity": {

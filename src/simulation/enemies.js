@@ -30,6 +30,7 @@ export class Enemy {
   vy = 0;                 // vertical speed: + is falling, - is rising
   facing = Facing.LEFT;   // the direction it walks (Facing)
   health = 0;             // starts at the character definition's health (req 40)
+  defeatTime = 0;         // seconds of defeat state left; more than 0 means defeated (frozen, harmless; the renderer flashes it)
 
   /** An Enemy with the given starting values; anything not given keeps its default. */
   constructor(values = {}) {
@@ -92,7 +93,7 @@ export function updateEnemies(state, dt) {
   const { gravity, maxFallSpeed } = state.data.tuning;
   const allSolids = solidObjects(state);
 
-  for (const enemy of state.enemies) {
+  for (const enemy of liveEnemies(state)) {   // defeated enemies are frozen (task 5.10)
     const solids = allSolids.filter((solid) => !overlapsBox(enemy, solid));
     const direction = enemy.facing === Facing.RIGHT ? 1 : -1;
     const standing = isSupported(level, enemy, solids);
@@ -139,12 +140,52 @@ function touchesFromAbove(player, before, enemy) {
 // Allowance for rounding error when comparing the player's feet with an enemy's top.
 const TOUCH_EPS = 1e-9;
 
+/** True if `enemy` has been defeated and is in its defeat state (task 5.10). */
+export const isDefeated = (enemy) => enemy.defeatTime > 0;
+
 /**
- * Defeats `enemy`, whatever its health (stomps, thrown objects, punches).
- * For now it is removed at once; task 5.10 adds a short defeat state first.
+ * The enemies that haven't been defeated. Only these walk, fall, hurt the
+ * player, and can be stomped, punched, or hit by a thrown object.
+ */
+export function liveEnemies(state) {
+  return state.enemies.filter((enemy) => !isDefeated(enemy));
+}
+
+/**
+ * Defeats `enemy`, whatever its health (stomps, thrown objects, punches; req
+ * 53). It goes into its defeat state for defeatSeconds (tuning): frozen where
+ * it is and harmless, so the renderer can flash it, then removed
+ * (updateDefeated). With defeatSeconds 0 it is removed at once. Defeating an
+ * enemy that is already defeated does nothing.
  */
 export function defeatEnemy(state, enemy) {
-  state.enemies = state.enemies.filter((e) => e !== enemy);
+  if (isDefeated(enemy)) return;
+  const { defeatSeconds } = state.data.tuning;
+  if (defeatSeconds <= 0) {
+    state.enemies = state.enemies.filter((e) => e !== enemy);
+    return;
+  }
+  enemy.defeatTime = defeatSeconds;
+  enemy.vx = 0;
+  enemy.vy = 0;
+}
+
+// Allowance for rounding error when a defeat state's time has run out.
+const TIME_EPS = 1e-9;
+
+/**
+ * The defeat state counting down (task 5.10), at the start of each step, so
+ * every way of defeating an enemy gets the full defeatSeconds. An enemy whose
+ * time has run out is removed.
+ */
+export function updateDefeated(state, dt) {
+  const timeUp = [];
+  for (const enemy of state.enemies) {
+    if (!isDefeated(enemy)) continue;
+    enemy.defeatTime = Math.max(0, enemy.defeatTime - dt);
+    if (enemy.defeatTime <= TIME_EPS) timeUp.push(enemy);
+  }
+  if (timeUp.length > 0) state.enemies = state.enemies.filter((enemy) => !timeUp.includes(enemy));
 }
 
 /**
@@ -166,7 +207,7 @@ export function hitEnemiesWithThrownObjects(state) {
     // steps per second), a throw could pass through a thin enemy without
     // hitting it. To fix: test the area the object swept this step (its box
     // before and after the move, joined) instead of only its final box.
-    const hit = state.enemies.filter((enemy) => overlapsBox(object, enemy));
+    const hit = liveEnemies(state).filter((enemy) => overlapsBox(object, enemy));
     if (hit.length === 0) continue;
     for (const enemy of hit) defeatEnemy(state, enemy);
     object.vx = 0;
@@ -191,7 +232,7 @@ export function hitEnemiesWithThrownObjects(state) {
  */
 export function resolveEnemyContact(state, before) {
   const { player } = state;
-  const touched = state.enemies.filter((enemy) => overlapsBox(player, enemy));
+  const touched = liveEnemies(state).filter((enemy) => overlapsBox(player, enemy));
   const stomped = touched.filter((enemy) => touchesFromAbove(player, before, enemy));
   for (const enemy of stomped) defeatEnemy(state, enemy);
   if (stomped.length > 0) {

@@ -221,6 +221,8 @@ VS Code will then underline mistakes as you type and suggest field names. The ga
 | "the level has no player start" / "has 2 goals" | Each level needs exactly one `P`-type and one `G`-type character. |
 | "the player ... doesn't fit at the start" | The hero is bigger than the space around the start. The hero stands on the bottom of the start's square and is about 1½ tiles tall, so leave open space above the start, and beside it if the hero is wide. |
 | "the enemy ... doesn't fit there" | An enemy is bigger than the space where you placed it. It stands on the bottom of its square, so leave open space above it if it is tall, and beside it if it is wide. The message gives the row and column of the enemy and of the tile in the way. |
+| "the object ... doesn't fit there" | The same, for an object such as a crate or plank that is bigger than the space where you placed it. Leave open space above a tall object and beside a wide one. |
+| "... would overlap each other" | Two objects are placed so close that they overlap, for example a plank wider than one tile right next to a crate. Leave an empty square between them, or make one smaller. Objects that only touch, such as crates stacked one on another, are fine. |
 | "is not a field that belongs here" | A field name is misspelled, for example `"colour"` instead of `"color"`. |
 | "there is no file data/…" | A name or image path doesn't match a real file. Check the spelling, and that names don't include `.json`. |
 

@@ -244,7 +244,7 @@ describe('enemies (reqs 40, 48)', () => {
   });
 
   test('the Enemy structure has exactly the declared properties', () => {
-    const PROPERTIES = ['type', 'x', 'y', 'width', 'height', 'vx', 'vy', 'facing', 'health'];
+    const PROPERTIES = ['type', 'x', 'y', 'width', 'height', 'vx', 'vy', 'facing', 'health', 'defeatTime'];
     assert.deepEqual(Object.keys(new Enemy()).sort(), [...PROPERTIES].sort());
   });
 
@@ -624,6 +624,45 @@ describe('invalid levels fail with an explanation', () => {
 
   test('an enemy that exactly fills the space where it is placed fits', () => {
     const data = buildData(['.....#.G', 'P...#e#.', '########'], { enemy: { size: { width: 1, height: 1 } } });
+    assert.doesNotThrow(() => createLevelState(data, TEST_LEVEL));
+  });
+
+  const OBJECT_FIT_PART = "the level's grid and legend, or the object's size in its definition (data/objects/)";
+
+  /** Game data from `grid` where "p" is a "plank" object of the given size. */
+  function withPlank(grid, size) {
+    const data = buildData(grid, { legend: { p: { object: 'plank' } } });
+    data.objects.plank = { formatVersion: 1, name: 'Plank', size, stackable: true, color: '#8b5a2b' };
+    return data;
+  }
+
+  test('an object too wide for the space where it is placed (inside the wall beside it)', () => {
+    const err = levelErrorFor(withPlank(['P...#p.G', '########'], { width: 2.5, height: 0.5 }));
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the objects', part: OBJECT_FIT_PART });
+    assert.match(err.message, /"plank" at row 1, column 6/);   // where the object is placed (counting from 1)
+    assert.match(err.message, /solid tile at row 1, column 5/);   // the wall left of it
+  });
+
+  test('an object too tall for the space where it is placed (inside the ceiling above it)', () => {
+    const err = levelErrorFor(withPlank(['.....#..', 'P....p.G', '########'], { width: 0.5, height: 1.5 }));
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the objects', part: OBJECT_FIT_PART });
+    assert.match(err.message, /solid tile at row 1, column 6/);   // the ceiling above it
+  });
+
+  test('an object that exactly fills the space where it is placed fits', () => {
+    const data = withPlank(['.....#.G', 'P...#p#.', '########'], { width: 1, height: 1 });
+    assert.doesNotThrow(() => createLevelState(data, TEST_LEVEL));
+  });
+
+  test('two objects placed so that they overlap each other', () => {
+    // Side by side, each 1.5 tiles wide, in 1-tile cells.
+    const err = levelErrorFor(withPlank(['P..pp..G', '########'], { width: 1.5, height: 0.5 }));
+    assert.deepEqual(what(err), { levelName: TEST_LEVEL, task: 'fitting the objects', part: OBJECT_FIT_PART });
+    assert.match(err.message, /"plank" at row 1, column 4 and the object "plank" at row 1, column 5/);
+  });
+
+  test('objects that only touch, such as crates stacked in a column, are fine', () => {
+    const data = withPlank(['...p...G', 'P..p....', '########'], { width: 1, height: 1 });
     assert.doesNotThrow(() => createLevelState(data, TEST_LEVEL));
   });
 

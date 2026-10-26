@@ -156,6 +156,25 @@ describe('req 83: wrong value types and values', () => {
     ]);
   });
 
+  test('tuning must say how long a defeated enemy stays before it is removed (defeatSeconds, task 5.10)', () => {
+    const tuning = fixture('config/tuning.json');
+    delete tuning.defeatSeconds;
+    assertErrors({ 'config/tuning.json': tuning }, [
+      { file: 'config/tuning.json', code: 'missing-field', details: { path: [], field: 'defeatSeconds' } },
+    ]);
+  });
+
+  test('defeatSeconds can be 0 (removed at once) but not negative', () => {
+    const atOnce = fixture('config/tuning.json');
+    atOnce.defeatSeconds = 0;
+    assertErrors({ 'config/tuning.json': atOnce }, []);
+    const negative = fixture('config/tuning.json');
+    negative.defeatSeconds = -1;
+    assertErrors({ 'config/tuning.json': negative }, [
+      { file: 'config/tuning.json', code: 'too-small', details: { path: ['defeatSeconds'], limit: 0, inclusive: true, value: -1 } },
+    ]);
+  });
+
   test('a value not in the allowed list', () => {
     const beetle = fixture('characters/beetle.json');
     beetle.kind = 'boss';
@@ -342,6 +361,88 @@ describe('the player must fit at the start', () => {
     const beetle = fixture('characters/beetle.json');
     beetle.size = { width: 1, height: 1 };
     assertErrors({ 'levels/level2.json': level, 'characters/beetle.json': beetle }, []);
+  });
+
+  // Level 2's row 2 is "P..o..eG": the coconut "o" is in column 4 (counting from 1).
+  // These tests make "o" a "plank" of the given size, used only here (level 1 is unaffected).
+  function withPlank(level, size) {
+    const plank = { formatVersion: 1, name: 'Plank', size, stackable: true, color: '#8b5a2b' };
+    level.legend.o = { object: 'plank' };
+    return { 'levels/level2.json': level, 'objects/plank.json': plank };
+  }
+
+  test('an object too wide for the space beside it (inside a wall)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[1] = 'P.#o..eG';   // a wall left of the object, in column 3
+    const size = { width: 2.5, height: 0.5 };
+    assertErrors(withPlank(level, size), [
+      { file: 'levels/level2.json', code: 'object-does-not-fit',
+        details: { key: 'o', name: 'plank', ...size, at: { row: 2, column: 4 }, row: 2, column: 3 } },
+    ]);
+  });
+
+  test('an object too tall for the space above it (inside a ceiling)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '...#....';   // a ceiling tile over the object only
+    const size = { width: 0.5, height: 1.5 };
+    assertErrors(withPlank(level, size), [
+      { file: 'levels/level2.json', code: 'object-does-not-fit',
+        details: { key: 'o', name: 'plank', ...size, at: { row: 2, column: 4 }, row: 1, column: 4 } },
+    ]);
+  });
+
+  test('every placement of an object that doesn\'t fit is reported', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '..#..#..';   // ceiling tiles over both objects
+    level.grid[1] = 'P.o..oeG';
+    const errors = errorsFor(withPlank(level, { width: 0.5, height: 1.5 }));
+    assert.deepEqual(errors.map((e) => e.details.at), [{ row: 2, column: 3 }, { row: 2, column: 6 }]);
+  });
+
+  test('an object that exactly fills the space fits', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '...#....';   // a ceiling over the object
+    level.grid[1] = 'P.#o#.eG';   // walls either side of it
+    assertErrors(withPlank(level, { width: 1, height: 1 }), []);
+  });
+
+  test('two objects placed so that they overlap each other', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[1] = 'P..oo.eG';   // side by side, each 1.5 tiles wide, in 1-tile cells
+    assertErrors(withPlank(level, { width: 1.5, height: 0.5 }), [
+      { file: 'levels/level2.json', code: 'objects-overlap', details: {
+        first: { key: 'o', name: 'plank', at: { row: 2, column: 4 } },
+        second: { key: 'o', name: 'plank', at: { row: 2, column: 5 } },
+      } },
+    ]);
+  });
+
+  test('every overlapping pair is reported once', () => {
+    // Three 1.5-wide planks in a row: each overlaps its neighbours, but the outer two don't overlap each other.
+    const level = fixture('levels/level2.json');
+    level.grid[1] = 'P..ooo.G';
+    const errors = errorsFor(withPlank(level, { width: 1.5, height: 0.5 }));
+    assert.deepEqual(errors.map((e) => [e.code, e.details.first.at.column, e.details.second.at.column]),
+      [['objects-overlap', 4, 5], ['objects-overlap', 5, 6]]);
+  });
+
+  test('objects of different kinds overlapping are reported too (a coconut inside a plank)', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[1] = 'P..ok.eG';
+    const files = withPlank(level, { width: 2, height: 0.5 });   // reaches into the coconut's cell
+    level.legend.k = { object: 'coconut' };
+    assertErrors(files, [
+      { file: 'levels/level2.json', code: 'objects-overlap', details: {
+        first: { key: 'o', name: 'plank', at: { row: 2, column: 4 } },
+        second: { key: 'k', name: 'coconut', at: { row: 2, column: 5 } },
+      } },
+    ]);
+  });
+
+  test('objects that only touch, such as crates stacked in a column, don\'t overlap', () => {
+    const level = fixture('levels/level2.json');
+    level.grid[0] = '...o....';   // one above the other in column 4
+    assertErrors(withPlank(level, { width: 1, height: 1 }), []);
   });
 
   test('a player that exactly fills the space fits', () => {
@@ -663,6 +764,10 @@ describe('describeProblem: plain-language messages', () => {
     'missing-object': [{ key: 'o', name: 'barrel' }, 'legend "o" is the object "barrel", but there is no file data/objects/barrel.json.'],
     'unused-legend': [{ key: 'z' }, 'legend "z" is not used anywhere in the grid.'],
     'missing-cutscene': [{ name: 'ending' }, '"cutscene" is "ending", but there is no file data/cutscenes/ending.json.'],
+    'objects-overlap': [{ first: { key: 'o', name: 'plank', at: { row: 2, column: 4 } }, second: { key: 'k', name: 'coconut', at: { row: 2, column: 5 } } },
+      'the object "plank" (legend "o", at row 2, column 4) and the object "coconut" (legend "k", at row 2, column 5) would overlap each other. Move them apart, or make them smaller.'],
+    'object-does-not-fit': [{ key: 'o', name: 'plank', width: 2.5, height: 0.5, at: { row: 2, column: 4 }, row: 2, column: 3 },
+      'the object "plank" (legend "o", at row 2, column 4) doesn\'t fit there: at 2.5 × 0.5 tiles (set in objects/plank.json) it would overlap the solid tile at row 2, column 3. Make more room around it, or make the object smaller.'],
     'enemy-does-not-fit': [{ key: 'e', name: 'beetle', width: 2.5, height: 0.7, at: { row: 2, column: 7 }, row: 2, column: 6 },
       'the enemy "beetle" (legend "e", at row 2, column 7) doesn\'t fit there: at 2.5 × 0.7 tiles (set in characters/beetle.json) it would overlap the solid tile at row 2, column 6. Make more room around it, or make the enemy smaller.'],
     'player-does-not-fit': [{ width: 0.8, height: 1.4, row: 1, column: 2 },

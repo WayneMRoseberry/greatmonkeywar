@@ -11,7 +11,7 @@
 import { updatePlayer } from './player.js';
 import { updateObjects, updateFalling } from './objects.js';
 import { collectRewards } from './rewards.js';
-import { updateEnemies, hitEnemiesWithThrownObjects, resolveEnemyContact } from './enemies.js';
+import { updateDefeated, updateEnemies, hitEnemiesWithThrownObjects, resolveEnemyContact } from './enemies.js';
 import { updatePunch } from './punch.js';
 
 const copyObjects = (objects) => objects.map((o) => o.copy());
@@ -58,6 +58,7 @@ function restartLevel(state) {
 export function step(state, input, dt) {
   const next = copyState(state);
   next.time += dt;
+  updateDefeated(next, dt);     // first, so every way of defeating an enemy later in a step gets the full defeatSeconds
   updatePlayer(next, input, dt);
   updateObjects(next, input);   // after the player moves, so a held object follows them
   updateFalling(next, dt);      // after updateObjects, so thrown and dropped objects move at once

@@ -6,7 +6,7 @@
 import { Facing } from './constants.js';
 import { Input } from './input.js';
 import { touches } from './collision.js';
-import { defeatEnemy } from './enemies.js';
+import { defeatEnemy, liveEnemies } from './enemies.js';
 import { heldObject } from './objects.js';
 
 /**
@@ -44,7 +44,7 @@ export function punchArea(state) {
  */
 export function enemiesInReach(state) {
   const area = punchArea(state);
-  return state.enemies.filter((enemy) => touches(area, enemy));
+  return liveEnemies(state).filter((enemy) => touches(area, enemy));   // defeated enemies can't be punched again
 }
 
 // Punch damage when the player definition gives none (docs/data-formats.md, req 40).

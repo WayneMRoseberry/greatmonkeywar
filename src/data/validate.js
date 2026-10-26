@@ -20,7 +20,7 @@
 
 import { checkSchema, typeOf } from './schema-check.js';
 import { placeInCell } from '../simulation/state.js';
-import { overlapsSolid } from '../simulation/collision.js';
+import { overlapsSolid, overlapsBox } from '../simulation/collision.js';
 import { LegendKind, LegendField, CharacterKind } from '../simulation/constants.js';
 import levelSchema from './schemas/level.schema.json' with { type: 'json' };
 import levelListSchema from './schemas/level-list.schema.json' with { type: 'json' };
@@ -353,6 +353,14 @@ const MESSAGES = {
     `the enemy "${name}" (legend "${key}", at row ${at.row}, column ${at.column}) doesn't fit there: ` +
     `at ${width} × ${height} tiles (set in characters/${name}.json) it would overlap the solid tile at row ${row}, column ${column}. ` +
     'Make more room around it, or make the enemy smaller.',
+  'objects-overlap': ({ first, second }) =>
+    `the object "${first.name}" (legend "${first.key}", at row ${first.at.row}, column ${first.at.column}) and ` +
+    `the object "${second.name}" (legend "${second.key}", at row ${second.at.row}, column ${second.at.column}) ` +
+    'would overlap each other. Move them apart, or make them smaller.',
+  'object-does-not-fit': ({ key, name, width, height, at, row, column }) =>
+    `the object "${name}" (legend "${key}", at row ${at.row}, column ${at.column}) doesn't fit there: ` +
+    `at ${width} × ${height} tiles (set in objects/${name}.json) it would overlap the solid tile at row ${row}, column ${column}. ` +
+    'Make more room around it, or make the object smaller.',
   'missing-layer-image': ({ layer, image }) => `background layer ${layer} uses the image "${image}", but there is no file data/${image}.`,
 
   // Level list
@@ -419,6 +427,7 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
   const starts = [];
   const goals = [];
   const enemyPlacements = [];
+  const objectPlacements = [];
   grid.forEach((row, r) => {
     [...row].forEach((ch, c) => {
       if (ch === '.') return;
@@ -433,6 +442,7 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
       if (entry.playerStart) starts.push({ row: r + 1, column: c + 1 });
       if (entry.goal) goals.push({ row: r + 1, column: c + 1 });
       if (entry.enemy) enemyPlacements.push({ key: ch, name: entry.enemy, at: { row: r + 1, column: c + 1 } });
+      if (entry.object) objectPlacements.push({ key: ch, name: entry.object, at: { row: r + 1, column: c + 1 } });
     });
   });
   for (const details of unknown.values()) error(path, 'unknown-character', details);
@@ -448,6 +458,10 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
       checkEnemyFits(path, level, placement, definition, error);
     }
   }
+  // A missing or broken object definition is reported elsewhere; there is no size to check then.
+  const sizedObjects = objectPlacements.filter(({ name }) => validFiles.has(`objects/${name}.json`));
+  for (const placement of sizedObjects) checkObjectFits(path, level, placement, data.objects[placement.name], error);
+  checkObjectsApart(path, sizedObjects, data.objects, error);
 
   // Legend entries
   for (const [key, entry] of Object.entries(legend)) {
@@ -492,6 +506,37 @@ function checkPlayerFits(path, level, start, player, error) {
 function checkEnemyFits(path, level, { key, name, at }, enemy, error) {
   const tile = overlappedTile(level, at, enemy.size);
   if (tile) error(path, 'enemy-does-not-fit', { key, name, ...enemy.size, at, ...tile });
+}
+
+/**
+ * Likewise for objects (task 4.11): an object must not start inside something
+ * solid, where it could rest inside a wall or fall through it
+ * (createLevelState refuses to build such a level too). Every placement is checked.
+ */
+function checkObjectFits(path, level, { key, name, at }, object, error) {
+  const tile = overlappedTile(level, at, object.size);
+  if (tile) error(path, 'object-does-not-fit', { key, name, ...object.size, at, ...tile });
+}
+
+/**
+ * No two objects may start overlapping each other (touching is fine, so
+ * stacked crates are), whatever their kinds: an object starting inside another
+ * could get stuck inside it (createLevelState refuses such a level too). Each
+ * overlapping pair is reported once, in grid order. `placements` count rows
+ * and columns from 1; `definitions` is data.objects.
+ */
+function checkObjectsApart(path, placements, definitions, error) {
+  const boxes = placements.map(({ name, at }) => {
+    const { width, height } = definitions[name].size;
+    return placeInCell(at.column - 1, at.row - 1, width, height);
+  });
+  for (let i = 0; i < placements.length; i++) {
+    for (let j = i + 1; j < placements.length; j++) {
+      if (!overlapsBox(boxes[i], boxes[j])) continue;
+      const describe = ({ key, name, at }) => ({ key, name, at });
+      error(path, 'objects-overlap', { first: describe(placements[i]), second: describe(placements[j]) });
+    }
+  }
 }
 
 /**

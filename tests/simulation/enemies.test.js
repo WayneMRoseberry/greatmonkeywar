@@ -23,7 +23,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
-import { Enemy } from '../../src/simulation/enemies.js';
+import { Enemy, liveEnemies } from '../../src/simulation/enemies.js';
 import { Player } from '../../src/simulation/player.js';
 import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
@@ -346,7 +346,7 @@ describe('contact (req 51)', () => {
     // The enemy stands on a 1-tile pillar, so it can't walk away; the player drops onto it from above.
     // The stomp defeats it in the step they first touch (task 5.4).
     const state = enemyState(['.....P...G', '..........', '..........', '.....e....', '.....#....', '##########'], CONTACT);
-    const touched = stepUntil(state, (s) => s.enemies.length === 0);
+    const touched = stepUntil(state, (s) => liveEnemies(s).length === 0);
     assert.equal(touched.player.health, HEALTH);
   });
 
@@ -411,12 +411,12 @@ describe('stomp (req 52)', () => {
 
   /** Steps with no input until there are fewer enemies than at the start, and returns that state. */
   function stepUntilStomped(state) {
-    return stepUntil(state, (s) => s.enemies.length < state.enemies.length);
+    return stepUntil(state, (s) => liveEnemies(s).length < liveEnemies(state).length);
   }
 
   test('falling onto an enemy defeats it and bounces the player upward at stompBounceSpeed', () => {
     const stomped = stepUntilStomped(enemyState(PILLAR_GRID, STOMP));
-    assert.deepEqual(stomped.enemies, []);
+    assert.deepEqual(liveEnemies(stomped), []);
     assert.equal(stomped.player.vy, -STOMP_BOUNCE);
     assert.equal(stomped.player.health, HEALTH);
   });
@@ -424,7 +424,7 @@ describe('stomp (req 52)', () => {
   test('the enemy is defeated whatever its health', () => {
     const health = 5;
     const stomped = stepUntilStomped(enemyState(PILLAR_GRID, { ...STOMP, enemy: { health } }));
-    assert.deepEqual(stomped.enemies, []);
+    assert.deepEqual(liveEnemies(stomped), []);
   });
 
   test('after the bounce the player rises, and is never hurt by the stomped enemy', () => {
@@ -446,10 +446,10 @@ describe('stomp (req 52)', () => {
   test('holding jump while stomping doesn\'t change the bounce', () => {
     // The player falls from row 0 (a jump press there does nothing: not standing), still holding jump at the stomp.
     let holdingJump = enemyState(PILLAR_GRID, STOMP);
-    for (let i = 0; i < 10 * STEPS_PER_SECOND && holdingJump.enemies.length > 0; i++) {
+    for (let i = 0; i < 10 * STEPS_PER_SECOND && liveEnemies(holdingJump).length > 0; i++) {
       holdingJump = step(holdingJump, holding(Input.JUMP), FIXED_DT);
     }
-    assert.deepEqual(holdingJump.enemies, [], 'the enemy was stomped');
+    assert.deepEqual(liveEnemies(holdingJump), [], 'the enemy was stomped');
     assert.equal(holdingJump.player.vy, -STOMP_BOUNCE);
   });
 
@@ -457,7 +457,7 @@ describe('stomp (req 52)', () => {
     const state = enemyState(PILLAR_GRID, STOMP);
     const invincible = { ...state, player: new Player({ ...state.player, invincibleTime: 100 }) };
     const stomped = stepUntilStomped(invincible);
-    assert.deepEqual(stomped.enemies, []);
+    assert.deepEqual(liveEnemies(stomped), []);
   });
 
   test('an enemy touched from the side or below is not defeated', () => {
@@ -465,7 +465,7 @@ describe('stomp (req 52)', () => {
     let current = state;
     for (let i = 0; i < 5 * STEPS_PER_SECOND && current.player.health === HEALTH; i++) current = step(current, holding(Input.JUMP), FIXED_DT);
     assert.equal(current.player.health, HEALTH - 1, 'the player was hurt');
-    assert.equal(current.enemies.length, 1, 'the enemy is still there');
+    assert.equal(liveEnemies(current).length, 1, 'the enemy is still there');
   });
 
   /** A state where the player, falling, is just above the given enemies' tops, so the next step touches them. */
@@ -480,7 +480,7 @@ describe('stomp (req 52)', () => {
     const justBelowFeet = (player) => player.y + player.height + 0.01;
     const twoUnder = fallingOnto(state, (p) => [[p.x - 0.5, justBelowFeet(p)], [p.x + 0.5, justBelowFeet(p)]]);
     const after = step(twoUnder, NO_INPUT, FIXED_DT);
-    assert.deepEqual(after.enemies, []);
+    assert.deepEqual(liveEnemies(after), []);
     assert.equal(after.player.vy, -STOMP_BOUNCE);
   });
 
@@ -490,8 +490,8 @@ describe('stomp (req 52)', () => {
     const both = fallingOnto(state, (p) => [[p.x, p.y + p.height + 0.01], [p.x + 0.5, p.y]]);
     const side = both.enemies[1];
     const after = step(both, NO_INPUT, FIXED_DT);
-    assert.equal(after.enemies.length, 1);
-    assertNear(after.enemies[0].x, side.x, 'the enemy left is the one beside the player');   // in the air, it doesn't move sideways
+    assert.equal(liveEnemies(after).length, 1);
+    assertNear(liveEnemies(after)[0].x, side.x, 'the enemy left is the one beside the player');   // in the air, it doesn't move sideways
     assert.equal(after.player.health, HEALTH - 1);
   });
 });
@@ -526,14 +526,14 @@ describe('thrown objects (req 33)', () => {
   test('a thrown object that hits an enemy defeats it', () => {
     const thrown = step(holdingCrate(enemyState(THROW_GRID, THROWN)), holding(Input.ACTION), FIXED_DT);
     assert.equal(thrown.objects[0].thrown, true, 'the crate is in flight');
-    const hit = stepUntil(thrown, (s) => s.enemies.length === 0);
-    assert.deepEqual(hit.enemies, []);
+    const hit = stepUntil(thrown, (s) => liveEnemies(s).length === 0);
+    assert.deepEqual(liveEnemies(hit), []);
     assert.equal(hit.player.health, thrown.player.health, 'the player wasn\'t hurt');
   });
 
   test('in the step it hits, the object stops (both speeds 0) and is no longer thrown', () => {
     const thrown = step(holdingCrate(enemyState(THROW_GRID, THROWN)), holding(Input.ACTION), FIXED_DT);
-    const [object] = stepUntil(thrown, (s) => s.enemies.length === 0).objects;
+    const [object] = stepUntil(thrown, (s) => liveEnemies(s).length === 0).objects;
     assert.equal(object.thrown, false);
     assert.equal(object.vx, 0);
     assert.equal(object.vy, 0);
@@ -543,7 +543,7 @@ describe('thrown objects (req 33)', () => {
   test('after the hit it drops straight down, comes to rest on the ground, and can be picked up again', () => {
     const groundTop = 3;
     const thrown = step(holdingCrate(enemyState(THROW_GRID, THROWN)), holding(Input.ACTION), FIXED_DT);
-    const hit = stepUntil(thrown, (s) => s.enemies.length === 0);
+    const hit = stepUntil(thrown, (s) => liveEnemies(s).length === 0);
     const hitX = hit.objects[0].x;
     const landed = stepUntil(hit, (s) => {
       assertNear(s.objects[0].x, hitX, 'it drops straight down');
@@ -559,8 +559,8 @@ describe('thrown objects (req 33)', () => {
   test('the enemy is defeated whatever its health', () => {
     const health = 5;
     const thrown = step(holdingCrate(enemyState(THROW_GRID, { ...THROWN, enemy: { health } })), holding(Input.ACTION), FIXED_DT);
-    const hit = stepUntil(thrown, (s) => s.enemies.length === 0);
-    assert.deepEqual(hit.enemies, []);
+    const hit = stepUntil(thrown, (s) => liveEnemies(s).length === 0);
+    assert.deepEqual(liveEnemies(hit), []);
   });
 
   test('a thrown object defeats every enemy it overlaps in the same step', () => {
@@ -568,7 +568,7 @@ describe('thrown objects (req 33)', () => {
     const crate = thrownCrate(5, 1, THROW_SPEED.x, 0);
     const twoEnemies = [enemyAt(state, crate.x + 0.5, crate.y), enemyAt(state, crate.x - 0.5, crate.y)];
     const after = step({ ...state, objects: [crate], enemies: twoEnemies }, NO_INPUT, FIXED_DT);
-    assert.deepEqual(after.enemies, []);
+    assert.deepEqual(liveEnemies(after), []);
   });
 
   test('after a hit, the falling object doesn\'t defeat another enemy it falls onto', () => {
@@ -580,16 +580,16 @@ describe('thrown objects (req 33)', () => {
     const high = enemyAt(state, crate.x + 0.5, crate.y);
     const below = new Enemy({ ...enemyAt(state, crate.x, 3), vx: 0 });
     const hit = step({ ...state, objects: [crate], enemies: [high, below] }, NO_INPUT, FIXED_DT);
-    assert.equal(hit.enemies.length, 1, 'the high enemy was hit');
+    assert.equal(liveEnemies(hit).length, 1, 'the high enemy was hit');
     const landed = stepUntil(hit, (s) => s.objects[0].resting);
-    assert.equal(landed.enemies.length, 1, 'the enemy below survives the falling crate');
+    assert.equal(liveEnemies(landed).length, 1, 'the enemy below survives the falling crate');
   });
 
   test('a crate that falls onto an enemy without being thrown doesn\'t defeat it', () => {
     const crawling = 0.01;   // so the enemy stays under the falling crate
     const state = enemyState(['..c.......G', '...........', '..e.....P..', '###########'], { enemy: { speed: crawling } });
     const landed = stepUntil(state, (s) => s.objects[0].resting);
-    assert.equal(landed.enemies.length, 1);
+    assert.equal(liveEnemies(landed).length, 1);
   });
 
   test('a dropped object doesn\'t defeat an enemy it is dropped onto', () => {
@@ -599,14 +599,128 @@ describe('thrown objects (req 33)', () => {
     const besideFeet = { ...state, enemies: [new Enemy({ ...enemyAt(state, player.x + player.width, player.y), vx: 0 })] };
     const dropped = step(besideFeet, holding(Input.DOWN, Input.ACTION), FIXED_DT);
     assert.equal(dropped.objects[0].held, false, 'the crate was dropped');
-    assert.equal(dropped.enemies.length, 1);
+    assert.equal(liveEnemies(dropped).length, 1);
   });
 
   test('a held object touching an enemy doesn\'t defeat it', () => {
     const state = holdingCrate(enemyState(['..........G', '...........', '.P.........', '###########'], THROWN));
     const crate = state.objects[0];
     const touchingCrate = { ...state, enemies: [new Enemy({ ...enemyAt(state, crate.x + 0.5, crate.y), vx: 0 })] };
-    assert.equal(step(touchingCrate, NO_INPUT, FIXED_DT).enemies.length, 1);
+    assert.equal(liveEnemies(step(touchingCrate, NO_INPUT, FIXED_DT)).length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.10: the defeat state (req 53). Decided:
+//  - a defeated enemy (stomped, punched to 0, or hit by a thrown object)
+//    stays for defeatSeconds (tuning), so the renderer can flash it, then is
+//    removed; with defeatSeconds 0 it is removed at once;
+//  - Enemy.defeatTime is the time it has left (more than 0 means defeated);
+//    it counts down at the start of each step, so every way of defeating an
+//    enemy gets the full time;
+//  - while defeated it is frozen (it doesn't walk or fall) and harmless: it
+//    can't hurt the player, and can't be stomped, punched, or hit again.
+
+describe('defeat (req 53)', () => {
+  const DEFEAT_SECONDS = 0.5;
+  const DEFEAT = { tuning: { defeatSeconds: DEFEAT_SECONDS } };
+  // The enemy stands on a 1-tile pillar (column 5); the player drops onto it from above.
+  const PILLAR_GRID = ['.....P...G', '..........', '..........', '.....e....', '.....#....', '##########'];
+
+  /** Steps until the pillar enemy has been stomped, and returns that state. */
+  const stomped = (options = DEFEAT) => stepUntil(enemyState(PILLAR_GRID, options), (s) => liveEnemies(s).length === 0);
+
+  /** The state with one enemy at (x, y) already defeated, with `left` seconds of its defeat state left. */
+  function withDefeatedEnemy(state, x, y, left = DEFEAT_SECONDS) {
+    return { ...state, enemies: [new Enemy({ ...enemyAt(state, x, y), health: 0, defeatTime: left })] };
+  }
+
+  test('a stomped enemy stays, defeated, with defeatSeconds left', () => {
+    const state = stomped();
+    assert.equal(state.enemies.length, 1, 'it is still in the level');
+    assert.deepEqual(liveEnemies(state), [], 'but it is defeated');
+    assert.equal(state.enemies[0].defeatTime, DEFEAT_SECONDS);
+  });
+
+  test('its time counts down each step, and it is removed once defeatSeconds have passed', () => {
+    const stepsToRemoval = DEFEAT_SECONDS * STEPS_PER_SECOND;
+    let state = stomped();
+    state = step(state, NO_INPUT, FIXED_DT);
+    assertNear(state.enemies[0].defeatTime, DEFEAT_SECONDS - FIXED_DT, 'defeatTime after one step');
+    for (let i = 1; i < stepsToRemoval - 1; i++) state = step(state, NO_INPUT, FIXED_DT);
+    assert.equal(state.enemies.length, 1, `still there after ${stepsToRemoval - 1} steps`);
+    state = step(state, NO_INPUT, FIXED_DT);
+    assert.deepEqual(state.enemies, [], `removed after ${stepsToRemoval} steps`);
+  });
+
+  test('with defeatSeconds 0 a defeated enemy is removed at once', () => {
+    const state = stomped({ tuning: { defeatSeconds: 0 } });
+    assert.deepEqual(state.enemies, []);
+  });
+
+  test('punching an enemy to 0 health and hitting one with a thrown object also leave it in its defeat state', () => {
+    const state = enemyState(['..........G', '...........', '..P........', '###########'], DEFEAT);
+    const { player } = state;
+    // One enemy overlapping the player's front edge (punched), one high up in a thrown crate's path.
+    const punched = new Enemy({ ...enemyAt(state, player.x + player.width - 0.5, player.y), health: 1 });
+    const crate = new CarriableObject({ type: 'crate', ...ONE_TILE, x: 6, y: 0, vx: 8, vy: 0, thrown: true });
+    const hit = enemyAt(state, crate.x + 0.5, crate.y);
+    const after = step({ ...state, enemies: [punched, hit], objects: [crate] }, holding(Input.PUNCH), FIXED_DT);
+    assert.deepEqual(after.enemies.map((e) => e.defeatTime), [DEFEAT_SECONDS, DEFEAT_SECONDS]);
+  });
+
+  test('while defeated it is frozen: it doesn\'t walk or fall', () => {
+    // Defeated in mid-air, with open space below and beside it.
+    const state = withDefeatedEnemy(enemyState(['..........G', '...........', '...........', 'P..........', '###########'], DEFEAT), 5, 0);
+    const [before] = state.enemies;
+    let current = state;
+    for (let i = 0; i < 10; i++) {
+      current = step(current, NO_INPUT, FIXED_DT);
+      assert.equal(current.enemies[0].x, before.x, `x at step ${i}`);
+      assert.equal(current.enemies[0].y, before.y, `y at step ${i}`);
+    }
+  });
+
+  test('a defeated enemy can\'t hurt the player', () => {
+    const state = enemyState(['..........G', '...........', '..P........', '###########'], DEFEAT);
+    const { player } = state;
+    const touching = withDefeatedEnemy(state, player.x, player.y);
+    assert.equal(step(touching, NO_INPUT, FIXED_DT).player.health, player.health);
+  });
+
+  test('a defeated enemy can\'t be stomped again: the player falls through it without a bounce', () => {
+    const state = enemyState(['..........G', '...........', '...........', '..P........', '###########'], DEFEAT);
+    const fallSpeed = 3;
+    const player = new Player({ ...state.player, y: 1, vy: fallSpeed });
+    const below = withDefeatedEnemy({ ...state, player }, player.x, player.y + player.height + 0.01);
+    const after = step(below, NO_INPUT, FIXED_DT);
+    assert.ok(after.player.vy > 0, `still falling: vy ${after.player.vy}`);
+    assertNear(after.enemies[0].defeatTime, DEFEAT_SECONDS - FIXED_DT, 'its time just counts down');
+  });
+
+  test('a defeated enemy can\'t be punched: its time just counts down', () => {
+    const state = enemyState(['..........G', '...........', '..P........', '###########'], DEFEAT);
+    const { player } = state;
+    const inReach = withDefeatedEnemy(state, player.x + player.width - 0.5, player.y);
+    const after = step(inReach, holding(Input.PUNCH), FIXED_DT);
+    assertNear(after.enemies[0].defeatTime, DEFEAT_SECONDS - FIXED_DT, 'defeatTime');
+  });
+
+  test('a thrown object passes through a defeated enemy, still thrown', () => {
+    const state = enemyState(['..........G', '...........', 'P..........', '###########'], DEFEAT);
+    const throwSpeed = 8;
+    const crate = new CarriableObject({ type: 'crate', ...ONE_TILE, x: 5, y: 0, vx: throwSpeed, vy: 0, thrown: true });
+    const after = step({ ...withDefeatedEnemy(state, crate.x + 0.5, crate.y), objects: [crate] }, NO_INPUT, FIXED_DT);
+    assert.equal(after.objects[0].thrown, true);
+    assert.equal(after.objects[0].vx, throwSpeed);
+  });
+
+  test('a restart brings defeated enemies back, undefeated', () => {
+    const state = stomped();
+    const lastLife = { ...state, player: new Player({ ...state.player, health: 0 }) };
+    const restarted = step(lastLife, NO_INPUT, FIXED_DT);
+    assert.equal(liveEnemies(restarted).length, restarted.levelStart.enemies.length);
+    assert.equal(restarted.enemies[0].defeatTime, 0);
   });
 });
 
