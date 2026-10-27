@@ -115,7 +115,7 @@ The scene ends when the last thing in it finishes: the latest keyframe of any ac
 
 ## Checking your work
 
-Check your cut scene the same way as a level: see [Checking your work](guide-levels.md#part-5-checking-your-work). Common messages:
+Check your cut scene the same way as a level: see [Checking your work](guide-levels.md#part-5-checking-your-work). Then watch it in the game: see [Seeing your change in the game](guide-levels.md#seeing-your-change-in-the-game). The cut scene plays after you finish level 1 and choose **Next level**. Common messages:
 
 | Message mentions… | Likely cause |
 |---|---|

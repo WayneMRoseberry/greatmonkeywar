@@ -4,6 +4,7 @@
 
 import { drawEntitySprite } from './sprites.js';
 import { hudFontSize } from './hud.js';
+import { confirmNames } from './binding-names.js';
 
 /** The narration box: half-transparent black along the bottom of the stage. */
 export const NARRATION_BOX_COLOR = '#000000';
@@ -22,13 +23,9 @@ export function stageFit(stage, viewport) {
   return { scale, left: (viewport.width - width) / 2, top: (viewport.height - height) / 2, width, height };
 }
 
-/** A key code or gamepad button as a player would name it: KeyE → E, a → A. */
-const keyName = (code) => code.replace(/^(Key|Digit)/, '');
-const buttonName = (button) => button.toUpperCase();
-
 /** The skip hint: the first keyboard key and gamepad button bound to confirm, e.g. "Enter / A: skip". */
 export function skipHint(bindings) {
-  return `${keyName(bindings.keyboard.confirm[0])} / ${buttonName(bindings.gamepad.confirm[0])}: skip`;
+  return `${confirmNames(bindings)}: skip`;
 }
 
 function drawActor(ctx, fit, shownActor, characters, assets) {

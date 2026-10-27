@@ -128,7 +128,7 @@ The prototype has no sound yet. When it does, use **Ogg** or **Opus** for audio 
 
 ## Checking your work
 
-Check your sprite sheet the same way as a level: see [Checking your work](guide-levels.md#part-5-checking-your-work). Common messages:
+Check your sprite sheet the same way as a level: see [Checking your work](guide-levels.md#part-5-checking-your-work). Then see it animate in the game: see [Seeing your change in the game](guide-levels.md#seeing-your-change-in-the-game). Common messages:
 
 | Message mentions… | Likely cause |
 |---|---|

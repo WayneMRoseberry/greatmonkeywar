@@ -104,7 +104,7 @@ Objects are things the hero can **pick up, carry, drop, and throw**, such as cra
 
 ## Checking your work
 
-After changing a character or object, check your work the same way as for levels: see [Checking your work](guide-levels.md#part-5-checking-your-work). Common messages:
+After changing a character or object, check your work the same way as for levels: see [Checking your work](guide-levels.md#part-5-checking-your-work). Then play the game to see the change: see [Seeing your change in the game](guide-levels.md#seeing-your-change-in-the-game). Common messages:
 
 | Message mentions… | Likely cause |
 |---|---|

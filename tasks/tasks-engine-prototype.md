@@ -51,7 +51,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `src/presentation/renderer.js` - Draws tiles, entities, parallax layers, and the punch flash.
 - `src/presentation/sprites.js` - Sprite sheet loading, animation frames, and shape fallback.
 - `src/presentation/hud.js` - Health and reward count.
-- `src/presentation/screens.js` - Start screen, level-complete screen, "Thanks for playing", and data error screen.
+- `src/presentation/screens.js` - Start screen, level-complete screen, "Thanks for playing", and data error screen; the menu hint and the menu option boxes used for mouse clicks.
+- `src/presentation/binding-names.js` - Bindings as a player would name them, for on-screen hints.
 - `src/presentation/cutscene-view.js` - Draws cut scene background, actors, and narration.
 - `src/presentation/debug-overlay.js` - F3 debug overlay.
 - `src/presentation/test-hook.js` - Read-only `window.gameTestHook` for UI checks (browser mode only).
@@ -65,8 +66,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `electron/window-options.js` - The game window's settings (security options, preload, page).
 - `electron/steam.js` - Steam start-up and user name, with the steamworks.js module passed in.
 - `electron/overlay.js` - Steam overlay settings, with Electron's `app` passed in.
-- `electron/preload.js` - Preload glue: exposes the bridge built by `preload-api.js`.
-- `electron/preload-api.js` - Builds the bridge object exposing only the platform methods.
+- `electron/preload.cjs` - The preload script: builds the bridge exposing only the platform methods, and puts it on the page's window.
+- `electron/ipc.js` - The main process's side of the bridge: answers its calls.
 - `steam_appid.txt` - Contains `480` for development.
 
 **Data (content)**
@@ -353,7 +354,7 @@ These were completed before this approach was adopted: their tests were written 
     - Carried over from 5.7: `updatePunch` runs after `updateEnemies`, so the punch is checked against where enemies are after this step's move. With no sprite, the reach is only the player's front edge (no width), so an enemy exactly flush against the player that walks away by any amount in the press step is out of reach and can't be punched. An enemy walking toward the player overlaps the edge and is hit, so this mostly affects one that has just turned away. Decide whether to resolve the punch against where enemies were before they moved this step: either call `updatePunch` before `updateEnemies`, or check reach against the enemies' start-of-step boxes. Keep the punch before contact damage either way (req 51), and test the flush, walking-away case.
     - Test: `tests/simulation/punch.test.js` ("order")
     - Code: `src/simulation/step.js`
-  - [x] 5.10 Defeated enemies are removed, after a short defeat state the renderer can flash (req 53).
+  - [x] 5.10 (req 53).
     - Decided: the defeat state lasts `defeatSeconds`, a new required tuning field (a number ≥ 0; 0 removes the enemy at once), added to the tuning schema, the valid fixture, the test data builder (default 0.5), and `docs/data-formats.md`. `defeatEnemy` sets `Enemy.defeatTime` to it (more than 0 means defeated); `updateDefeated` counts it down at the start of each step, so every way of defeating an enemy gets the full time, and removes the enemy when it runs out. While defeated an enemy is frozen (no walking or falling) and harmless: it can't hurt the player, and can't be stomped, punched, or hit by a thrown object again (`liveEnemies` is the enemies that aren't defeated, used by all of those). Defeating an already defeated enemy does nothing. Earlier tests that checked a defeat by the enemy disappearing now check `liveEnemies` instead.
     - Test: `tests/simulation/enemies.test.js` ("defeat", and the stomp, thrown-object, and contact tests), `tests/simulation/punch.test.js` (damage, order), `tests/simulation/state.test.js` (the Enemy structure), `tests/data/validate.test.js` (`defeatSeconds`)
     - Code: `src/simulation/enemies.js` (`defeatEnemy`, `updateDefeated`, `isDefeated`, `liveEnemies`), `src/simulation/punch.js`, `src/simulation/step.js`, `src/data/schemas/tuning.schema.json`
@@ -460,34 +461,49 @@ These were completed before this approach was adopted: their tests were written 
     - Test (red first): extend `tests-ui/smoke.spec.js` so it checks that the page opens on the start screen (through the test hook), and that broken data shows the error screen. Run with `npm run test:ui`.
     - Code: `src/presentation/main.js`
 - [ ] 8.0 Build the platform layer and the Electron host with Steam
-  - [ ] 8.1 Platform interface (`getSteamStatus()`, `getSteamUserName()`, `toggleFullscreen()`, `quit()`) and a fake implementation. A shared contract test checks every implementation (req 71).
-    - Test: `tests/platform/platform-contract.test.js`, `tests/platform/fake-platform.test.js`
+  - [x] 8.1 Platform interface (`getSteamStatus()`, `getSteamUserName()`, `toggleFullscreen()`, `quit()`) and a fake implementation. A shared contract test checks every implementation (req 71).
+    - Decided: `SteamStatus` (CONNECTED, UNAVAILABLE) and `PLATFORM_METHODS` in `platform.js`. The contract is `platformContract(name, make, { canConnect })` in `tests/platform/contract.js`, which each implementation's test file runs on itself (not a separate contract test file).
+    - Test: `tests/platform/contract.js`, `tests/platform/fake-platform.test.js`
     - Code: `src/platform/platform.js`, `src/platform/fake-platform.js`
-  - [ ] 8.2 Browser platform with an injected `document`: Steam unavailable, fullscreen using the browser's fullscreen feature, and quit reporting that "Thanks for playing" should be shown (req 7).
-    - Test: `tests/platform/browser-platform.test.js`, added to the contract test
+  - [x] 8.2 Browser platform with an injected `document`: Steam unavailable, fullscreen using the browser's fullscreen feature, and quit reporting that "Thanks for playing" should be shown (req 7).
+    - Decided: `createBrowserPlatform({ document, log })` logs `BROWSER_STEAM_UNAVAILABLE_MESSAGE` once when created (req 9); a refused fullscreen request is logged, not thrown.
+    - Test: `tests/platform/browser-platform.test.js`, which runs the contract
     - Code: `src/platform/browser-platform.js`
-  - [ ] 8.3 Install Electron. Window options: `contextIsolation` on, `nodeIntegration` off, the preload script, and loading `index.html`. Add `npm start`.
+  - [x] 8.3 Install Electron. Window options: `contextIsolation` on, `nodeIntegration` off, the preload script, and loading `index.html`. Add `npm start`.
+    - Decided: the window also has `sandbox` on. Chromium won't let file:// pages fetch the data files, so `main.js` serves the game on `app://game/` (a standard, secure scheme with fetch), using the same file rules as `tools/serve.js` (`appFileFor`).
     - Test: `tests/electron/window-options.test.js`
     - Code: `electron/window-options.js`, `electron/main.js` (glue), `package.json`
-  - [ ] 8.4 The preload bridge exposes only the platform methods, and the page-side Electron platform calls them.
-    - Test: `tests/electron/preload-api.test.js` (fake `ipcRenderer`), `tests/platform/electron-platform.test.js` (fake bridge), added to the contract test
-    - Code: `electron/preload-api.js`, `electron/preload.js` (glue), `src/platform/electron-platform.js`
-  - [ ] 8.5 Install steamworks.js and add `steam_appid.txt` containing `480`. Steam start-up with the steamworks module passed in: on success it reports connected; on failure it logs a clear message, reports unavailable, and doesn't throw (reqs 8–9).
+  - [x] 8.4 The preload bridge exposes only the platform methods, and the page-side Electron platform calls them.
+    - Decided: the bridge is one CommonJS file, `electron/preload.cjs` (a sandboxed preload script must be CommonJS and can't require our other files), exposing `getSteamInfo`, `toggleFullscreen`, and `quit` over the IPC channels in `CHANNELS`; `electron/ipc.js` answers them in the main process. `createElectronPlatform(bridge)` asks for the Steam info once, so the platform's methods answer at once each frame. `src/presentation/main.js` uses it when the bridge is on the window.
+    - Test: `tests/electron/preload-api.test.js` (fake `ipcRenderer` and `ipcMain`), `tests/platform/electron-platform.test.js` (fake bridge), which runs the contract
+    - Code: `electron/preload.cjs`, `electron/ipc.js`, `src/platform/electron-platform.js`
+  - [x] 8.5 Install steamworks.js and add `steam_appid.txt` containing `480`. Steam start-up with the steamworks module passed in: on success it reports connected; on failure it logs a clear message, reports unavailable, and doesn't throw (reqs 8–9).
+    - Decided: if the steamworks module fails to load, `main.js` passes null and Steam counts as unavailable. The log messages come from `steamConnectedMessage(userName)` and `steamUnavailableMessage(reason)`, so tests check them without depending on the wording.
     - Test: `tests/electron/steam.test.js` (fake steamworks module)
     - Code: `electron/steam.js`, `electron/main.js` (glue)
-  - [ ] 8.6 The Steam user's display name flows from `electron/steam.js` through the bridge to the platform, and appears in the debug overlay (req 10).
-    - Test: `tests/electron/steam.test.js` ("user name"), `tests/platform/electron-platform.test.js` ("user name")
-    - Code: `electron/steam.js`, `electron/preload-api.js`, `src/platform/electron-platform.js`
-  - [ ] 8.7 Steam overlay settings applied before the app starts, using the steamworks.js Electron helper and the required Chromium flags, with `app` passed in (req 11).
-    - Test: `tests/electron/overlay.test.js` (fake `app.commandLine`)
+  - [x] 8.6 The Steam user's display name flows from `electron/steam.js` through the bridge to the platform, and appears in the debug overlay (req 10).
+    - Decided: if Steam connects but the name can't be read, the name is "(unknown)".
+    - Test: `tests/electron/steam.test.js` ("the user name"), `tests/electron/preload-api.test.js` ("the main process's side"), `tests/platform/electron-platform.test.js`
+    - Code: `electron/steam.js`, `electron/ipc.js`, `src/platform/electron-platform.js`
+  - [x] 8.7 Steam overlay settings applied before the app starts, using the steamworks.js Electron helper and the required Chromium flags, with `app` passed in (req 11).
+    - Decided: `applyOverlaySettings({ app, steamworks, log })` calls `electronEnableSteamOverlay()` and also sets `OVERLAY_SWITCHES` (`in-process-gpu`, `disable-direct-composition`) itself, so they're on even without the module. Applied after the app is ready, it changes nothing and logs a warning.
+    - Test: `tests/electron/steam.test.js` ("the overlay settings"; fake `app.commandLine`)
     - Code: `electron/overlay.js`, `electron/main.js` (glue)
   - [ ] 8.8 (no code) Launch with Steam running. Confirm the Steam user name shows in the debug overlay, Shift+Tab opens the overlay, and F12 takes a screenshot (reqs 10–11).
+    - Steps: [manual test checklist](../docs/manual-test-checklist.md), section 1.
+    - 2026-10-26: with Steam running, the app connects, and the F3 debug overlay shows "Steam: connected (wayne_roseberry)" (req 10 confirmed).
+    - 2026-10-27: with `npm start`, Shift+Tab and F12 do nothing and Steam's notice never appears. Cause: Chromium blocklists this PC's old AMD driver (8.17.10.1404) and draws in software, which the overlay can't hook (see the KNOWN ISSUE in `electron/overlay.js`). Run with `npx electron --ignore-gpu-blocklist .`, Shift+Tab opened the overlay and F12 took a screenshot. Open until the fix is chosen and made: add that switch, and/or update the driver.
   - [ ] 8.9 (no code) Measure FPS with the overlay settings on, using the debug overlay (req 12).
+    - 2026-10-26/27, on an AMD A8-8650 (60 Hz), level 1: 45 FPS with the settings on, 48 with them off, both drawn in software (the GPU blocklist, as in 8.8); 60 FPS with `--ignore-gpu-blocklist`, drawn on the GPU. Results are in `docs/steam-overlay.md`. Open with 8.8; level 2 and the cut scene aren't measured yet.
   - [ ] 8.10 (no code) Write `docs/steam-overlay.md`: each setting and why it's needed, plus the FPS results (req 12).
-  - [ ] 8.11 (no code) Launch with Steam closed and confirm the game runs (req 9).
-  - [ ] 8.12 Extend the architecture guard: only `electron/` and `src/platform/` may reference `electron` or `steamworks.js` (req 13). For the red step, temporarily add a forbidden reference and confirm the test fails.
+    - Written, with each setting, why it's needed, the GPU blocklist issue, and the level 1 results. Done when 8.9's results are complete.
+  - [x] 8.11 (no code) Launch with Steam closed and confirm the game runs (req 9).
+    - Steps: [manual test checklist](../docs/manual-test-checklist.md), section 2.
+    - Done 2026-10-27 (Wayne, in the checklist run): with Steam exited, the game started and played, and F3 showed Steam as unavailable.
+  - [x] 8.12 Extend the architecture guard: only `electron/` and `src/platform/` may reference `electron` or `steamworks.js` (req 13). For the red step, temporarily add a forbidden reference and confirm the test fails.
+    - Decided: `checkHostReferences(source, filePath)` finds the packages (and files in them) wherever a module is loaded: import, `import '...'`, export from, `import()`, `require()`, and `createRequire(...)()`. Other strings, such as a folder name in `path.join(root, 'electron')`, are allowed. The guard checks every `.js` and `.cjs` file in `src/` and `tools/`. Red step: adding `import steamworks from 'steamworks.js'` to `src/presentation/hud.js` failed the guard ("line 42: references "steamworks.js", which only electron/ and src/platform/ may use"); it was then removed.
     - Test: `tests/architecture.test.js`
-    - Code: none beyond the guard.
+    - Code: `tools/architecture.js`
 - [x] 9.0 Create the prototype content (no code; checked by data validation in `npm test`)
   - [x] 9.1 Create `tuning.json`, `bindings.json` (defaults from the PRD's bindings table), and `display.json`.
     - Decided: `data/config/tuning.json` (the values the tests' builder uses: gravity 35, maxFallSpeed 20, jumpSpeed 14, throwSpeed 10/6, dropSpeed 0/0, knockback 6/6, invincibilitySeconds 1, stompBounceSpeed 10, punchSeconds 0.15, defeatSeconds 0.5), `bindings.json` (the PRD's default bindings table), and `display.json` (visibleHeight 12, stickDeadZone 0.3).
@@ -511,13 +527,21 @@ These were completed before this approach was adopted: their tests were written 
   - [x] 9.10 Run `npm test` to confirm all content passes validation.
     - Decided: `npm test` passes, and data validation passes on the 12 data files.
 - [ ] 10.0 Verify, automate the UI check, and finish documentation
-  - [ ] 10.1 Movement UI check: start the game with Enter, then hold Right, Left, and Jump, and confirm through `gameTestHook` that the player moved right, moved left, and left the ground and landed (req 93). The behaviour already exists by this point, so this check confirms finished work rather than driving new code. If it fails, fix the code test-first.
+  - [x] 10.1 Movement UI check: start the game with Enter, then hold Right, Left, and Jump, and confirm through `gameTestHook` that the player moved right, moved left, and left the ground and landed (req 93). The behaviour already exists by this point, so this check confirms finished work rather than driving new code. If it fails, fix the code test-first.
+    - Decided: the check waits inside the page (`page.waitForFunction`, every frame) for the player to leave the ground and land. A first version polled from the test with `expect.poll` and missed the whole jump; a probe showed the game jumps correctly, so no code changed. Alongside the other checks it took up to 25 s, so it has a 60 s timeout.
     - Test: `tests-ui/movement.spec.js`
-  - [ ] 10.2 (no code) Run `npm run test:ui` and confirm all UI checks pass.
-  - [ ] 10.3 (no code) Write `docs/manual-test-checklist.md`: Electron launch, Steam overlay and F12, gamepad play, window resizing and fullscreen, browser mode, and cut scene playback (req 95).
-  - [ ] 10.4 (no code) Run the manual test checklist and record the results.
-  - [ ] 10.5 (no code) Ask a repository admin to turn on branch protection for `main`, requiring the CI workflow to pass (req 92). Confirm a pull request with a failing test can't be merged.
-  - [ ] 10.6 (no code) Confirm a commit with a failing test or a broken data file is blocked by the pre-commit hook.
+  - [x] 10.2 (no code) Run `npm run test:ui` and confirm all UI checks pass.
+    - Done: all 4 checks pass, and 12 of 12 with `--repeat-each=3`.
+  - [x] 10.3 (no code) Write `docs/manual-test-checklist.md`: Electron launch, Steam overlay and F12, gamepad play, window resizing and fullscreen, browser mode, and cut scene playback (req 95).
+  - [x] 10.4 (no code) Run the manual test checklist and record the results.
+    - Done 2026-10-27: every section passed, with section 1's Shift+Tab and F12 passing only when started with `--ignore-gpu-blocklist` (see 8.8). Results are recorded in `docs/manual-test-checklist.md`.
+  - [x] 10.5 (no code) Ask a repository admin to turn on branch protection for `main`, requiring the CI workflow to pass (req 92). Confirm a pull request with a failing test can't be merged.
+    - Done 2026-10-26/27: branch protection is on for `main`: the "Unit tests and data validation" check is required, and the rule applies to admins. Throwaway PR #10 (one failing test) failed CI; once marked ready for review, its merge button was disabled. The PR was closed without merging and its branch deleted.
+  - [x] 10.6 (no code) Confirm a commit with a failing test or a broken data file is blocked by the pre-commit hook.
+    - Done: `git config core.hooksPath` is `.githooks`. Running `.githooks/pre-commit` with `tuning.json` made invalid printed "config/tuning.json: this file is not valid JSON..." and "COMMIT BLOCKED", exit 1; with a temporary failing test it exited 1. Both were then undone.
   - [ ] 10.7 (no code) Ask someone who doesn't write code to follow the guides to add an enemy, reward, stackable crate, and platform, and to change a cut scene narration line. Fix the guides wherever they get stuck (Success Metric 6).
-  - [ ] 10.8 (no code) Walk through every success metric in PRD Section 8 and note any gaps.
+  - [x] 10.8 (no code) Walk through every success metric in PRD Section 8 and note any gaps.
+    - Met: 3 (`npm test` passes; test names cover every bullet of reqs 86 and 83), 4 (10.6 locally, 10.5 on `main`), and 5 (10.2).
+    - Gaps, waiting on manual tasks: 1, 9, 10, 11 (10.4); 2 (8.9; measured below 60 FPS); 6 (10.7); 7 (8.8, 8.11). 8 (data changes behaviour with no code changes) holds by design, since all tuning comes from data, but hasn't been tried by hand; it can be added to the checklist run.
   - [ ] 10.9 (no code) Update `docs/developer-guide.md` with anything learned, then open a pull request to `main`.
+    - The developer guide is updated (Electron, Steam, UI check waiting, architecture rules). The pull request waits for the manual tasks above.

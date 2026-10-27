@@ -3,6 +3,7 @@
 
 import { MenuOption } from '../simulation/flow.js';
 import { hudFontSize } from './hud.js';
+import { confirmNames } from './binding-names.js';
 
 export const GAME_TITLE = 'Great Monkey War';
 
@@ -38,47 +39,92 @@ function centredText(ctx, text, x, y, size, color = TEXT_COLOR) {
   ctx.fillText(text, x, y);
 }
 
+/** The menu hint: how to choose an option, e.g. "Enter / A or click: choose". */
+export function menuHint(bindings) {
+  return `${confirmNames(bindings)} or click: choose`;
+}
+
 /**
- * Draws a menu's options one under another, centred on `x`, the first at `top`;
- * the selected one has a highlight box behind it.
+ * Where a menu's options are: one under another, centred on `x`, the first at
+ * `top`. Each is { x, y, width, height }, the box the highlight is drawn in
+ * when it is selected, and the area a click on it must land in.
  */
-function drawMenu(ctx, menu, x, top, size) {
-  menu.options.forEach((option, i) => {
-    const label = MENU_LABELS[option];
+function menuBoxes(ctx, menu, { x, top, size }) {
+  ctx.save();
+  ctx.font = `bold ${size}px sans-serif`;
+  const boxes = menu.options.map((option, i) => {
     const y = top + i * size * 2;
+    const width = ctx.measureText(MENU_LABELS[option]).width + size * 2;
+    const height = size * 1.6;
+    return { x: x - width / 2, y: y - height / 2, width, height };
+  });
+  ctx.restore();
+  return boxes;
+}
+
+/** Draws a menu's options in their boxes (menuBoxes); the selected one has a highlight behind it. */
+function drawMenu(ctx, menu, place) {
+  menuBoxes(ctx, menu, place).forEach((box, i) => {
     const selected = i === menu.selected;
     if (selected) {
-      ctx.font = `bold ${size}px sans-serif`;
-      const width = ctx.measureText(label).width + size * 2;
-      const height = size * 1.6;
       ctx.fillStyle = HIGHLIGHT_COLOR;
-      ctx.fillRect(x - width / 2, y - height / 2, width, height);
+      ctx.fillRect(box.x, box.y, box.width, box.height);
     }
-    centredText(ctx, label, x, y, size, selected ? SELECTED_TEXT_COLOR : TEXT_COLOR);
+    centredText(ctx, MENU_LABELS[menu.options[i]], box.x + box.width / 2, box.y + box.height / 2, place.size,
+      selected ? SELECTED_TEXT_COLOR : TEXT_COLOR);
   });
 }
 
-/** The start screen (req 56): the game's name and its menu (Start, highlighted). */
-export function drawStartScreen(ctx, menu, viewport) {
+/** The index of the option whose box holds `point` ({ x, y }), or -1 if none does. */
+export function optionAt(boxes, point) {
+  return boxes.findIndex((box) =>
+    point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height);
+}
+
+/** Where the start screen's menu goes. */
+function startMenuPlace(viewport) {
+  return { x: viewport.width / 2, top: viewport.height * 0.6, size: hudFontSize(viewport.height) * 1.2 };
+}
+
+/** The start screen's option boxes (menuBoxes), for clicks. */
+export function startMenuBoxes(ctx, menu, viewport) {
+  return menuBoxes(ctx, menu, startMenuPlace(viewport));
+}
+
+/** The start screen (req 56): the game's name, its menu (Start, highlighted), and the menu hint. */
+export function drawStartScreen(ctx, menu, viewport, bindings) {
   const size = hudFontSize(viewport.height);
   ctx.save();
   fillBackground(ctx, viewport);
   centredText(ctx, GAME_TITLE, viewport.width / 2, viewport.height * 0.35, size * 2.5);
-  drawMenu(ctx, menu, viewport.width / 2, viewport.height * 0.6, size * 1.2);
+  drawMenu(ctx, menu, startMenuPlace(viewport));
+  centredText(ctx, menuHint(bindings), viewport.width / 2, viewport.height * 0.85, size * 0.8);
   ctx.restore();
+}
+
+/** The level-complete panel's size and place, and where its menu goes. */
+function levelCompleteLayout(menu, viewport) {
+  const size = hudFontSize(viewport.height);
+  const width = Math.min(viewport.width * 0.8, size * 20);
+  const height = size * (10 + menu.options.length * 2);
+  const left = (viewport.width - width) / 2;
+  const top = (viewport.height - height) / 2;
+  const x = viewport.width / 2;
+  return { size, width, height, left, top, x, menu: { x, top: top + size * 7, size } };
+}
+
+/** The level-complete panel's option boxes (menuBoxes), for clicks. */
+export function levelCompleteMenuBoxes(ctx, menu, viewport) {
+  return menuBoxes(ctx, menu, levelCompleteLayout(menu, viewport).menu);
 }
 
 /**
  * The level-complete panel (req 58), drawn over the frozen game:
- * "Level complete", the reward count, and the menu.
+ * "Level complete", the reward count, the menu, and the menu hint.
  */
-export function drawLevelComplete(ctx, menu, rewardCount, viewport) {
-  const size = hudFontSize(viewport.height);
-  const width = Math.min(viewport.width * 0.8, size * 20);
-  const height = size * (8 + menu.options.length * 2);
-  const left = (viewport.width - width) / 2;
-  const top = (viewport.height - height) / 2;
-  const x = viewport.width / 2;
+export function drawLevelComplete(ctx, menu, rewardCount, viewport, bindings) {
+  const layout = levelCompleteLayout(menu, viewport);
+  const { size, width, height, left, top, x } = layout;
   ctx.save();
   ctx.globalAlpha = PANEL_ALPHA;
   ctx.fillStyle = PANEL_COLOR;
@@ -86,7 +132,8 @@ export function drawLevelComplete(ctx, menu, rewardCount, viewport) {
   ctx.globalAlpha = 1;
   centredText(ctx, 'Level complete', x, top + size * 2, size * 1.6);
   centredText(ctx, `Rewards: ${rewardCount}`, x, top + size * 4.5, size);
-  drawMenu(ctx, menu, x, top + size * 7, size);
+  drawMenu(ctx, menu, layout.menu);
+  centredText(ctx, menuHint(bindings), x, top + height - size * 1.5, size * 0.8);
   ctx.restore();
 }
 

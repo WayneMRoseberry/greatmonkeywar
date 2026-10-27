@@ -21,18 +21,19 @@ import { createFakePlatform } from '../../src/platform/fake-platform.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
 import { InputDevice } from '../../src/presentation/input.js';
-import { GAME_TITLE } from '../../src/presentation/screens.js';
-import { Screen } from '../../src/simulation/flow.js';
+import { GAME_TITLE, menuHint, startMenuBoxes, levelCompleteMenuBoxes } from '../../src/presentation/screens.js';
+import { Screen, MenuOption } from '../../src/simulation/flow.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 
 const NO_KEYS = { fullscreen: false, debug: false };
 
 /** A fake input reader: read() gives what `set` was last told. */
 function fakeReader() {
-  let current = { input: NO_INPUT, presentation: NO_KEYS, device: InputDevice.KEYBOARD };
+  let current = { input: NO_INPUT, presentation: NO_KEYS, device: InputDevice.KEYBOARD, click: null };
   return {
     read: () => current,
     set(input = NO_INPUT, presentation = NO_KEYS) { current = { ...current, input, presentation }; },
+    setClick(click) { current = { ...current, click }; },
   };
 }
 
@@ -41,8 +42,13 @@ function oneLevel() {
   return buildData(['P.G', '###']);
 }
 
+const VIEWPORT = { width: 800, height: 600 };
+
+/** The centre of a menu option's box. */
+const centreOf = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+
 function setUp({ data = oneLevel(), platform = createFakePlatform() } = {}) {
-  const canvas = createFakeCanvas(800, 600);
+  const canvas = createFakeCanvas(VIEWPORT.width, VIEWPORT.height);
   const reader = fakeReader();
   let time = 0;
   const logs = [];
@@ -59,6 +65,12 @@ function setUp({ data = oneLevel(), platform = createFakePlatform() } = {}) {
       controller.update(FIXED_DT);
       reader.set();
       controller.update(FIXED_DT);
+    },
+    /** Clicks at `point` (canvas pixels): the reader reports it for one update. */
+    click(point) {
+      reader.setClick(point);
+      controller.update(FIXED_DT);
+      reader.setClick(null);
     },
     /** Draws once and returns the texts drawn this time. */
     drawTexts() {
@@ -122,6 +134,39 @@ describe('stepping and drawing the screens', () => {
     const texts = game.drawTexts();
     assert.ok(texts.includes('Meanwhile...'));
     assert.ok(texts.some((t) => t.endsWith(': skip')));
+  });
+});
+
+describe('menus by mouse, and the menu hint', () => {
+  test('the start screen and the level-complete panel show the menu hint', () => {
+    const game = setUp();
+    const hint = menuHint(game.controller.getGame().data.bindings);
+    assert.ok(game.drawTexts().includes(hint), 'start screen');
+    toLevelComplete(game);
+    assert.ok(game.drawTexts().includes(hint), 'level complete');
+  });
+
+  test('clicking Start on the start screen starts the level', () => {
+    const game = setUp();
+    const [start] = startMenuBoxes(game.ctx, game.controller.getGame().menu, VIEWPORT);
+    game.click(centreOf(start));
+    assert.equal(game.controller.getGame().screen, Screen.PLAYING);
+  });
+
+  test('a click that isn\'t on an option does nothing', () => {
+    const game = setUp();
+    game.click({ x: 0, y: 0 });
+    assert.equal(game.controller.getGame().screen, Screen.START);
+  });
+
+  test('clicking Exit game on the level-complete panel quits through the platform', () => {
+    const game = setUp();
+    toLevelComplete(game);
+    const { menu } = game.controller.getGame();
+    const boxes = levelCompleteMenuBoxes(game.ctx, menu, VIEWPORT);
+    game.click(centreOf(boxes[menu.options.indexOf(MenuOption.EXIT)]));
+    assert.equal(game.controller.getGame().screen, Screen.FINISHED);
+    assert.equal(game.platform.quits, 1);
   });
 });
 

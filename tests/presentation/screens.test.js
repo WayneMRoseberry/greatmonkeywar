@@ -6,6 +6,12 @@
 //    is the only one that does;
 //  - the start screen fills the canvas with a dark background and shows the
 //    game's name above its menu;
+//  - both menus show a hint, "Enter / A or click: choose", from the first
+//    confirm bindings (like the cut scene's skip hint);
+//  - each menu option has a box for mouse clicks (startMenuBoxes,
+//    levelCompleteMenuBoxes): the same box the highlight is drawn in, so a
+//    click lands where the player sees the button; optionAt finds the box a
+//    point is in;
 //  - the level-complete screen is a half-transparent panel drawn over the
 //    frozen game (not clearing it), with "Level complete", the reward count,
 //    and the menu;
@@ -18,11 +24,13 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   drawStartScreen, drawLevelComplete, drawThanks, drawDataErrors, MENU_LABELS, HIGHLIGHT_COLOR, GAME_TITLE, MIN_ERROR_FONT,
+  menuHint, startMenuBoxes, levelCompleteMenuBoxes, optionAt,
 } from '../../src/presentation/screens.js';
 import { MenuOption } from '../../src/simulation/flow.js';
 import { createFakeContext } from '../helpers/fake-canvas.js';
 
 const VIEWPORT = { width: 1280, height: 720 };
+const BINDINGS = { keyboard: { confirm: ['Enter'] }, gamepad: { confirm: ['a'] } };
 
 /** The highlight boxes drawn. */
 const highlights = (ctx) => ctx.callsOf('fillRect').filter((c) => c.style.fillStyle === HIGHLIGHT_COLOR);
@@ -41,15 +49,46 @@ describe('menu labels', () => {
   });
 });
 
+describe('the menu hint', () => {
+  test('it names the first keyboard key and gamepad button for confirm, and clicking', () => {
+    assert.equal(menuHint(BINDINGS), 'Enter / A or click: choose');
+  });
+
+  test('key codes are shown as their key names', () => {
+    assert.equal(menuHint({ keyboard: { confirm: ['KeyE'] }, gamepad: { confirm: ['b'] } }), 'E / B or click: choose');
+  });
+});
+
 describe('start screen (req 56)', () => {
-  test('a dark background over the whole canvas, the game\'s name, and a highlighted Start button', () => {
+  const MENU = { options: [MenuOption.START], selected: 0 };
+
+  function drawn() {
     const ctx = createFakeContext();
-    drawStartScreen(ctx, { options: [MenuOption.START], selected: 0 }, VIEWPORT);
+    drawStartScreen(ctx, MENU, VIEWPORT, BINDINGS);
+    return ctx;
+  }
+
+  test('a dark background over the whole canvas, the game\'s name, and a highlighted Start button', () => {
+    const ctx = drawn();
     assert.deepEqual(ctx.calls[0].args, [0, 0, VIEWPORT.width, VIEWPORT.height]);
     assert.ok(ctx.texts().includes(GAME_TITLE));
     const start = textCall(ctx, 'Start');
     const [box] = highlights(ctx);
     assert.ok(box && boxHolds(box.args, start.args[1], start.args[2]), 'the highlight is behind Start');
+  });
+
+  test('the menu hint is drawn below the menu', () => {
+    const ctx = drawn();
+    const hint = textCall(ctx, menuHint(BINDINGS));
+    assert.ok(hint, 'the hint is drawn');
+    assert.ok(hint.args[2] > textCall(ctx, 'Start').args[2], 'below Start');
+  });
+
+  test('the Start button\'s box, for clicks, is where its highlight is drawn', () => {
+    const ctx = drawn();
+    const [highlight] = highlights(ctx);
+    const [box] = startMenuBoxes(createFakeContext(), MENU, VIEWPORT);
+    assert.deepEqual([box.x, box.y, box.width, box.height], highlight.args);
   });
 });
 
@@ -58,9 +97,29 @@ describe('level complete (req 58)', () => {
 
   function drawn(menu = MENU, rewardCount = 5) {
     const ctx = createFakeContext();
-    drawLevelComplete(ctx, menu, rewardCount, VIEWPORT);
+    drawLevelComplete(ctx, menu, rewardCount, VIEWPORT, BINDINGS);
     return ctx;
   }
+
+  test('the menu hint is drawn inside the panel, below the options', () => {
+    const ctx = drawn();
+    const [panel] = ctx.callsOf('fillRect');
+    const hint = textCall(ctx, menuHint(BINDINGS));
+    assert.ok(hint && boxHolds(panel.args, hint.args[1], hint.args[2]), 'inside the panel');
+    assert.ok(hint.args[2] > textCall(ctx, 'Exit game').args[2], 'below the last option');
+  });
+
+  test('each option has a box, for clicks, around its label; the selected one\'s is where its highlight is drawn', () => {
+    const ctx = drawn();
+    const boxes = levelCompleteMenuBoxes(createFakeContext(), MENU, VIEWPORT);
+    assert.equal(boxes.length, MENU.options.length);
+    MENU.options.forEach((option, i) => {
+      const label = textCall(ctx, MENU_LABELS[option]);
+      assert.ok(boxHolds([boxes[i].x, boxes[i].y, boxes[i].width, boxes[i].height], label.args[1], label.args[2]), MENU_LABELS[option]);
+    });
+    const selected = boxes[MENU.selected];
+    assert.deepEqual([selected.x, selected.y, selected.width, selected.height], highlights(ctx)[0].args);
+  });
 
   test('a half-transparent panel over the game, not clearing it', () => {
     const ctx = drawn();
@@ -88,6 +147,21 @@ describe('level complete (req 58)', () => {
     const texts = drawn({ options: [MenuOption.EXIT], selected: 0 }).texts();
     assert.ok(texts.includes('Exit game'));
     assert.ok(!texts.includes('Next level'));
+  });
+});
+
+describe('which option a click is on', () => {
+  const BOXES = [{ x: 10, y: 10, width: 100, height: 20 }, { x: 10, y: 50, width: 100, height: 20 }];
+
+  test('a point inside an option\'s box gives that option\'s index', () => {
+    const second = BOXES[1];
+    assert.equal(optionAt(BOXES, { x: second.x + second.width / 2, y: second.y + second.height / 2 }), 1);
+  });
+
+  test('a point outside every box gives -1', () => {
+    const [first, second] = BOXES;
+    assert.equal(optionAt(BOXES, { x: first.x, y: (first.y + first.height + second.y) / 2 }), -1, 'between the boxes');
+    assert.equal(optionAt(BOXES, { x: first.x + first.width + 1, y: first.y }), -1, 'right of them');
   });
 });
 

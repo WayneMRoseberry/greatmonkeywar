@@ -1,6 +1,6 @@
 // The Electron platform (tasks 8.4, 8.6; see platform.js): the page's side.
 // It talks to the main process only through the preload bridge
-// (electron/preload-api.cjs), which preload.cjs puts on the window.
+// (electron/preload.cjs), which puts it on the window.
 
 import { SteamStatus } from './platform.js';
 

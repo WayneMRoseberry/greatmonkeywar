@@ -9,7 +9,8 @@
 //  - the screens are Screen.START, PLAYING, LEVEL_COMPLETE, CUTSCENE, FINISHED;
 //  - menus are lists of MenuOption values with a selected index; up and down
 //    move the selection one place, stopping at the ends (no wrap-around);
-//    confirm chooses the selected option;
+//    confirm chooses the selected option; chooseMenuOption(game, index)
+//    chooses any option directly (the presentation uses it for mouse clicks);
 //  - only a new press of confirm, up, or down counts, and the game remembers
 //    what was held across screens, so the press that chooses a menu option
 //    doesn't also skip the cut scene that follows;
@@ -24,7 +25,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, stepGame, Screen, MenuOption } from '../../src/simulation/flow.js';
+import { createGame, stepGame, chooseMenuOption, Screen, MenuOption } from '../../src/simulation/flow.js';
 import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
@@ -128,6 +129,37 @@ describe('start (6.2, req 56)', () => {
     const game = started(twoLevels());
     const after = stepGame(game, holding(Input.RIGHT), FIXED_DT);
     assert.ok(after.level.player.x > game.level.player.x);
+  });
+});
+
+describe('choosing a menu option directly (a mouse click on it)', () => {
+  test('choosing Start (index 0) on the start screen begins the first level, like confirm does', () => {
+    const data = twoLevels();
+    const game = chooseMenuOption(createGame(data), 0);
+    assert.equal(game.screen, Screen.PLAYING);
+    assert.equal(game.level.levelName, data.levelList.levels[0]);
+  });
+
+  test('choosing an option that isn\'t selected chooses it: Exit game on level complete finishes', () => {
+    const game = completed(twoLevels());
+    const exit = game.menu.options.indexOf(MenuOption.EXIT);
+    assert.notEqual(game.menu.selected, exit, 'Next level is selected first');
+    assert.equal(chooseMenuOption(game, exit).screen, Screen.FINISHED);
+  });
+
+  test('it doesn\'t change the game passed in', () => {
+    const game = createGame(twoLevels());
+    const before = structuredClone({ ...game, data: undefined });
+    chooseMenuOption(game, 0);
+    assert.deepEqual(structuredClone({ ...game, data: undefined }), before);
+  });
+
+  test('with no menu showing, or no option at that index, nothing happens', () => {
+    const playing = started(twoLevels());
+    assert.equal(chooseMenuOption(playing, 0), playing);
+    const start = createGame(twoLevels());
+    assert.equal(chooseMenuOption(start, -1), start);
+    assert.equal(chooseMenuOption(start, start.menu.options.length), start);
   });
 });
 

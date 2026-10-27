@@ -96,6 +96,19 @@ function choose(game, option) {
   }
 }
 
+/**
+ * Chooses the menu option at `index` directly, as if it were selected and
+ * confirmed (the presentation uses it for a mouse click on an option). With
+ * no menu showing, or no option at `index`, returns `game` itself.
+ */
+export function chooseMenuOption(game, index) {
+  if (!game.menu || !(index >= 0 && index < game.menu.options.length)) return game;
+  const next = copyGame(game);
+  next.menu.selected = index;
+  choose(next, next.menu.options[index]);
+  return next;
+}
+
 /** Up and down move the selection one place, stopping at the ends; confirm chooses (req 19). */
 function updateMenu(game, pressed) {
   const { menu: current } = game;

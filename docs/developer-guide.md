@@ -30,7 +30,20 @@ Then open <http://localhost:8765> in Chrome or Edge. Use `PORT=9000 npm run web`
 
 The game can't be opened by double-clicking `index.html`. Browsers block JavaScript modules and JSON data files on pages opened straight from disk, so a local web server is needed. The server only serves `index.html`, `src/`, and `data/`.
 
-Running the game as an Electron desktop app is added in task 8.0.
+## Running the game as a desktop app (Electron)
+
+```
+npm start
+```
+
+This opens the game in an Electron window. Electron serves the game's files itself (on an `app://game/` address, with the same rules as `npm run web`), so no web server is needed.
+
+- **Steam:** if Steam is running and logged in, the game connects using Valve's public test app ID, 480 (in `steam_appid.txt`). Press F3 to see the Steam status and your Steam name in the debug overlay. If Steam isn't running, the game still starts, and the terminal says Steam is unavailable.
+- **Steam overlay:** Shift+Tab opens it and F12 takes a Steam screenshot. The settings this needs are explained in [steam-overlay.md](steam-overlay.md).
+- **steamworks.js** is a native module. If it can't load on your machine, the game runs without Steam and logs why.
+- If `npm start` fails with "The requested module 'electron' does not provide an export named 'BrowserWindow'", the environment variable `ELECTRON_RUN_AS_NODE` is set, so Electron is running as plain Node. Tools built on Electron (such as VS Code) can pass it on to programs they start. Clear it (`Remove-Item Env:ELECTRON_RUN_AS_NODE` in PowerShell, `unset ELECTRON_RUN_AS_NODE` in bash) and run `npm start` again.
+
+Things only a person can check (the Steam overlay, gamepads, resizing, cut scenes) are in the [manual test checklist](manual-test-checklist.md).
 
 ## Tests
 
@@ -49,6 +62,8 @@ node --test tests/tools/serve.test.js
 Unit tests use Node's built-in test runner (`node:test`) and `node:assert`. Name test files `*.test.js` and put them in `tests/`, mirroring the `src/` folder they test.
 
 UI checks use [Playwright](https://playwright.dev/). `npm run test:ui` starts its own web server on port 8766, so `npm run web` doesn't need to be running. After a failure, `npx playwright show-report` shows details.
+
+UI checks read the game's state through `window.gameTestHook.getState()` (browser mode only) instead of comparing pixels. To wait for something that happens quickly, such as the player leaving the ground, wait inside the page with `page.waitForFunction(...)`, which checks every frame. `expect.poll` asks from outside the page, and on a busy machine the gap between its checks can be longer than a whole jump.
 
 ## Quality gates
 
@@ -69,3 +84,8 @@ UI checks use [Playwright](https://playwright.dev/). `npm run test:ui` starts it
 | `tests/` | Unit tests. |
 | `tests-ui/` | Playwright UI checks. |
 | `docs/` | Requirements and guides. |
+
+`tests/architecture.test.js` enforces two rules on every run of `npm test`:
+
+- code in `src/simulation/` imports only other simulation code, and uses no browser globals, `Math.random`, or clock reads;
+- only `electron/` and `src/platform/` may load the `electron` or `steamworks.js` packages, so all Steam and Electron calls go through the platform layer.

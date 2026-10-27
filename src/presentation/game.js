@@ -2,13 +2,15 @@
 // drawing together. The loop (loop.js) calls update(dt) for each fixed step
 // and draw() once a frame. Everything it uses is passed in, so tests use fakes.
 
-import { createGame, stepGame, Screen } from '../simulation/flow.js';
+import { createGame, stepGame, chooseMenuOption, Screen } from '../simulation/flow.js';
 import { cutsceneAt } from '../simulation/cutscene.js';
 import { heldObject } from '../simulation/objects.js';
 import { visibleArea } from '../simulation/camera.js';
 import { levelView, drawLevel } from './renderer.js';
 import { drawHud } from './hud.js';
-import { drawStartScreen, drawLevelComplete, drawThanks } from './screens.js';
+import {
+  drawStartScreen, drawLevelComplete, drawThanks, startMenuBoxes, levelCompleteMenuBoxes, optionAt,
+} from './screens.js';
 import { drawCutscene } from './cutscene-view.js';
 import { debugLines, drawDebugOverlay } from './debug-overlay.js';
 
@@ -20,12 +22,12 @@ const FPS_SMOOTHING = 0.2;
  *  - data, images: loaded game data and images (src/data/load.js);
  *  - platform: the platform (src/platform/platform.js);
  *  - canvas: the canvas, already sized in device pixels (canvas-size.js);
- *  - inputReader: read() gives { input, presentation, device } (input.js);
+ *  - inputReader: read() gives { input, presentation, device, click } (input.js);
  *  - now(): the clock in milliseconds, for the fps reading;
  *  - log(message): for warnings (a missing sprite, req 79).
  * update(dt): reads input; a new press of the debug key shows or hides the
  * overlay and of the fullscreen key toggles fullscreen through the platform;
- * then steps the game flow. When the flow reaches the finished screen, the
+ * a click on a menu option chooses it; then steps the game flow. When the flow reaches the finished screen, the
  * platform's quit is called once, and its { showThanks } decides whether
  * "Thanks for playing" is drawn. draw(): draws the current screen, and the
  * debug overlay if shown. getGame(): the current game flow state.
@@ -48,21 +50,35 @@ export function createGameController({ data, images, platform, canvas, inputRead
     held = { ...presentation };
 
     if (game.screen === Screen.FINISHED) return;
-    game = stepGame(game, lastRead.input, dt);
+    if (lastRead.click) game = clickMenu(game, lastRead.click);
+    if (game.screen !== Screen.FINISHED) game = stepGame(game, lastRead.input, dt);
     if (game.screen === Screen.FINISHED) quitResult = platform.quit();
+  }
+
+  /** A click on a menu option chooses it; a click anywhere else does nothing. */
+  function clickMenu(current, point) {
+    const ctx = canvas.getContext('2d');
+    const viewport = { width: canvas.width, height: canvas.height };
+    const boxesFor = {
+      [Screen.START]: () => startMenuBoxes(ctx, current.menu, viewport),
+      [Screen.LEVEL_COMPLETE]: () => levelCompleteMenuBoxes(ctx, current.menu, viewport),
+    }[current.screen];
+    return boxesFor ? chooseMenuOption(current, optionAt(boxesFor(), point)) : current;
   }
 
   function drawScreen(ctx, viewport) {
     const level = game.level;
     switch (game.screen) {
       case Screen.START:
-        drawStartScreen(ctx, game.menu, viewport);
+        drawStartScreen(ctx, game.menu, viewport, data.bindings);
         break;
       case Screen.PLAYING:
       case Screen.LEVEL_COMPLETE:
         drawLevel(ctx, level, levelView(level, viewport, data.display.visibleHeight), assets);
         drawHud(ctx, { health: level.player.health, rewardCount: level.rewardCount }, viewport);
-        if (game.screen === Screen.LEVEL_COMPLETE) drawLevelComplete(ctx, game.menu, level.rewardCount, viewport);
+        if (game.screen === Screen.LEVEL_COMPLETE) {
+          drawLevelComplete(ctx, game.menu, level.rewardCount, viewport, data.bindings);
+        }
         break;
       case Screen.CUTSCENE: {
         const scene = data.cutscenes[game.cutscene.name];

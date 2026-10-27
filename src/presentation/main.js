@@ -37,7 +37,8 @@ if (!loaded.ok) {
   const platform = bridge ? await createElectronPlatform(bridge) : createBrowserPlatform({ document, log });
   watchCanvasSize(canvas, window, document, () => {});
   const inputReader = createInputReader({
-    target: window, getGamepads: () => navigator.getGamepads?.(), bindings: data.bindings, deadZone: data.display.stickDeadZone,
+    target: window, pointerTarget: canvas, getGamepads: () => navigator.getGamepads?.(),
+    bindings: data.bindings, deadZone: data.display.stickDeadZone,
   });
   const controller = createGameController({
     data, images, platform, canvas, inputReader, now: () => performance.now(), log,

@@ -1,11 +1,13 @@
 // Tests for reading input (task 7.10; PRD req 14), with fake events and gamepads.
 //
-// createInputReader({ target, getGamepads, bindings, deadZone }) tracks the
-// keys held from keydown and keyup events on `target` (the window), and reads
-// the gamepads each time read() is called (once a frame; the Gamepad API is
-// polled, not event-driven). read() gives { input, presentation, device }:
-// the input state (input-map.js), the fullscreen and debug keys, and which
-// device was used last.
+// createInputReader({ target, pointerTarget, getGamepads, bindings, deadZone })
+// tracks the keys held from keydown and keyup events on `target` (the window),
+// clicks on `pointerTarget` (the canvas), and reads the gamepads each time
+// read() is called (once a frame; the Gamepad API is polled, not
+// event-driven). read() gives { input, presentation, device, click }: the
+// input state (input-map.js), the fullscreen and debug keys, which device was
+// used last, and the last click since the previous read ({ x, y } in canvas
+// pixels, or null).
 // Decided:
 //  - a key that is bound to something has its browser default prevented (so
 //    arrows and Space don't scroll the page, and F3 and F11 don't do the
@@ -14,7 +16,10 @@
 //    would never arrive);
 //  - the device is the keyboard to begin with; it becomes the gamepad when
 //    something is held on one (a button, or the stick past the dead zone),
-//    and the keyboard again when a key is pressed.
+//    and the keyboard again when a key is pressed;
+//  - a click is only used by the menus, so it doesn't change the device;
+//    only the main button counts, and the canvas may be drawn at a different
+//    size than it shows on the page (device pixels), so the click is scaled.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,11 +61,35 @@ function gamepad({ held = [], x = 0 } = {}) {
   return { mapping: 'standard', buttons, axes: [x, 0, 0, 0] };
 }
 
+/** Where the fake canvas is on the page, in CSS pixels; it is drawn at twice that size (a high-DPI screen). */
+const CANVAS_RECT = { left: 10, top: 20, width: 800, height: 450 };
+const MAIN_BUTTON = 0;
+const SECONDARY_BUTTON = 2;
+
+/** A fake canvas: records listeners; click({ clientX, clientY, button }) fires a click event. */
+function fakeCanvas() {
+  const listeners = {};
+  return {
+    listeners,
+    width: CANVAS_RECT.width * 2,
+    height: CANVAS_RECT.height * 2,
+    getBoundingClientRect: () => ({ ...CANVAS_RECT }),
+    addEventListener(type, fn) { (listeners[type] ??= []).push(fn); },
+    removeEventListener(type, fn) { listeners[type] = (listeners[type] ?? []).filter((f) => f !== fn); },
+    click({ clientX, clientY, button = MAIN_BUTTON }) {
+      for (const fn of listeners.click ?? []) fn({ type: 'click', clientX, clientY, button });
+    },
+  };
+}
+
 function setUp() {
   const win = fakeWindow();
+  const canvas = fakeCanvas();
   let pads = [];
-  const reader = createInputReader({ target: win, getGamepads: () => pads, bindings: BINDINGS, deadZone: DEAD_ZONE });
-  return { win, reader, setPads: (p) => { pads = p; } };
+  const reader = createInputReader({
+    target: win, pointerTarget: canvas, getGamepads: () => pads, bindings: BINDINGS, deadZone: DEAD_ZONE,
+  });
+  return { win, canvas, reader, setPads: (p) => { pads = p; } };
 }
 
 describe('keyboard', () => {
@@ -130,7 +159,9 @@ describe('gamepads, read each frame', () => {
 
   test('no gamepad support (getGamepads gives nothing) still works', () => {
     const win = fakeWindow();
-    const reader = createInputReader({ target: win, getGamepads: () => undefined, bindings: BINDINGS, deadZone: DEAD_ZONE });
+    const reader = createInputReader({
+      target: win, pointerTarget: fakeCanvas(), getGamepads: () => undefined, bindings: BINDINGS, deadZone: DEAD_ZONE,
+    });
     win.key('keydown', 'Enter');
     assert.equal(reader.read().input[Input.CONFIRM], true);
   });
@@ -158,10 +189,38 @@ describe('the device in use (debug overlay)', () => {
   });
 });
 
+describe('mouse clicks on the canvas (menus)', () => {
+  test('there is no click until one happens', () => {
+    const { reader } = setUp();
+    assert.equal(reader.read().click, null);
+  });
+
+  test('a click is reported once, in canvas pixels', () => {
+    const { canvas, reader } = setUp();
+    const clientX = CANVAS_RECT.left + CANVAS_RECT.width / 4;
+    const clientY = CANVAS_RECT.top + CANVAS_RECT.height / 2;
+    canvas.click({ clientX, clientY });
+    const scaleX = canvas.width / CANVAS_RECT.width;
+    const scaleY = canvas.height / CANVAS_RECT.height;
+    assert.deepEqual(reader.read().click, {
+      x: (clientX - CANVAS_RECT.left) * scaleX,
+      y: (clientY - CANVAS_RECT.top) * scaleY,
+    });
+    assert.equal(reader.read().click, null, 'only once');
+  });
+
+  test('only the main button counts', () => {
+    const { canvas, reader } = setUp();
+    canvas.click({ clientX: CANVAS_RECT.left, clientY: CANVAS_RECT.top, button: SECONDARY_BUTTON });
+    assert.equal(reader.read().click, null);
+  });
+});
+
 describe('cleaning up', () => {
   test('dispose removes the event listeners', () => {
-    const { win, reader } = setUp();
+    const { win, canvas, reader } = setUp();
     reader.dispose();
     for (const type of ['keydown', 'keyup', 'blur']) assert.deepEqual(win.listeners[type], []);
+    assert.deepEqual(canvas.listeners.click, []);
   });
 });

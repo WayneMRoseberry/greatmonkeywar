@@ -117,3 +117,32 @@ export function checkSimulationSource(source, filePath) {
     .sort((a, b) => a.index - b.index)
     .map(({ line, rule, subject, message }) => ({ line, rule, subject, message }));
 }
+
+/** The folders that may reference the host packages (PRD req 13). */
+const HOST_DIRS = [path.join(REPO_ROOT, 'electron'), path.join(REPO_ROOT, 'src', 'platform')];
+
+/**
+ * The electron or steamworks.js package (or a file in it), named where a
+ * module is loaded: import ... from, import '...', export ... from, import(),
+ * require(), and createRequire(...)(). A string anywhere else, such as a folder
+ * name in path.join(root, 'electron'), loads nothing.
+ */
+const HOST_PACKAGE = new RegExp(
+  String.raw`(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*|\)\s*\(\s*)` +
+  String.raw`(['"\x60])((?:electron|steamworks\.js)(?:\/[^'"\x60]*)?)\1`, 'g');
+
+/**
+ * Returns the references to the electron or steamworks.js packages in a source
+ * file, each as { line, rule: 'host-reference', subject, message }. Files in
+ * electron/ and src/platform/ may reference them, so have none.
+ */
+export function checkHostReferences(source, filePath) {
+  if (HOST_DIRS.some((dir) => isInside(dir, filePath))) return [];
+  const { code } = blankOut(source);
+  return [...code.matchAll(HOST_PACKAGE)].map((match) => ({
+    line: lineAt(source, match.index + match[0].indexOf(match[1])),
+    rule: 'host-reference',
+    subject: match[2],
+    message: `references "${match[2]}", which only electron/ and src/platform/ may use`,
+  }));
+}

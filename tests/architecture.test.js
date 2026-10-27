@@ -5,6 +5,10 @@
 // and must not use browser globals, Node built-ins, or hidden sources of
 // randomness or time.
 //
+// All Steam and Electron calls go through the platform layer (req 13). So
+// only electron/ and src/platform/ may reference the electron or steamworks.js
+// packages; everything in src/ and tools/ is checked.
+//
 // Detection tests check what was found ({ line, rule, subject }); the wording
 // of messages is checked separately, once per rule.
 
@@ -12,7 +16,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkSimulationSource } from '../tools/architecture.js';
+import { checkSimulationSource, checkHostReferences } from '../tools/architecture.js';
 
 const SIMULATION_DIR = path.resolve('src/simulation');
 const FILE = path.join(SIMULATION_DIR, 'example.js');
@@ -121,6 +125,60 @@ describe('checkSimulationSource: messages', () => {
   });
 });
 
+// Host references (task 8.12; PRD reqs 13, 71): only electron/ and
+// src/platform/ may reference the electron or steamworks.js packages, so all
+// Steam and Electron calls go through the platform layer. Any way of naming
+// the package counts (import, export from, import(), require, createRequire).
+
+const PRESENTATION_FILE = path.resolve('src/presentation/example.js');
+const hostFound = (source, file = PRESENTATION_FILE) =>
+  checkHostReferences(source, file).map(({ line, rule, subject }) => ({ line, rule, subject }));
+const hostReference = (line, subject) => ({ line, rule: 'host-reference', subject });
+
+describe('checkHostReferences: detection', () => {
+  test('rejects every way of naming electron or steamworks.js outside the platform layer', () => {
+    assert.deepEqual(hostFound(
+      "import { app } from 'electron';\n" +
+      "export * from 'steamworks.js';\n" +
+      "const e = await import('electron');\n" +
+      "const s = require('steamworks.js');\n" +
+      "const t = createRequire(import.meta.url)('steamworks.js');\n" +
+      'import { x } from "electron/main";\n' +
+      "import 'electron';\n"), [
+      hostReference(1, 'electron'),
+      hostReference(2, 'steamworks.js'),
+      hostReference(3, 'electron'),
+      hostReference(4, 'steamworks.js'),
+      hostReference(5, 'steamworks.js'),
+      hostReference(6, 'electron/main'),
+      hostReference(7, 'electron'),
+    ]);
+  });
+
+  test('allows them in electron/ and src/platform/', () => {
+    const source = "import { app } from 'electron';\nconst s = require('steamworks.js');\n";
+    assert.deepEqual(hostFound(source, path.resolve('electron/main.js')), []);
+    assert.deepEqual(hostFound(source, path.resolve('src/platform/electron-platform.js')), []);
+  });
+
+  test('ignores comments, other packages, names that only start the same way, and strings that load nothing', () => {
+    assert.deepEqual(hostFound(
+      "// import { app } from 'electron';\n" +
+      "/* require('steamworks.js') */\n" +
+      "import { test } from 'node:test';\n" +
+      "const label = 'electronic';\n" +
+      "const file = '../platform/electron-platform.js';\n" +
+      "const dir = path.join(root, 'electron');\n"), []);
+  });
+});
+
+describe('checkHostReferences: messages', () => {
+  test('host-reference names the package and where it may be used', () => {
+    assert.equal(checkHostReferences("import { app } from 'electron';", PRESENTATION_FILE)[0].message,
+      'references "electron", which only electron/ and src/platform/ may use');
+  });
+});
+
 describe('architecture guard', () => {
   const files = fs.existsSync(SIMULATION_DIR)
     ? fs.readdirSync(SIMULATION_DIR, { recursive: true }).filter((f) => f.endsWith('.js'))
@@ -131,6 +189,19 @@ describe('architecture guard', () => {
       const full = path.join(SIMULATION_DIR, file);
       const violations = checkSimulationSource(fs.readFileSync(full, 'utf8'), full);
       // Messages, so a failure explains itself.
+      assert.deepEqual(violations.map((v) => `line ${v.line}: ${v.message}`), []);
+    });
+  }
+
+  const hostDirs = ['src', 'tools'];
+  const hostFiles = hostDirs.flatMap((dir) => fs.readdirSync(path.resolve(dir), { recursive: true })
+    .filter((f) => f.endsWith('.js') || f.endsWith('.cjs'))
+    .map((f) => path.join(dir, f)));
+
+  for (const file of hostFiles) {
+    test(`${file.split(path.sep).join('/')} references electron and steamworks.js only through the platform layer`, () => {
+      const full = path.resolve(file);
+      const violations = checkHostReferences(fs.readFileSync(full, 'utf8'), full);
       assert.deepEqual(violations.map((v) => `line ${v.line}: ${v.message}`), []);
     });
   }

@@ -6,6 +6,17 @@
  * the game's drawing, so the GPU work must run in the main process
  * (in-process-gpu), and on Windows DirectComposition must be off so the
  * overlay can draw over the window (disable-direct-composition).
+ *
+ * KNOWN ISSUE (to solve later): these aren't enough on a PC whose graphics
+ * driver Chromium blocklists. Chromium then draws in software, and the
+ * overlay has no GPU drawing to hook: no notice, and Shift+Tab does nothing.
+ * The frame rate also drops below 60. Found on an AMD A8-8650 (Radeon R7)
+ * with driver 8.17.10.1404: app.getGPUFeatureStatus() showed gpu_compositing
+ * "disabled_software" and 45 FPS. With the ignore-gpu-blocklist switch,
+ * Chromium used the GPU (Direct3D 11), ran at 60 FPS, and Shift+Tab and F12
+ * worked (checked by hand, 2026-10-27). Options: add that switch here (it
+ * risks the driver bugs the blocklist exists for; others report random
+ * crashes), and/or tell players to update their graphics driver.
  */
 export const OVERLAY_SWITCHES = ['in-process-gpu', 'disable-direct-composition'];
 
