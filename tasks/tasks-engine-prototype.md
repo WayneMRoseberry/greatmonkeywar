@@ -51,7 +51,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `src/presentation/renderer.js` - Draws tiles, entities, parallax layers, and the punch flash.
 - `src/presentation/sprites.js` - Sprite sheet loading, animation frames, and shape fallback.
 - `src/presentation/hud.js` - Health and reward count.
-- `src/presentation/screens.js` - Start screen, level-complete screen, "Thanks for playing", and data error screen.
+- `src/presentation/screens.js` - Start screen, level-complete screen, "Thanks for playing", and data error screen; the menu hint and the menu option boxes used for mouse clicks.
+- `src/presentation/binding-names.js` - Bindings as a player would name them, for on-screen hints.
 - `src/presentation/cutscene-view.js` - Draws cut scene background, actors, and narration.
 - `src/presentation/debug-overlay.js` - F3 debug overlay.
 - `src/presentation/test-hook.js` - Read-only `window.gameTestHook` for UI checks (browser mode only).
@@ -65,8 +66,8 @@ Source: [prd-engine-prototype.md](prd-engine-prototype.md). "Req N" refers to th
 - `electron/window-options.js` - The game window's settings (security options, preload, page).
 - `electron/steam.js` - Steam start-up and user name, with the steamworks.js module passed in.
 - `electron/overlay.js` - Steam overlay settings, with Electron's `app` passed in.
-- `electron/preload.js` - Preload glue: exposes the bridge built by `preload-api.js`.
-- `electron/preload-api.js` - Builds the bridge object exposing only the platform methods.
+- `electron/preload.cjs` - The preload script: builds the bridge exposing only the platform methods, and puts it on the page's window.
+- `electron/ipc.js` - The main process's side of the bridge: answers its calls.
 - `steam_appid.txt` - Contains `480` for development.
 
 **Data (content)**
@@ -353,136 +354,195 @@ These were completed before this approach was adopted: their tests were written 
     - Carried over from 5.7: `updatePunch` runs after `updateEnemies`, so the punch is checked against where enemies are after this step's move. With no sprite, the reach is only the player's front edge (no width), so an enemy exactly flush against the player that walks away by any amount in the press step is out of reach and can't be punched. An enemy walking toward the player overlaps the edge and is hit, so this mostly affects one that has just turned away. Decide whether to resolve the punch against where enemies were before they moved this step: either call `updatePunch` before `updateEnemies`, or check reach against the enemies' start-of-step boxes. Keep the punch before contact damage either way (req 51), and test the flush, walking-away case.
     - Test: `tests/simulation/punch.test.js` ("order")
     - Code: `src/simulation/step.js`
-  - [x] 5.10 Defeated enemies are removed, after a short defeat state the renderer can flash (req 53).
+  - [x] 5.10 (req 53).
     - Decided: the defeat state lasts `defeatSeconds`, a new required tuning field (a number ≥ 0; 0 removes the enemy at once), added to the tuning schema, the valid fixture, the test data builder (default 0.5), and `docs/data-formats.md`. `defeatEnemy` sets `Enemy.defeatTime` to it (more than 0 means defeated); `updateDefeated` counts it down at the start of each step, so every way of defeating an enemy gets the full time, and removes the enemy when it runs out. While defeated an enemy is frozen (no walking or falling) and harmless: it can't hurt the player, and can't be stomped, punched, or hit by a thrown object again (`liveEnemies` is the enemies that aren't defeated, used by all of those). Defeating an already defeated enemy does nothing. Earlier tests that checked a defeat by the enemy disappearing now check `liveEnemies` instead.
     - Test: `tests/simulation/enemies.test.js` ("defeat", and the stomp, thrown-object, and contact tests), `tests/simulation/punch.test.js` (damage, order), `tests/simulation/state.test.js` (the Enemy structure), `tests/data/validate.test.js` (`defeatSeconds`)
     - Code: `src/simulation/enemies.js` (`defeatEnemy`, `updateDefeated`, `isDefeated`, `liveEnemies`), `src/simulation/punch.js`, `src/simulation/step.js`, `src/data/schemas/tuning.schema.json`
-- [ ] 6.0 Build game flow: start screen, level completion, progression, and cut scenes (simulation side)
-  - [ ] 6.1 Screens as states: start, playing, level complete, cut scene, and finished. The game begins on the start screen.
+- [x] 6.0 Build game flow: start screen, level completion, progression, and cut scenes (simulation side)
+  - [x] 6.1 Screens as states: start, playing, level complete, cut scene, and finished. The game begins on the start screen.
+    - Decided: `createGame(data)` / `stepGame(game, input, dt)` in `src/simulation/flow.js` hold the whole game: `screen` (`Screen.START`, `PLAYING`, `LEVEL_COMPLETE`, `CUTSCENE`, `FINISHED`), `menu` ({ options of `MenuOption`, selected }), the current `level` state, `levelIndex`, `cutscene` ({ name, time }), and which menu inputs were `held`. It begins on the start screen with Start selected and no level. `stepGame` never changes the game passed in.
     - Test: `tests/simulation/flow.test.js` ("screens")
     - Code: `src/simulation/flow.js`
-  - [ ] 6.2 Start screen: confirm on Start begins the first level in the level list (req 56).
+  - [x] 6.2 Start screen: confirm on Start begins the first level in the level list (req 56).
+    - Decided: a new press of confirm on Start begins the first level in the level list (`createLevelState`).
     - Test: `tests/simulation/flow.test.js` ("start")
     - Code: `src/simulation/flow.js`
-  - [ ] 6.3 Reaching the goal stops gameplay and opens level complete, offering Next level and Exit game, or only Exit game on the last level (req 58).
+  - [x] 6.3 Reaching the goal stops gameplay and opens level complete, offering Next level and Exit game, or only Exit game on the last level (req 58).
+    - Decided: the level is complete when the player's box overlaps the goal's. The level state is then no longer stepped (frozen under the panel) and is kept, with its reward count, for the panel to show. The menu offers Next level then Exit game, with Next level selected, or only Exit game on the last level in the list.
     - Test: `tests/simulation/flow.test.js` ("level complete")
     - Code: `src/simulation/flow.js`, `src/simulation/step.js`
-  - [ ] 6.4 Menu selection with up, down, and confirm (req 19).
+  - [x] 6.4 Menu selection with up, down, and confirm (req 19).
+    - Decided: up and down move the selection one place and stop at the ends (no wrap-around); confirm chooses. Only a new press of confirm, up, or down counts, and the game remembers what was held across screens, so the press that chooses an option doesn't also act on the next screen.
     - Test: `tests/simulation/flow.test.js` ("menus")
     - Code: `src/simulation/flow.js`
-  - [ ] 6.5 Next level plays the completed level's cut scene if it has one, then loads the next level, carrying over health and reward count (req 59). With and without a cut scene.
+  - [x] 6.5 Next level plays the completed level's cut scene if it has one, then loads the next level, carrying over health and reward count (req 59). With and without a cut scene.
+    - Decided: Next level plays the completed level's cut scene if it names one, then starts the next level in the list; without one it starts the next level at once. The next level starts with the completed level's health and reward count: `createLevelState(data, name, carry)` takes an optional `{ health, rewardCount }`, which also becomes the level-start snapshot, so a restart at 0 health goes back to the carried values.
     - Test: `tests/simulation/flow.test.js` ("next level")
     - Code: `src/simulation/flow.js`, `src/simulation/state.js`
-  - [ ] 6.6 Exit game moves to the finished state, which the presentation hands to the platform's quit (req 60).
+  - [x] 6.6 Exit game moves to the finished state, which the presentation hands to the platform's quit (req 60).
+    - Decided: Exit game moves to `Screen.FINISHED`, which stays finished; the presentation (7.15) calls the platform's quit when it sees it.
     - Test: `tests/simulation/flow.test.js` ("exit")
     - Code: `src/simulation/flow.js`
-  - [ ] 6.7 Cut scene timing: for a given elapsed time, each actor's position (straight-line movement between keyframes), animation, and visibility, the narration lines showing, and whether the scene has ended (reqs 62–63).
+  - [x] 6.7 Cut scene timing: for a given elapsed time, each actor's position (straight-line movement between keyframes), animation, and visibility, the narration lines showing, and whether the scene has ended (reqs 62–63).
+    - Decided: `cutsceneAt(scene, time)` (`src/simulation/cutscene.js`) gives each actor's `x`, `y` (stage bottom-centre), `visible` (not before its first keyframe), `facing` (its `facing`, default right), `animation` (the latest keyframe's that names one, else "idle") and `animationTime` (how long that animation has played), plus the narration texts with start <= time < end, and `ended` (time >= `cutsceneLength`, the latest last keyframe or narration end; 0 for an empty scene).
     - Test: `tests/simulation/cutscene.test.js`
     - Code: `src/simulation/cutscene.js`
-  - [ ] 6.8 Skipping a cut scene with confirm (req 63).
+  - [x] 6.8 Skipping a cut scene with confirm (req 63).
+    - Decided: a new press of confirm during a cut scene skips it and starts the next level. The confirm press that chose Next level doesn't count (it is still held). The cut scene's time advances by dt each step, and the next level starts when it has ended.
     - Test: `tests/simulation/flow.test.js` ("skip")
     - Code: `src/simulation/flow.js`
-- [ ] 7.0 Build the presentation layer
-  - [ ] 7.1 Test helper: a recording fake canvas context that records draw calls (`fillRect`, `drawImage`, `fillText`, and the like) and the style in use for each.
+- [x] 7.0 Build the presentation layer
+  - [x] 7.1 Test helper: a recording fake canvas context that records draw calls (`fillRect`, `drawImage`, `fillText`, and the like) and the style in use for each.
+    - Decided: `createFakeContext()` records each drawing call (`fillRect`, `strokeRect`, `clearRect`, `drawImage`, `fillText`, `strokeText`, paths) as { op, args, style }, where style copies the fill and stroke style, alpha, line width, font, text alignment, and transform at the time; `save`/`restore`, `translate`, `scale`, and `setTransform` work as on a canvas; `measureText` gives 0.6 × font size per character; `callsOf(op)` and `texts()` help assertions. `createFakeCanvas(w, h)` wraps it.
     - Test: `tests/helpers/fake-canvas.test.js`
     - Code: `tests/helpers/fake-canvas.js`
-  - [ ] 7.2 Game loop with an injected clock and frame scheduler: runs as many fixed steps as have elapsed, carries over leftover time, caps catch-up after a long pause, then draws once per frame (reqs 4–5).
+  - [x] 7.2 Game loop with an injected clock and frame scheduler: runs as many fixed steps as have elapsed, carries over leftover time, caps catch-up after a long pause, then draws once per frame (reqs 4–5).
+    - Decided: `createLoop({ update, draw, now, schedule, fixedDt, maxFrameSeconds })`: each frame runs update(fixedDt) for as many whole steps as the time since the last frame allows, carries the leftover, then draws once. A frame covers at most `MAX_FRAME_SECONDS` (0.25 s); after a longer pause the rest is dropped rather than caught up.
     - Test: `tests/presentation/loop.test.js`
     - Code: `src/presentation/loop.js`
-  - [ ] 7.3 Visible area: from the window size and visible world height, the scale and visible world width, for several window sizes and aspect ratios (req 6).
+  - [x] 7.3 Visible area: from the window size and visible world height, the scale and visible world width, for several window sizes and aspect ratios (req 6).
+    - Decided: `visibleArea(viewportWidth, viewportHeight, visibleHeight)` (simulation/camera.js): scale = pixels per tile = height / visibleHeight, the same both ways; width = viewportWidth / scale. A viewport with no height shows nothing (scale and width 0).
     - Test: `tests/simulation/camera.test.js` ("visible area")
     - Code: `src/simulation/camera.js`
-  - [ ] 7.4 Canvas sizing: the canvas's pixel size from the window size and device pixel ratio, applied to a canvas on resize and fullscreen changes (req 6).
+  - [x] 7.4 Canvas sizing: the canvas's pixel size from the window size and device pixel ratio, applied to a canvas on resize and fullscreen changes (req 6).
+    - Decided: `canvasPixelSize` (window size × devicePixelRatio, rounded; ratio 1 if missing), `fitCanvas(canvas, window)`, and `watchCanvasSize(canvas, window, document, onResize)`, which refits on window resize and on fullscreenchange and returns a function that stops watching.
     - Test: `tests/presentation/canvas-size.test.js` (fake canvas and fake window)
     - Code: `src/presentation/canvas-size.js`
-  - [ ] 7.5 Camera follow, level bounds, and centring a level smaller than the visible area (reqs 66–67).
+  - [x] 7.5 Camera follow, level bounds, and centring a level smaller than the visible area (reqs 66–67).
+    - Decided: `cameraFor(level, target, area)`: the view's top-left follows the target's centre and is kept inside the level on each axis; on an axis where the view is at least as big as the level, the level is centred instead (the background colour fills the rest). So it follows vertically only when the level is taller than the view.
     - Test: `tests/simulation/camera.test.js` ("follow")
     - Code: `src/simulation/camera.js`
-  - [ ] 7.6 Parallax: layer offsets from camera position and scroll factor, and which repeated copies cover the screen (reqs 68, 70).
+  - [x] 7.6 Parallax: layer offsets from camera position and scroll factor, and which repeated copies cover the screen (reqs 68, 70).
+    - Decided: `layerOffset` (camera x × scroll factor), `layerSize` (the image scaled to the view's height, keeping its proportions; layers don't move vertically), and `layerCopies` (a repeating layer is drawn in side-by-side copies from at or just left of the view's left edge past its right edge; a non-repeating one once, where the level starts). `repeat` defaults to true, as in the data format.
     - Test: `tests/simulation/parallax.test.js`
     - Code: `src/simulation/parallax.js`
-  - [ ] 7.7 Renderer: draws parallax layers, tiles, the player, enemies, objects, rewards, and the goal as coloured shapes from data, plus the punch flash, the invincibility flash, and the defeat flash (req 76).
+  - [x] 7.7 Renderer: draws parallax layers, tiles, the player, enemies, objects, rewards, and the goal as coloured shapes from data, plus the punch flash, the invincibility flash, and the defeat flash (req 76).
+    - Decided: `levelView(state, canvasSize, visibleHeight)` and `drawLevel(ctx, state, view, assets)`: the level's background colour over the whole canvas, parallax layers (the first is the farthest; unloaded images are skipped), the tiles in view (solid or not), the goal, rewards, objects, enemies, the player, then the punch flash. Shapes in their data colours. An invincible player and a defeated enemy flash, shown on alternate tenths of a second of level time (`FLASH_PER_SECOND` 10). The punch flash is half-transparent white over the punch area; a no-width area is drawn 0.1 tiles wide.
     - Test: `tests/presentation/renderer.test.js` (fake canvas)
     - Code: `src/presentation/renderer.js`
-  - [ ] 7.8 Sprites: choosing the animation frame for a state and time (falling back to `idle`), drawing the frame bottom-centred and flipped when facing left, and falling back to the shape with a logged warning when a sprite is missing. The player uses idle and run (reqs 77–79).
+  - [x] 7.8 Sprites: choosing the animation frame for a state and time (falling back to `idle`), drawing the frame bottom-centred and flipped when facing left, and falling back to the shape with a logged warning when a sprite is missing. The player uses idle and run (reqs 77–79).
+    - Decided: `frameFor` (frames in order at fps, looping, or holding the last frame if loop is false; a missing animation falls back to idle), `frameSource` (frames numbered left to right, top to bottom), `spriteBox` (frameWidth / pixelsPerTile wide, bottom-centred on the entity), and `drawEntitySprite` (flipped about its centre when facing left). A missing sprite or sprite image draws the shape instead and logs a warning once per sprite per game. The player's animation, by priority: hurt (knocked back), punch, jump or fall (in the air), carry, run, idle. Enemies play run, objects idle.
     - Test: `tests/presentation/sprites.test.js` (fake canvas)
     - Code: `src/presentation/sprites.js`, `src/presentation/renderer.js`
-  - [ ] 7.9 Input mapping: raw keys held, gamepad buttons, and stick position, plus bindings, become the input state, using the stick dead zone (reqs 14–18).
+  - [x] 7.9 Input mapping: raw keys held, gamepad buttons, and stick position, plus bindings, become the input state, using the stick dead zone (reqs 14–18).
+    - Decided: `inputFromDevices({ keys, gamepads, bindings, deadZone })`: an input is on if any of its bound keys is held or any of its bound buttons or stick directions is held on any gamepad. Gamepads use the browser's standard mapping (`GAMEPAD_BUTTONS`); one without it is ignored. The left stick counts only strictly past the dead zone. `presentationKeys` gives the keyboard-only fullscreen and debug keys.
     - Test: `tests/presentation/input-map.test.js`
     - Code: `src/presentation/input-map.js`
-  - [ ] 7.10 Input reading with an injected event target and `getGamepads`: tracks keys held, reads standard-mapping gamepads each frame, and works with keyboard and gamepad at the same time (req 14).
+  - [x] 7.10 Input reading with an injected event target and `getGamepads`: tracks keys held, reads standard-mapping gamepads each frame, and works with keyboard and gamepad at the same time (req 14).
+    - Decided: `createInputReader({ target, getGamepads, bindings, deadZone })`: keys held are tracked from keydown and keyup; a bound key's browser default is prevented; losing focus releases every key; gamepads are read on each read(). A key pressed since the last read counts as held for that read even if already released, so a quick tap isn't lost (found by the in-browser check in 7.17). read() also gives the device used last: the keyboard to begin with, the gamepad once something is held on one, the keyboard again on a key press.
     - Test: `tests/presentation/input.test.js` (fake events and fake gamepads)
     - Code: `src/presentation/input.js`
-  - [ ] 7.11 HUD: health and reward count anchored to a corner, at a size that stays readable at any window size (req 44).
+  - [x] 7.11 HUD: health and reward count anchored to a corner, at a size that stays readable at any window size (req 44).
+    - Decided: "Health: n" and "Rewards: n" in the top-left corner, white with a dark outline; the font is 4.5% of the viewport's height but never under 16 px, set in 0.75 font sizes from the corner.
     - Test: `tests/presentation/hud.test.js` (fake canvas)
     - Code: `src/presentation/hud.js`
-  - [ ] 7.12 Screens: start screen, level-complete panel with the selected option highlighted, "Thanks for playing", and the data error screen listing every error (reqs 7, 56, 58, 85).
+  - [x] 7.12 Screens: start screen, level-complete panel with the selected option highlighted, "Thanks for playing", and the data error screen listing every error (reqs 7, 56, 58, 85).
+    - Decided: Menu options are labelled Start, Next level, and Exit game; the selected one has a highlight box behind it. The start screen shows "Great Monkey War" above its menu on a dark background; the level-complete panel is a half-transparent panel over the frozen game with "Level complete", the reward count, and the menu; "Thanks for playing" is shown alone; the data error screen lists every error under a title, wrapping long ones, the font shrinking down to 10 px so more fit.
     - Test: `tests/presentation/screens.test.js` (fake canvas)
     - Code: `src/presentation/screens.js`
-  - [ ] 7.13 Cut scene view: background scaled to fit and centred, side fill colour, actors with their animations, the narration text box, and the skip hint (reqs 62, 65).
+  - [x] 7.13 Cut scene view: background scaled to fit and centred, side fill colour, actors with their animations, the narration text box, and the skip hint (reqs 62, 65).
+    - Decided: `stageFit` scales the stage to fit inside the viewport, keeping its proportions, and centres it; `drawCutscene` fills the viewport with backgroundColor, covers the stage with the background image, draws each visible actor (its character's sprite and the actor's animation, or its shape), the narration in a half-transparent box along the bottom of the stage, and the skip hint ("Enter / A: skip", from the first confirm bindings) in the bottom-right corner.
     - Test: `tests/presentation/cutscene-view.test.js` (fake canvas)
     - Code: `src/presentation/cutscene-view.js`
-  - [ ] 7.14 Debug overlay: shows everything in the PRD's Design Considerations, including Steam status from the platform (req 10).
+  - [x] 7.14 Debug overlay: shows everything in the PRD's Design Considerations, including Steam status from the platform (req 10).
+    - Decided: `debugLines(info)`: FPS, player position, velocity, on ground, held object, input device, window size, visible area, and Steam status with the user name (from the platform); 2 decimal places; "-" for the player lines with no level. Drawn right-aligned in the top-right corner over a half-transparent box. (8.1 and 8.2, the platform interface and browser platform, were done before 7.14, which needs them.)
     - Test: `tests/presentation/debug-overlay.test.js` (fake canvas, fake platform)
     - Code: `src/presentation/debug-overlay.js`
-  - [ ] 7.15 Game controller: each frame, reads input, steps the simulation, and draws the current screen. It also handles the presentation-only keys (F3 debug overlay, F11 fullscreen through the platform) and calls the platform's quit when the flow reaches finished (reqs 2, 60).
+  - [x] 7.15 Game controller: each frame, reads input, steps the simulation, and draws the current screen. It also handles the presentation-only keys (F3 debug overlay, F11 fullscreen through the platform) and calls the platform's quit when the flow reaches finished (reqs 2, 60).
+    - Decided: `createGameController({ data, images, platform, canvas, inputReader, now, log })` with update(dt), draw(), and getGame(). F3 and F11 act on a new press only; F11 calls the platform's toggleFullscreen. When the flow reaches finished, the platform's quit is called once; if it returns showThanks, "Thanks for playing" is drawn. The overlay's fps is measured from the time between draws (smoothed).
     - Test: `tests/presentation/game.test.js` (fake platform, fake canvas, fake input)
     - Code: `src/presentation/game.js`
-  - [ ] 7.16 Test hook: in browser mode only, a read-only `gameTestHook.getState()` returning a copy of the current screen, player position, velocity, and on-ground flag. Changing the returned object doesn't affect the game (req 94).
+  - [x] 7.16 Test hook: in browser mode only, a read-only `gameTestHook.getState()` returning a copy of the current screen, player position, velocity, and on-ground flag. Changing the returned object doesn't affect the game (req 94).
+    - Decided: `gameTestState(game)` is { screen, player } (player { x, y, vx, vy, onGround } while a level shows, else null); `createTestHook(currentState)` gives a frozen hook whose getState() returns a fresh copy; `installTestHook(window, hook)` defines a non-writable window.gameTestHook. With invalid data, main.js gives the hook { screen: "dataError", errors }.
     - Test: `tests/presentation/test-hook.test.js`
     - Code: `src/presentation/test-hook.js`
-  - [ ] 7.17 Start-up glue in `main.js`: load data, show the error screen if it's invalid, pick the platform, create the game, install the test hook in browser mode, and start the loop.
+  - [x] 7.17 Start-up glue in `main.js`: load data, show the error screen if it's invalid, pick the platform, create the game, install the test hook in browser mode, and start the loop.
+    - Decided: `main.js` loads and validates the data; if invalid, it draws the error screen (redrawn on resize) and logs each error; otherwise it creates the browser platform (the Electron one is added in 8.4), the input reader, the controller, the test hook (browser mode only), and the loop. The UI checks (`tests-ui/smoke.spec.js`) check the start screen through the hook and that broken data (tuning.json replaced with invalid JSON by Playwright) shows the error screen. 9.0's content was made first, so there was valid data to load.
     - Test (red first): extend `tests-ui/smoke.spec.js` so it checks that the page opens on the start screen (through the test hook), and that broken data shows the error screen. Run with `npm run test:ui`.
     - Code: `src/presentation/main.js`
 - [ ] 8.0 Build the platform layer and the Electron host with Steam
-  - [ ] 8.1 Platform interface (`getSteamStatus()`, `getSteamUserName()`, `toggleFullscreen()`, `quit()`) and a fake implementation. A shared contract test checks every implementation (req 71).
-    - Test: `tests/platform/platform-contract.test.js`, `tests/platform/fake-platform.test.js`
+  - [x] 8.1 Platform interface (`getSteamStatus()`, `getSteamUserName()`, `toggleFullscreen()`, `quit()`) and a fake implementation. A shared contract test checks every implementation (req 71).
+    - Decided: `SteamStatus` (CONNECTED, UNAVAILABLE) and `PLATFORM_METHODS` in `platform.js`. The contract is `platformContract(name, make, { canConnect })` in `tests/platform/contract.js`, which each implementation's test file runs on itself (not a separate contract test file).
+    - Test: `tests/platform/contract.js`, `tests/platform/fake-platform.test.js`
     - Code: `src/platform/platform.js`, `src/platform/fake-platform.js`
-  - [ ] 8.2 Browser platform with an injected `document`: Steam unavailable, fullscreen using the browser's fullscreen feature, and quit reporting that "Thanks for playing" should be shown (req 7).
-    - Test: `tests/platform/browser-platform.test.js`, added to the contract test
+  - [x] 8.2 Browser platform with an injected `document`: Steam unavailable, fullscreen using the browser's fullscreen feature, and quit reporting that "Thanks for playing" should be shown (req 7).
+    - Decided: `createBrowserPlatform({ document, log })` logs `BROWSER_STEAM_UNAVAILABLE_MESSAGE` once when created (req 9); a refused fullscreen request is logged, not thrown.
+    - Test: `tests/platform/browser-platform.test.js`, which runs the contract
     - Code: `src/platform/browser-platform.js`
-  - [ ] 8.3 Install Electron. Window options: `contextIsolation` on, `nodeIntegration` off, the preload script, and loading `index.html`. Add `npm start`.
+  - [x] 8.3 Install Electron. Window options: `contextIsolation` on, `nodeIntegration` off, the preload script, and loading `index.html`. Add `npm start`.
+    - Decided: the window also has `sandbox` on. Chromium won't let file:// pages fetch the data files, so `main.js` serves the game on `app://game/` (a standard, secure scheme with fetch), using the same file rules as `tools/serve.js` (`appFileFor`).
     - Test: `tests/electron/window-options.test.js`
     - Code: `electron/window-options.js`, `electron/main.js` (glue), `package.json`
-  - [ ] 8.4 The preload bridge exposes only the platform methods, and the page-side Electron platform calls them.
-    - Test: `tests/electron/preload-api.test.js` (fake `ipcRenderer`), `tests/platform/electron-platform.test.js` (fake bridge), added to the contract test
-    - Code: `electron/preload-api.js`, `electron/preload.js` (glue), `src/platform/electron-platform.js`
-  - [ ] 8.5 Install steamworks.js and add `steam_appid.txt` containing `480`. Steam start-up with the steamworks module passed in: on success it reports connected; on failure it logs a clear message, reports unavailable, and doesn't throw (reqs 8–9).
+  - [x] 8.4 The preload bridge exposes only the platform methods, and the page-side Electron platform calls them.
+    - Decided: the bridge is one CommonJS file, `electron/preload.cjs` (a sandboxed preload script must be CommonJS and can't require our other files), exposing `getSteamInfo`, `toggleFullscreen`, and `quit` over the IPC channels in `CHANNELS`; `electron/ipc.js` answers them in the main process. `createElectronPlatform(bridge)` asks for the Steam info once, so the platform's methods answer at once each frame. `src/presentation/main.js` uses it when the bridge is on the window.
+    - Test: `tests/electron/preload-api.test.js` (fake `ipcRenderer` and `ipcMain`), `tests/platform/electron-platform.test.js` (fake bridge), which runs the contract
+    - Code: `electron/preload.cjs`, `electron/ipc.js`, `src/platform/electron-platform.js`
+  - [x] 8.5 Install steamworks.js and add `steam_appid.txt` containing `480`. Steam start-up with the steamworks module passed in: on success it reports connected; on failure it logs a clear message, reports unavailable, and doesn't throw (reqs 8–9).
+    - Decided: if the steamworks module fails to load, `main.js` passes null and Steam counts as unavailable. The log messages come from `steamConnectedMessage(userName)` and `steamUnavailableMessage(reason)`, so tests check them without depending on the wording.
     - Test: `tests/electron/steam.test.js` (fake steamworks module)
     - Code: `electron/steam.js`, `electron/main.js` (glue)
-  - [ ] 8.6 The Steam user's display name flows from `electron/steam.js` through the bridge to the platform, and appears in the debug overlay (req 10).
-    - Test: `tests/electron/steam.test.js` ("user name"), `tests/platform/electron-platform.test.js` ("user name")
-    - Code: `electron/steam.js`, `electron/preload-api.js`, `src/platform/electron-platform.js`
-  - [ ] 8.7 Steam overlay settings applied before the app starts, using the steamworks.js Electron helper and the required Chromium flags, with `app` passed in (req 11).
-    - Test: `tests/electron/overlay.test.js` (fake `app.commandLine`)
+  - [x] 8.6 The Steam user's display name flows from `electron/steam.js` through the bridge to the platform, and appears in the debug overlay (req 10).
+    - Decided: if Steam connects but the name can't be read, the name is "(unknown)".
+    - Test: `tests/electron/steam.test.js` ("the user name"), `tests/electron/preload-api.test.js` ("the main process's side"), `tests/platform/electron-platform.test.js`
+    - Code: `electron/steam.js`, `electron/ipc.js`, `src/platform/electron-platform.js`
+  - [x] 8.7 Steam overlay settings applied before the app starts, using the steamworks.js Electron helper and the required Chromium flags, with `app` passed in (req 11).
+    - Decided: `applyOverlaySettings({ app, steamworks, log })` calls `electronEnableSteamOverlay()` and also sets `OVERLAY_SWITCHES` (`in-process-gpu`, `disable-direct-composition`) itself, so they're on even without the module. Applied after the app is ready, it changes nothing and logs a warning.
+    - Test: `tests/electron/steam.test.js` ("the overlay settings"; fake `app.commandLine`)
     - Code: `electron/overlay.js`, `electron/main.js` (glue)
   - [ ] 8.8 (no code) Launch with Steam running. Confirm the Steam user name shows in the debug overlay, Shift+Tab opens the overlay, and F12 takes a screenshot (reqs 10–11).
+    - Steps: [manual test checklist](../docs/manual-test-checklist.md), section 1.
+    - 2026-10-26: with Steam running, the app connects, and the F3 debug overlay shows "Steam: connected (wayne_roseberry)" (req 10 confirmed).
+    - 2026-10-27: with `npm start`, Shift+Tab and F12 do nothing and Steam's notice never appears. Cause: Chromium blocklists this PC's old AMD driver (8.17.10.1404) and draws in software, which the overlay can't hook (see the KNOWN ISSUE in `electron/overlay.js`). Run with `npx electron --ignore-gpu-blocklist .`, Shift+Tab opened the overlay and F12 took a screenshot. Open until the fix is chosen and made: add that switch, and/or update the driver.
   - [ ] 8.9 (no code) Measure FPS with the overlay settings on, using the debug overlay (req 12).
+    - 2026-10-26/27, on an AMD A8-8650 (60 Hz), level 1: 45 FPS with the settings on, 48 with them off, both drawn in software (the GPU blocklist, as in 8.8); 60 FPS with `--ignore-gpu-blocklist`, drawn on the GPU. Results are in `docs/steam-overlay.md`. Open with 8.8; level 2 and the cut scene aren't measured yet.
   - [ ] 8.10 (no code) Write `docs/steam-overlay.md`: each setting and why it's needed, plus the FPS results (req 12).
-  - [ ] 8.11 (no code) Launch with Steam closed and confirm the game runs (req 9).
-  - [ ] 8.12 Extend the architecture guard: only `electron/` and `src/platform/` may reference `electron` or `steamworks.js` (req 13). For the red step, temporarily add a forbidden reference and confirm the test fails.
+    - Written, with each setting, why it's needed, the GPU blocklist issue, and the level 1 results. Done when 8.9's results are complete.
+  - [x] 8.11 (no code) Launch with Steam closed and confirm the game runs (req 9).
+    - Steps: [manual test checklist](../docs/manual-test-checklist.md), section 2.
+    - Done 2026-10-27 (Wayne, in the checklist run): with Steam exited, the game started and played, and F3 showed Steam as unavailable.
+  - [x] 8.12 Extend the architecture guard: only `electron/` and `src/platform/` may reference `electron` or `steamworks.js` (req 13). For the red step, temporarily add a forbidden reference and confirm the test fails.
+    - Decided: `checkHostReferences(source, filePath)` finds the packages (and files in them) wherever a module is loaded: import, `import '...'`, export from, `import()`, `require()`, and `createRequire(...)()`. Other strings, such as a folder name in `path.join(root, 'electron')`, are allowed. The guard checks every `.js` and `.cjs` file in `src/` and `tools/`. Red step: adding `import steamworks from 'steamworks.js'` to `src/presentation/hud.js` failed the guard ("line 42: references "steamworks.js", which only electron/ and src/platform/ may use"); it was then removed.
     - Test: `tests/architecture.test.js`
-    - Code: none beyond the guard.
-- [ ] 9.0 Create the prototype content (no code; checked by data validation in `npm test`)
-  - [ ] 9.1 Create `tuning.json`, `bindings.json` (defaults from the PRD's bindings table), and `display.json`.
+    - Code: `tools/architecture.js`
+- [x] 9.0 Create the prototype content (no code; checked by data validation in `npm test`)
+  - [x] 9.1 Create `tuning.json`, `bindings.json` (defaults from the PRD's bindings table), and `display.json`.
+    - Decided: `data/config/tuning.json` (the values the tests' builder uses: gravity 35, maxFallSpeed 20, jumpSpeed 14, throwSpeed 10/6, dropSpeed 0/0, knockback 6/6, invincibilitySeconds 1, stompBounceSpeed 10, punchSeconds 0.15, defeatSeconds 0.5), `bindings.json` (the PRD's default bindings table), and `display.json` (visibleHeight 12, stickDeadZone 0.3).
     - From 5.10: `tuning.json` must include `defeatSeconds` (required; docs/data-formats.md suggests 0.5).
-  - [ ] 9.2 Create `player.json` (health 3, punch damage 1) and one enemy definition (health 1).
-  - [ ] 9.3 Create object definitions: a stackable crate and a non-stackable throwable (for example a coconut).
-  - [ ] 9.4 Create a simple placeholder player sprite sheet (`player.png` and `player.json`) with idle and run animations (req 78).
-  - [ ] 9.5 Create at least three background layer images per level (simple placeholders are fine) (req 69).
-  - [ ] 9.6 Build `level1.json`: pits, a jump obstacle, enemies, crates to stack to reach something, rewards, a goal, and the cut scene name (reqs 45–47, 61).
-  - [ ] 9.7 Build `level2.json` with the same elements in a different layout (req 54).
-  - [ ] 9.8 Create `levels.json` listing level 1 then level 2 (req 55).
-  - [ ] 9.9 Create `after-level1.json`: a background image, at least one animated actor, and several narration lines (reqs 62, 64).
-  - [ ] 9.10 Run `npm test` to confirm all content passes validation.
+  - [x] 9.2 Create `player.json` (health 3, punch damage 1) and one enemy definition (health 1).
+    - Decided: `characters/player.json` (Hero: 0.8 × 1.4, health 3, speed 6, punch damage 1, sprite "player") and `characters/beetle.json` (Beetle: 0.9 × 0.7, health 1, speed 2). Colours are distinct per kind of thing (Design Considerations).
+  - [x] 9.3 Create object definitions: a stackable crate and a non-stackable throwable (for example a coconut).
+    - Decided: `objects/crate.json` (1 × 1, stackable) and `objects/coconut.json` (0.5 × 0.5, not stackable).
+  - [x] 9.4 Create a simple placeholder player sprite sheet (`player.png` and `player.json`) with idle and run animations (req 78).
+    - Decided: `sprites/player.png` and `sprites/player.json`: 32 × 48 frames at 32 pixels per tile (1 × 1.5 tiles), idle (frames 0-1, 2 fps) and run (frames 2-5, 10 fps). The PNG is a plain-shapes monkey made by a one-off generator script (not in the repository).
+  - [x] 9.5 Create at least three background layer images per level (simple placeholders are fine) (req 69).
+    - Decided: three layers per level, each with a different scroll factor: level 1 sky (0), hills (0.3), trees (0.6); level 2 sky (0), mountains (0.2), bushes (0.7). Placeholder PNGs (gradients and shapes; the nearer layers are transparent above their shapes).
+  - [x] 9.6 Build `level1.json`: pits, a jump obstacle, enemies, crates to stack to reach something, rewards, a goal, and the cut scene name (reqs 45–47, 61).
+    - Decided: "Jungle Edge", 60 × 12: two pits, a 2-tile wall to jump (a jump reaches 2.8 tiles), an enemy on the ground and one patrolling a low platform, a coconut, rewards, and a ledge 4 tiles up whose rewards can only be reached by stacking the two crates near it (2 crates + a jump reaches 4.8). It names the cut scene "after-level1".
+  - [x] 9.7 Build `level2.json` with the same elements in a different layout (req 54).
+    - Decided: "Ridge Run", 64 × 12: three pits, a 3-tile wall that needs a crate as a step, two crates that start stacked, a raised platform with an enemy, two coconuts, four enemies (one starting facing right), rewards, and the goal.
+  - [x] 9.8 Create `levels.json` listing level 1 then level 2 (req 55).
+    - Decided: `levels/levels.json` lists level1 then level2.
+  - [x] 9.9 Create `after-level1.json`: a background image, at least one animated actor, and several narration lines (reqs 62, 64).
+    - Decided: `cutscenes/after-level1.json`: the camp background (placeholder PNG), the hero running in and stopping, a beetle following, and three narration lines; it ends at 7.5 s.
+  - [x] 9.10 Run `npm test` to confirm all content passes validation.
+    - Decided: `npm test` passes, and data validation passes on the 12 data files.
 - [ ] 10.0 Verify, automate the UI check, and finish documentation
-  - [ ] 10.1 Movement UI check: start the game with Enter, then hold Right, Left, and Jump, and confirm through `gameTestHook` that the player moved right, moved left, and left the ground and landed (req 93). The behaviour already exists by this point, so this check confirms finished work rather than driving new code. If it fails, fix the code test-first.
+  - [x] 10.1 Movement UI check: start the game with Enter, then hold Right, Left, and Jump, and confirm through `gameTestHook` that the player moved right, moved left, and left the ground and landed (req 93). The behaviour already exists by this point, so this check confirms finished work rather than driving new code. If it fails, fix the code test-first.
+    - Decided: the check waits inside the page (`page.waitForFunction`, every frame) for the player to leave the ground and land. A first version polled from the test with `expect.poll` and missed the whole jump; a probe showed the game jumps correctly, so no code changed. Alongside the other checks it took up to 25 s, so it has a 60 s timeout.
     - Test: `tests-ui/movement.spec.js`
-  - [ ] 10.2 (no code) Run `npm run test:ui` and confirm all UI checks pass.
-  - [ ] 10.3 (no code) Write `docs/manual-test-checklist.md`: Electron launch, Steam overlay and F12, gamepad play, window resizing and fullscreen, browser mode, and cut scene playback (req 95).
-  - [ ] 10.4 (no code) Run the manual test checklist and record the results.
-  - [ ] 10.5 (no code) Ask a repository admin to turn on branch protection for `main`, requiring the CI workflow to pass (req 92). Confirm a pull request with a failing test can't be merged.
-  - [ ] 10.6 (no code) Confirm a commit with a failing test or a broken data file is blocked by the pre-commit hook.
-  - [ ] 10.7 (no code) Ask someone who doesn't write code to follow the guides to add an enemy, reward, stackable crate, and platform, and to change a cut scene narration line. Fix the guides wherever they get stuck (Success Metric 6).
-  - [ ] 10.8 (no code) Walk through every success metric in PRD Section 8 and note any gaps.
-  - [ ] 10.9 (no code) Update `docs/developer-guide.md` with anything learned, then open a pull request to `main`.
+  - [x] 10.2 (no code) Run `npm run test:ui` and confirm all UI checks pass.
+    - Done: all 4 checks pass, and 12 of 12 with `--repeat-each=3`.
+  - [x] 10.3 (no code) Write `docs/manual-test-checklist.md`: Electron launch, Steam overlay and F12, gamepad play, window resizing and fullscreen, browser mode, and cut scene playback (req 95).
+  - [x] 10.4 (no code) Run the manual test checklist and record the results.
+    - Done 2026-10-27: every section passed, with section 1's Shift+Tab and F12 passing only when started with `--ignore-gpu-blocklist` (see 8.8). Results are recorded in `docs/manual-test-checklist.md`.
+  - [x] 10.5 (no code) Ask a repository admin to turn on branch protection for `main`, requiring the CI workflow to pass (req 92). Confirm a pull request with a failing test can't be merged.
+    - Done 2026-10-26/27: branch protection is on for `main`: the "Unit tests and data validation" check is required, and the rule applies to admins. Throwaway PR #10 (one failing test) failed CI; once marked ready for review, its merge button was disabled. The PR was closed without merging and its branch deleted.
+  - [x] 10.6 (no code) Confirm a commit with a failing test or a broken data file is blocked by the pre-commit hook.
+    - Done: `git config core.hooksPath` is `.githooks`. Running `.githooks/pre-commit` with `tuning.json` made invalid printed "config/tuning.json: this file is not valid JSON..." and "COMMIT BLOCKED", exit 1; with a temporary failing test it exited 1. Both were then undone.
+  - [x] 10.7 (no code) Ask someone who doesn't write code to follow the guides to add an enemy, reward, stackable crate, and platform, and to change a cut scene narration line. Fix the guides wherever they get stuck (Success Metric 6).
+    - Done 2026-10-27. Before the session, the README gained links to the guides, the levels guide gained "Seeing your change in the game", and the sprites guide gained recommended background sizes.
+  - [x] 10.8 (no code) Walk through every success metric in PRD Section 8 and note any gaps.
+    - Met: 3 (`npm test` passes; test names cover every bullet of reqs 86 and 83), 4 (10.6 locally, 10.5 on `main`), and 5 (10.2).
+    - Gaps, waiting on manual tasks: 1, 9, 10, 11 (10.4); 2 (8.9; measured below 60 FPS); 6 (10.7); 7 (8.8, 8.11). 8 (data changes behaviour with no code changes) holds by design, since all tuning comes from data, but hasn't been tried by hand; it can be added to the checklist run.
+  - [x] 10.9 (no code) Update `docs/developer-guide.md` with anything learned, then open a pull request to `main`.
+    - The developer guide is updated (Electron, Steam, UI check waiting, architecture rules). The pull request waits for the manual tasks above.

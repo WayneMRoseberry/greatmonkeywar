@@ -179,6 +179,7 @@ Colours are written as `"#"` followed by six letters and numbers, for example `"
 - Each layer repeats sideways to cover the whole level. To stop a layer repeating, add `"repeat": false`.
 - Each layer picture is scaled to the height of the screen and sits at the bottom.
 - The prototype levels use at least three layers.
+- For what size to make the pictures, see [What size to make them](guide-sprites.md#what-size-to-make-them) in the sprites guide.
 
 ---
 
@@ -198,6 +199,24 @@ There are three ways to see these messages:
 3. **In the game.** If a data file has a problem, the game shows the messages on screen instead of starting.
 
 **Warnings** are messages that don't stop anything, such as a legend entry you didn't use. They're there to help you tidy up.
+
+### Seeing your change in the game
+
+Once the check passes, play the game to see your change. The first time, a developer needs to set up your computer (see the [developer guide](developer-guide.md#setup)); after that:
+
+1. Open a terminal in the project folder and type `npm run web`. Leave that terminal open while you play.
+2. Open <http://localhost:8765> in Chrome or Edge.
+3. Press **Enter** (or click **Start**) to start level 1.
+4. After each change to a file, save it and press **F5** in the browser. The game starts again from the start screen with your change.
+
+When you're finished, go back to the terminal and press **Ctrl+C** to stop it.
+
+Tips:
+
+- **To reach level 2 or a cut scene**, play through level 1; the cut scene plays when you choose **Next level**. To get there faster while testing, you can temporarily put your level first in `data/levels/levels.json`. Remember to put the order back.
+- **Press F3** to show the debug overlay. It shows the hero's position in tiles, which helps when you place things on the grid.
+- **If the screen lists problems instead of the start screen**, the check failed; fix what it lists, save, and press F5.
+- **The desktop version** (`npm start`) shows the same thing. It doesn't reload, so close its window and run `npm start` again after each change.
 
 ### Help from your editor (optional)
 

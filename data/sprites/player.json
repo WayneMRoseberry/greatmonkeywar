@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "image": "sprites/player.png",
+  "frameWidth": 32,
+  "frameHeight": 48,
+  "pixelsPerTile": 32,
+  "animations": {
+    "idle": {
+      "frames": [
+        0,
+        1
+      ],
+      "fps": 2
+    },
+    "run": {
+      "frames": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "fps": 10
+    }
+  }
+}

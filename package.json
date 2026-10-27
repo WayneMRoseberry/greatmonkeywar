@@ -4,6 +4,7 @@
   "description": "Great Monkey War - a 2D side-scrolling game for Steam.",
   "private": true,
   "type": "module",
+  "main": "electron/main.js",
   "engines": {
     "node": ">=22"
   },
@@ -12,10 +13,15 @@
     "validate": "node tools/validate-data.js",
     "web": "node tools/serve.js",
     "test:ui": "playwright test",
-    "prepare": "node tools/install-hooks.js"
+    "prepare": "node tools/install-hooks.js",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "steamworks.js": "^0.4.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "ajv": "^8.20.0"
+    "ajv": "^8.20.0",
+    "electron": "^45.0.0"
   }
 }

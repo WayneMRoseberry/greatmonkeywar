@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Only the game's own files may load (Electron security; the inline style below is allowed). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+
   <title>Great Monkey War</title>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
