@@ -179,6 +179,7 @@ Colours are written as `"#"` followed by six letters and numbers, for example `"
 - Each layer repeats sideways to cover the whole level. To stop a layer repeating, add `"repeat": false`.
 - Each layer picture is scaled to the height of the screen and sits at the bottom.
 - The prototype levels use at least three layers.
+- For what size to make the pictures, see [What size to make them](guide-sprites.md#what-size-to-make-them) in the sprites guide.
 
 ---
 

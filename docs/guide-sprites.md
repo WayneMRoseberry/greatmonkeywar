@@ -120,6 +120,24 @@ Background layers and cut scene backgrounds are ordinary pictures, not sprite sh
 - **Background layers** are scaled to the height of the screen and repeat sideways, so make them tall enough to look sharp and with left and right edges that join up seamlessly. Use transparency in all but the farthest layer so the layers behind show through.
 - **Cut scene backgrounds** fill the cut scene's stage, so make them the same shape as the stage (for example 16:9).
 
+### What size to make them
+
+A background layer is always drawn **exactly as tall as the game window**, in real screen pixels, whatever size you make it. The game shows 12 tiles from top to bottom, so on a full HD screen (1920 × 1080) the window is 1080 pixels tall and each tile is 90 pixels.
+
+| Picture | Recommended size | Why |
+|---|---|---|
+| Background layer | **1080 pixels tall**, at least **1920 wide**; **3840 wide** (or more) for near layers | 1080 tall looks sharp on a full HD screen. At 1920 wide, one copy covers a 16:9 screen, so it repeats once per screen. Near layers scroll fastest, so make them wider and the repeat is harder to notice. |
+| Background layer, sharp on 4K screens | 2160 pixels tall, twice the widths above | Only if you want 4K screens to look as crisp as full HD. Files get about four times bigger. |
+| Cut scene background | **1920 × 1080** (for a 16:9 stage) | The stage fills a full HD screen. Use the same shape as the stage in your cut scene file. |
+
+Things to know:
+
+- **Any size works; it just gets stretched or squashed to fit.** A picture shorter than the window is enlarged and looks soft; the placeholder art (512 × 256 layers, a 320 × 180 cut scene picture) is enlarged about four times at full HD, which is why it looks blurry. A picture taller than the window is shrunk, which looks fine but makes files bigger than they need to be.
+- **The shape is kept.** A layer is never stretched sideways. A 3840 × 1080 layer always shows twice as wide as it is tall.
+- **A layer's width sets how often it repeats.** A 1920 × 1080 layer covers one 16:9 screen before repeating; a 3840 × 1080 layer covers two. A layer narrower than the screen repeats more than once across it.
+- **The bottom of each layer sits at the bottom of the screen**, behind the level's ground. In the prototype levels the ground is the bottom 2 of the 12 tiles (180 pixels of a 1080-pixel layer), so whatever you draw there is mostly hidden. Put the parts you want seen higher up.
+- **Wider screens show more.** On an ultrawide (21:9) screen, a 1080-pixel-tall window is about 2520 pixels wide, so a 1920-wide layer repeats partly on screen. That's fine if the edges join up seamlessly.
+
 ## Sound and video
 
 The prototype has no sound yet. When it does, use **Ogg** or **Opus** for audio and **WebM** for video (not MP3, AAC, or MP4).
