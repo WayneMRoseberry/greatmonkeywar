@@ -539,9 +539,10 @@ These were completed before this approach was adopted: their tests were written 
     - Done 2026-10-26/27: branch protection is on for `main`: the "Unit tests and data validation" check is required, and the rule applies to admins. Throwaway PR #10 (one failing test) failed CI; once marked ready for review, its merge button was disabled. The PR was closed without merging and its branch deleted.
   - [x] 10.6 (no code) Confirm a commit with a failing test or a broken data file is blocked by the pre-commit hook.
     - Done: `git config core.hooksPath` is `.githooks`. Running `.githooks/pre-commit` with `tuning.json` made invalid printed "config/tuning.json: this file is not valid JSON..." and "COMMIT BLOCKED", exit 1; with a temporary failing test it exited 1. Both were then undone.
-  - [ ] 10.7 (no code) Ask someone who doesn't write code to follow the guides to add an enemy, reward, stackable crate, and platform, and to change a cut scene narration line. Fix the guides wherever they get stuck (Success Metric 6).
+  - [x] 10.7 (no code) Ask someone who doesn't write code to follow the guides to add an enemy, reward, stackable crate, and platform, and to change a cut scene narration line. Fix the guides wherever they get stuck (Success Metric 6).
+    - Done 2026-10-27. Before the session, the README gained links to the guides, the levels guide gained "Seeing your change in the game", and the sprites guide gained recommended background sizes.
   - [x] 10.8 (no code) Walk through every success metric in PRD Section 8 and note any gaps.
     - Met: 3 (`npm test` passes; test names cover every bullet of reqs 86 and 83), 4 (10.6 locally, 10.5 on `main`), and 5 (10.2).
     - Gaps, waiting on manual tasks: 1, 9, 10, 11 (10.4); 2 (8.9; measured below 60 FPS); 6 (10.7); 7 (8.8, 8.11). 8 (data changes behaviour with no code changes) holds by design, since all tuning comes from data, but hasn't been tried by hand; it can be added to the checklist run.
-  - [ ] 10.9 (no code) Update `docs/developer-guide.md` with anything learned, then open a pull request to `main`.
+  - [x] 10.9 (no code) Update `docs/developer-guide.md` with anything learned, then open a pull request to `main`.
     - The developer guide is updated (Electron, Steam, UI check waiting, architecture rules). The pull request waits for the manual tasks above.
