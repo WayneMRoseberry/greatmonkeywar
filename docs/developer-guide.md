@@ -68,6 +68,9 @@ UI checks read the game's state through `window.gameTestHook.getState()` (browse
 ## Quality gates
 
 - **Pre-commit hook:** `.githooks/pre-commit` runs `npm test`. If any test or data check fails, the commit is blocked and the errors are printed. `npm install` installs the hook by setting `git config core.hooksPath .githooks`. UI checks are not run by the hook.
+  - **Documentation-only commits skip the tests.** If every staged file is on the documentation list in `tools/docs-only-commit.js` (the `tasks/` folder, `README.md`, and the docs no test reads), the hook says so and lets the commit through without running `npm test`. Any other file, even one, runs the tests as usual. `docs/data-formats.md` and the `guide-*.md` files are not on the list, because `tests/data/schemas.test.js` checks their JSON examples.
+  - To add a document to the list, add it to `DOCUMENTATION` in `tools/docs-only-commit.js`. A test (`tests/tools/docs-only-commit.test.js`) fails if any code or test refers to a listed document outside a comment; if you need a test to read one, take it off the list.
+  - The pull request check still runs `npm test` on every pull request, documentation-only or not.
 - **Pull request check:** `.github/workflows/ci.yml` runs `npm test` on every pull request to `main`. Branch protection on `main` requires it to pass before merging.
 
 ## Project layout
@@ -80,7 +83,7 @@ UI checks read the game's state through `window.gameTestHook.getState()` (browse
 | `src/data/` | Loading and validating data files. |
 | `electron/` | Electron main process and preload script. |
 | `data/` | Game content: levels, characters, objects, cut scenes, sprites, images, and config. |
-| `tools/` | Developer tools: local web server, data validator, hook installer. |
+| `tools/` | Developer tools: local web server, data validator, hook installer, documentation-only commit check. |
 | `tests/` | Unit tests. |
 | `tests-ui/` | Playwright UI checks. |
 | `docs/` | Requirements and guides. |
