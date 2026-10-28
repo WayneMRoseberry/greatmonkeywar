@@ -407,7 +407,8 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
 {
   "formatVersion": 1,
   "visibleHeight": 12,
-  "stickDeadZone": 0.3
+  "stickDeadZone": 0.3,
+  "startBackground": "images/start-screen.png"
 }
 ```
 
@@ -416,6 +417,7 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
 | `formatVersion` | yes | number | Always `1`. |
 | `visibleHeight` | yes | number > 0, tiles | How much of the world is visible vertically. A wider window shows more horizontally (req 6). |
 | `stickDeadZone` | yes | number ≥ 0 and < 1 | How far the analog stick must move (0 = centre, 1 = fully pushed) before it counts (req 16). |
+| `startBackground` | no | image path | The start screen's background picture. It covers the whole window, keeping its proportions and centred, so its edges may be cut off on a window of a different shape. Without it, the start screen is a plain dark colour. |
 
 ## Schemas and the validator
 

@@ -70,7 +70,7 @@ export function createGameController({ data, images, platform, canvas, inputRead
     const level = game.level;
     switch (game.screen) {
       case Screen.START:
-        drawStartScreen(ctx, game.menu, viewport, data.bindings);
+        drawStartScreen(ctx, game.menu, viewport, data.bindings, images[data.display.startBackground]);
         break;
       case Screen.PLAYING:
       case Screen.LEVEL_COMPLETE:

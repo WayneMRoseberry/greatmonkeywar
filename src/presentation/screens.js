@@ -91,11 +91,31 @@ export function startMenuBoxes(ctx, menu, viewport) {
   return menuBoxes(ctx, menu, startMenuPlace(viewport));
 }
 
-/** The start screen (req 56): the game's name, its menu (Start, highlighted), and the menu hint. */
-export function drawStartScreen(ctx, menu, viewport, bindings) {
+/**
+ * Where an image ({ width, height }) goes to cover the whole viewport: scaled
+ * to keep its proportions and centred, so its edges may be cut off.
+ * { left, top, width, height } in pixels.
+ */
+export function coverFit(image, viewport) {
+  const scale = Math.max(viewport.width / image.width, viewport.height / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  return { left: (viewport.width - width) / 2, top: (viewport.height - height) / 2, width, height };
+}
+
+/**
+ * The start screen (req 56): the background image if there is one (a loaded
+ * { image, width, height }, covering the canvas), the game's name, its menu
+ * (Start, highlighted), and the menu hint.
+ */
+export function drawStartScreen(ctx, menu, viewport, bindings, background) {
   const size = hudFontSize(viewport.height);
   ctx.save();
   fillBackground(ctx, viewport);
+  if (background) {
+    const fit = coverFit(background, viewport);
+    ctx.drawImage(background.image, fit.left, fit.top, fit.width, fit.height);
+  }
   centredText(ctx, GAME_TITLE, viewport.width / 2, viewport.height * 0.35, size * 2.5);
   drawMenu(ctx, menu, startMenuPlace(viewport));
   centredText(ctx, menuHint(bindings), viewport.width / 2, viewport.height * 0.85, size * 0.8);

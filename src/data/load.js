@@ -4,7 +4,7 @@
 // A browser can't list the files in a folder, so loading starts from the
 // required files (validate.js REQUIRED_FILES) and follows references between
 // files: level list → levels → characters, objects, cut scenes, images →
-// sprite sheets → sprite images. Files that nothing refers to are not loaded.
+// sprite sheets → sprite images; display settings → start screen image. Files that nothing refers to are not loaded.
 //
 // loadGameData(options) resolves to
 //   { ok, errors, warnings, data, images }
@@ -61,6 +61,8 @@ export function referencesOf(kind, value) {
     image(value?.background);
   } else if (kind === 'sprite') {
     image(value?.image);
+  } else if (kind === 'display') {
+    image(value?.startBackground);
   }
   return { json, images };
 }

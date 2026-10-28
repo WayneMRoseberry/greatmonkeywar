@@ -47,13 +47,13 @@ const VIEWPORT = { width: 800, height: 600 };
 /** The centre of a menu option's box. */
 const centreOf = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
 
-function setUp({ data = oneLevel(), platform = createFakePlatform() } = {}) {
+function setUp({ data = oneLevel(), images = {}, platform = createFakePlatform() } = {}) {
   const canvas = createFakeCanvas(VIEWPORT.width, VIEWPORT.height);
   const reader = fakeReader();
   let time = 0;
   const logs = [];
   const controller = createGameController({
-    data, images: {}, platform, canvas, inputReader: reader, now: () => time, log: (m) => logs.push(m),
+    data, images, platform, canvas, inputReader: reader, now: () => time, log: (m) => logs.push(m),
   });
   const ctx = canvas.getContext('2d');
   return {
@@ -98,6 +98,14 @@ describe('stepping and drawing the screens', () => {
     const game = setUp();
     assert.equal(game.controller.getGame().screen, Screen.START);
     assert.ok(game.drawTexts().includes(GAME_TITLE));
+  });
+
+  test('the start screen is drawn over the display settings\' start background image', () => {
+    const startBackground = 'images/title.png';
+    const title = { image: { name: 'title' }, width: VIEWPORT.width, height: VIEWPORT.height };
+    const game = setUp({ data: buildData(['P.G', '###'], { display: { startBackground } }), images: { [startBackground]: title } });
+    game.drawTexts();
+    assert.deepEqual(game.ctx.callsOf('drawImage').map((c) => c.args[0]), [title.image]);
   });
 
   test('update steps the game with the input read: confirm starts the level, which is then drawn with the HUD', () => {

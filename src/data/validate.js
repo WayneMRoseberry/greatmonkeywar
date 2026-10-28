@@ -375,6 +375,7 @@ const MESSAGES = {
 
   // Cut scenes
   'missing-background-image': ({ image }) => `"background" is "${image}", but there is no file data/${image}.`,
+  'missing-start-background': ({ image }) => `"startBackground" is "${image}", but there is no file data/${image}.`,
   'missing-character': ({ actor, name }) => `actors, item ${actor}: "character" is "${name}", but there is no file data/characters/${name}.json.`,
   'keyframe-order': ({ actor, keyframe, time, previous }) =>
     `actors, item ${actor}, keyframe ${keyframe}: "time" is ${time}, but it must be later than the keyframe before it (${previous}). Keyframes must be in time order.`,
@@ -410,6 +411,7 @@ const CUSTOM_CHECKS = {
   object: checkObject,
   cutscene: checkCutscene,
   sprite: checkSprite,
+  display: checkDisplay,
 };
 
 function checkLevel({ path, value: level }, { names, images, data, validFiles, error, warn }) {
@@ -602,6 +604,12 @@ function checkCutscene({ path, value }, { names, images, data, error, warn }) {
       error(path, 'narration-order', { line: n + 1, start: line.start, previous: previous.start });
     }
   });
+}
+
+function checkDisplay({ path, value }, { images, error }) {
+  if ('startBackground' in value && !(value.startBackground in images)) {
+    error(path, 'missing-start-background', { image: value.startBackground });
+  }
 }
 
 function checkSprite({ path, value }, { images, error }) {

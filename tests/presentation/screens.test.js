@@ -6,6 +6,9 @@
 //    is the only one that does;
 //  - the start screen fills the canvas with a dark background and shows the
 //    game's name above its menu;
+//  - the start screen's background image (display.json "startBackground"),
+//    when loaded, covers the whole canvas over the dark background, keeping
+//    its proportions and centred, so its edges may be cut off (coverFit);
 //  - both menus show a hint, "Enter / A or click: choose", from the first
 //    confirm bindings (like the cut scene's skip hint);
 //  - each menu option has a box for mouse clicks (startMenuBoxes,
@@ -24,7 +27,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   drawStartScreen, drawLevelComplete, drawThanks, drawDataErrors, MENU_LABELS, HIGHLIGHT_COLOR, GAME_TITLE, MIN_ERROR_FONT,
-  menuHint, startMenuBoxes, levelCompleteMenuBoxes, optionAt,
+  menuHint, startMenuBoxes, levelCompleteMenuBoxes, optionAt, coverFit,
 } from '../../src/presentation/screens.js';
 import { MenuOption } from '../../src/simulation/flow.js';
 import { createFakeContext } from '../helpers/fake-canvas.js';
@@ -89,6 +92,50 @@ describe('start screen (req 56)', () => {
     const [highlight] = highlights(ctx);
     const [box] = startMenuBoxes(createFakeContext(), MENU, VIEWPORT);
     assert.deepEqual([box.x, box.y, box.width, box.height], highlight.args);
+  });
+});
+
+describe('fitting an image to cover the canvas', () => {
+  test('an image the canvas\'s shape fills it exactly', () => {
+    const image = { width: VIEWPORT.width / 4, height: VIEWPORT.height / 4 };
+    assert.deepEqual(coverFit(image, VIEWPORT), { left: 0, top: 0, width: VIEWPORT.width, height: VIEWPORT.height });
+  });
+
+  test('a taller image: as wide as the canvas, centred up and down (top and bottom cut off)', () => {
+    const image = { width: 100, height: 100 };
+    const scale = VIEWPORT.width / image.width;
+    assert.deepEqual(coverFit(image, VIEWPORT), {
+      left: 0, top: (VIEWPORT.height - image.height * scale) / 2, width: VIEWPORT.width, height: image.height * scale,
+    });
+  });
+
+  test('a wider image: as tall as the canvas, centred left and right (sides cut off)', () => {
+    const image = { width: 400, height: 100 };
+    const scale = VIEWPORT.height / image.height;
+    assert.deepEqual(coverFit(image, VIEWPORT), {
+      left: (VIEWPORT.width - image.width * scale) / 2, top: 0, width: image.width * scale, height: VIEWPORT.height,
+    });
+  });
+});
+
+describe('start screen background image', () => {
+  const MENU = { options: [MenuOption.START], selected: 0 };
+  const BACKGROUND = { image: { name: 'title' }, width: 100, height: 100 };
+
+  test('drawn over the dark background, covering the canvas, under the title and menu', () => {
+    const ctx = createFakeContext();
+    drawStartScreen(ctx, MENU, VIEWPORT, BINDINGS, BACKGROUND);
+    assert.equal(ctx.calls[0].op, 'fillRect');
+    const imageIndex = ctx.calls.findIndex((c) => c.op === 'drawImage');
+    const fit = coverFit(BACKGROUND, VIEWPORT);
+    assert.deepEqual(ctx.calls[imageIndex].args, [BACKGROUND.image, fit.left, fit.top, fit.width, fit.height]);
+    assert.ok(imageIndex < ctx.calls.indexOf(textCall(ctx, GAME_TITLE)), 'under the title');
+  });
+
+  test('no image given: only the dark background', () => {
+    const ctx = createFakeContext();
+    drawStartScreen(ctx, MENU, VIEWPORT, BINDINGS);
+    assert.equal(ctx.callsOf('drawImage').length, 0);
   });
 });
 

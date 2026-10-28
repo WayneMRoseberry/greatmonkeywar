@@ -48,7 +48,7 @@ test('loads and validates the whole valid data set by following references', asy
   assert.equal(result.data.sprites.hero.pixelsPerTile, 32);
   assert.equal(result.data.cutscenes['after-level1'].narration.length, 2);
   assert.deepEqual(Object.keys(result.images).sort(), [
-    'images/camp.png', 'images/far.png', 'images/mid.png', 'images/near.png', 'sprites/hero.png',
+    'images/camp.png', 'images/far.png', 'images/mid.png', 'images/near.png', 'images/title.png', 'sprites/hero.png',
   ]);
   assert.equal(result.images['sprites/hero.png'], '<image sprites/hero.png>');
 
@@ -134,4 +134,11 @@ test('references with unsafe names are not fetched', () => {
     background: { layers: [{ image: '../outside.png' }, { image: 'images/far.png' }] },
   });
   assert.deepEqual(refs, { json: ['objects/crate.json'], images: ['images/far.png'] });
+});
+
+test('the display settings refer to the start screen background image, if it has a safe name', () => {
+  const startBackground = 'images/title.png';
+  assert.deepEqual(referencesOf('display', { startBackground }), { json: [], images: [startBackground] });
+  assert.deepEqual(referencesOf('display', { startBackground: '../title.png' }), { json: [], images: [] });
+  assert.deepEqual(referencesOf('display', {}), { json: [], images: [] });
 });
