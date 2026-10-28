@@ -10,6 +10,7 @@
     "$schema": { "type": "string" },
     "formatVersion": { "const": 1 },
     "visibleHeight": { "type": "number", "exclusiveMinimum": 0 },
-    "stickDeadZone": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 }
+    "stickDeadZone": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+    "startBackground": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(png|jpg|jpeg)$" }
   }
 }

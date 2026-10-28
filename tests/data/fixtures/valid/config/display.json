@@ -1,5 +1,6 @@
 {
   "formatVersion": 1,
   "visibleHeight": 12,
-  "stickDeadZone": 0.3
+  "stickDeadZone": 0.3,
+  "startBackground": "images/title.png"
 }

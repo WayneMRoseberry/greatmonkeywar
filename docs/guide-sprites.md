@@ -112,13 +112,14 @@ Objects use only `idle`. Cut scenes can use any animation name that's in the spr
 
 ---
 
-## Background and cut scene pictures
+## Background, cut scene, and start screen pictures
 
-Background layers and cut scene backgrounds are ordinary pictures, not sprite sheets, so they don't need a description file:
+Background layers, cut scene backgrounds, and the start screen background are ordinary pictures, not sprite sheets, so they don't need a description file:
 
 - Put them in `data/images/`. PNG or JPG are both fine.
 - **Background layers** are scaled to the height of the screen and repeat sideways, so make them tall enough to look sharp and with left and right edges that join up seamlessly. Use transparency in all but the farthest layer so the layers behind show through.
 - **Cut scene backgrounds** fill the cut scene's stage, so make them the same shape as the stage (for example 16:9).
+- **The start screen background** is set by `"startBackground"` in `data/config/display.json` (for example `"images/start-screen.png"`). It covers the whole window; on a window that isn't 16:9 its edges are cut off, so keep anything important away from the edges. The game's name is drawn in white about a third of the way down, and the menu just below the middle, so keep those areas fairly plain and dark enough for white text to stand out.
 
 ### What size to make them
 
@@ -129,6 +130,7 @@ A background layer is always drawn **exactly as tall as the game window**, in re
 | Background layer | **1080 pixels tall**, at least **1920 wide**; **3840 wide** (or more) for near layers | 1080 tall looks sharp on a full HD screen. At 1920 wide, one copy covers a 16:9 screen, so it repeats once per screen. Near layers scroll fastest, so make them wider and the repeat is harder to notice. |
 | Background layer, sharp on 4K screens | 2160 pixels tall, twice the widths above | Only if you want 4K screens to look as crisp as full HD. Files get about four times bigger. |
 | Cut scene background | **1920 × 1080** (for a 16:9 stage) | The stage fills a full HD screen. Use the same shape as the stage in your cut scene file. |
+| Start screen background | **1920 × 1080** | It covers a full HD window exactly. |
 
 Things to know:
 

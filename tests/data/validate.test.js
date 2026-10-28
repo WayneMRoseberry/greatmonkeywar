@@ -207,6 +207,20 @@ describe('req 83: wrong value types and values', () => {
     ]);
   });
 
+  test('a start background that isn\'t an image path inside the data folder', () => {
+    const display = fixture('config/display.json');
+    display.startBackground = '../title.png';
+    assertErrors({ 'config/display.json': display }, [
+      { file: 'config/display.json', code: 'bad-format', details: { path: ['startBackground'], format: 'image-path', value: '../title.png' } },
+    ]);
+  });
+
+  test('the start background is optional', () => {
+    const display = fixture('config/display.json');
+    delete display.startBackground;
+    assertErrors({ 'config/display.json': display }, []);
+  });
+
   test('an empty list', () => {
     assertErrors({ 'levels/levels.json': { formatVersion: 1, levels: [] } }, [
       { file: 'levels/levels.json', code: 'too-few-items', details: { path: ['levels'], limit: 1 } },
@@ -586,6 +600,12 @@ describe('req 83: references to files that don\'t exist', () => {
     ], { 'images/camp.png': undefined });
   });
 
+  test('a missing start screen background image', () => {
+    assertErrors({}, [
+      { file: 'config/display.json', code: 'missing-start-background', details: { image: 'images/title.png' } },
+    ], { 'images/title.png': undefined });
+  });
+
   test('a missing sprite sheet image', () => {
     assertErrors({}, [
       { file: 'sprites/hero.json', code: 'missing-sprite-image', details: { image: 'sprites/hero.png' } },
@@ -781,6 +801,8 @@ describe('describeProblem: plain-language messages', () => {
     'enemy-kind': [{ kind: 'player' }, '"kind" is "player", but only data/characters/player.json can be the player. Use "enemy".'],
     'enemy-punch-damage': [{}, '"punchDamage" is only for the player. Remove it from this enemy.'],
     'missing-background-image': [{ image: 'images/camp.png' }, '"background" is "images/camp.png", but there is no file data/images/camp.png.'],
+    'missing-start-background': [{ image: 'images/title.png' },
+      '"startBackground" is "images/title.png", but there is no file data/images/title.png.'],
     'missing-character': [{ actor: 2, name: 'snake' }, 'actors, item 2: "character" is "snake", but there is no file data/characters/snake.json.'],
     'keyframe-order': [{ actor: 1, keyframe: 3, time: 2, previous: 3 },
       'actors, item 1, keyframe 3: "time" is 2, but it must be later than the keyframe before it (3). Keyframes must be in time order.'],
