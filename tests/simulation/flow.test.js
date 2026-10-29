@@ -26,7 +26,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, stepGame, chooseMenuOption, Screen, MenuOption } from '../../src/simulation/flow.js';
-import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, SoundEvent } from '../../src/simulation/constants.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
 
@@ -300,5 +300,51 @@ describe('skip (6.8, req 63)', () => {
     let game = stepGame(completed(twoLevels({ cutscene: 5 })), CONFIRM, FIXED_DT);
     for (let i = 0; i < 10; i++) game = stepGame(game, CONFIRM, FIXED_DT);   // still holding confirm
     assert.equal(game.screen, Screen.CUTSCENE);
+  });
+});
+
+describe('sound events (sound PRD req 14)', () => {
+  test('a new game has no events', () => {
+    assert.deepEqual(createGame(twoLevels()).events, []);
+  });
+
+  test('menuChoose: confirming a menu option; the next step starts with no events again', () => {
+    const chosen = stepGame(createGame(twoLevels()), CONFIRM, FIXED_DT);
+    assert.equal(chosen.screen, Screen.PLAYING);
+    assert.deepEqual(chosen.events, [SoundEvent.MENU_CHOOSE]);
+    assert.deepEqual(stepGame(chosen, NO_INPUT, FIXED_DT).events, []);
+  });
+
+  test('menuChoose: choosing an option directly (a click)', () => {
+    assert.deepEqual(chooseMenuOption(createGame(twoLevels()), 0).events, [SoundEvent.MENU_CHOOSE]);
+  });
+
+  test('menuMove: only when up or down changes the selection, not at the ends', () => {
+    const panel = completed(twoLevels());   // Next level (selected) and Exit game
+    const down = stepGame(panel, DOWN, FIXED_DT);
+    assert.deepEqual(down.events, [SoundEvent.MENU_MOVE], 'down to Exit game');
+    const downAgain = stepGame(stepGame(down, NO_INPUT, FIXED_DT), DOWN, FIXED_DT);   // released, then pressed again
+    assert.deepEqual(downAgain.events, [], 'already at the last option');
+    const up = stepGame(stepGame(downAgain, NO_INPUT, FIXED_DT), UP, FIXED_DT);
+    assert.deepEqual(up.events, [SoundEvent.MENU_MOVE], 'back up to Next level');
+  });
+
+  test('while playing, the game\'s events are the level step\'s events', () => {
+    const jumped = stepGame(started(twoLevels()), holding(Input.JUMP), FIXED_DT);
+    assert.deepEqual(jumped.events, jumped.level.events);
+    assert.deepEqual(jumped.events, [SoundEvent.JUMP]);
+  });
+
+  test('reachGoal: on the step the level is completed, after that step\'s level events; not again under the panel', () => {
+    const done = stepUntil(started(twoLevels()), holding(Input.RIGHT), (g) => g.screen === Screen.LEVEL_COMPLETE);
+    assert.deepEqual(done.events, [...done.level.events, SoundEvent.REACH_GOAL]);
+    assert.deepEqual(stepGame(done, NO_INPUT, FIXED_DT).events, []);
+  });
+
+  test('a cut scene step has no events of its own', () => {
+    const cutsceneSeconds = 5;
+    const inCutscene = press(completed(twoLevels({ cutscene: cutsceneSeconds })), CONFIRM);
+    assert.equal(inCutscene.screen, Screen.CUTSCENE);
+    assert.deepEqual(stepGame(inCutscene, NO_INPUT, FIXED_DT).events, []);
   });
 });

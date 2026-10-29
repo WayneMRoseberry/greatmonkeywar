@@ -22,7 +22,7 @@ import { Player } from '../../src/simulation/player.js';
 import { Enemy, liveEnemies } from '../../src/simulation/enemies.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
 import { punchArea, enemiesInReach } from '../../src/simulation/punch.js';
-import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, Facing, SoundEvent } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
@@ -467,5 +467,22 @@ describe('order (req 51)', () => {
     assert.ok(PATROL.speed * FIXED_DT > gap);
     const after = step(state, PUNCH, FIXED_DT);
     assert.equal(after.enemies[0].health, health);
+  });
+});
+
+describe('sound events (sound PRD req 14)', () => {
+  const PUNCH = holding(Input.PUNCH);
+
+  test('punch: on the step a punch starts, even with nothing in reach; holding punch doesn\'t repeat it', () => {
+    const first = step(punchState(), PUNCH, FIXED_DT);
+    assert.deepEqual(first.events, [SoundEvent.PUNCH]);
+    assert.deepEqual(step(first, PUNCH, FIXED_DT).events, []);
+  });
+
+  test('no punch while carrying an object', () => {
+    const state = punchState();
+    const { player } = state;
+    const crate = new CarriableObject({ type: 'crate', width: 1, height: 1, x: player.x, y: player.y - 1, held: true });
+    assert.deepEqual(step({ ...state, objects: [crate] }, PUNCH, FIXED_DT).events, []);
   });
 });

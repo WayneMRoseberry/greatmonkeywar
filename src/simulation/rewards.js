@@ -7,6 +7,7 @@
 // previous state, never a state someone else still holds.
 
 import { overlapsBox } from './collision.js';
+import { SoundEvent } from './constants.js';
 
 /**
  * The reward placed in grid cell (column, row), from its legend entry's
@@ -26,8 +27,12 @@ export function collectRewards(state) {
   const { player } = state;
   const kept = [];
   for (const reward of state.rewards) {
-    if (overlapsBox(player, reward)) state.rewardCount += reward.value;
-    else kept.push(reward);
+    if (overlapsBox(player, reward)) {
+      state.rewardCount += reward.value;
+      state.events.push(SoundEvent.COLLECT_REWARD);
+    } else {
+      kept.push(reward);
+    }
   }
   state.rewards = kept;
 }

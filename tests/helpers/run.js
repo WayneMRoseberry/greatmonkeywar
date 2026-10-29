@@ -12,3 +12,18 @@ export function runSteps(step, state, inputOrFn, count, dt) {
   for (let i = 0; i < count; i++) current = step(current, inputFor(i), dt);
   return current;
 }
+
+/**
+ * Like runSteps, but also collects each step's sound events (state.events):
+ * returns { state, events }, where events[i] is the list from step i.
+ */
+export function runStepsWithEvents(step, state, inputOrFn, count, dt) {
+  const inputFor = typeof inputOrFn === 'function' ? inputOrFn : () => inputOrFn;
+  const events = [];
+  let current = state;
+  for (let i = 0; i < count; i++) {
+    current = step(current, inputFor(i), dt);
+    events.push(current.events);
+  }
+  return { state: current, events };
+}

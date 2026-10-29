@@ -8,7 +8,7 @@
 // fails with a LevelDataError if the player definition is missing, so it is
 // always present here and isn't checked again. The data is read-only (frozen).
 
-import { Facing } from './constants.js';
+import { Facing, SoundEvent } from './constants.js';
 import { Input } from './input.js';
 import { withoutNegativeZero } from './numbers.js';
 import { moveBoxes, isSupported, overlapsBox } from './collision.js';
@@ -68,6 +68,7 @@ export function damagePlayer(state, source) {
 
   player.health = Math.max(0, player.health - 1);
   player.invincibleTime = invincibilitySeconds;
+  state.events.push(SoundEvent.PLAYER_HURT);
 
   const offset = (player.x + player.width / 2) - (source.x + source.width / 2);
   const away = offset !== 0 ? Math.sign(offset) : (player.facing === Facing.RIGHT ? -1 : 1);
@@ -127,6 +128,9 @@ export function updatePlayer(state, input, dt) {
   const { gravity, jumpSpeed, maxFallSpeed } = state.data.tuning;
 
   player.invincibleTime = Math.max(0, player.invincibleTime - dt);
+  // Falling before this step's move: in the air and moving down. Never true at the level's
+  // start or just after a respawn, where the player is at rest (vy 0).
+  const wasFalling = !player.onGround && player.vy > 0;
 
   // While knocked back, the knockback carries the player: running input is ignored.
   if (!player.knockedBack) {
@@ -139,7 +143,10 @@ export function updatePlayer(state, input, dt) {
   const standing = isStanding(state, solids);
   player.vy = Math.min(player.vy + gravity * dt, maxFallSpeed);
   const jumpPressed = input[Input.JUMP] && !player.jumpHeld;
-  if (jumpPressed && standing) player.vy = -jumpSpeed;
+  if (jumpPressed && standing) {
+    player.vy = -jumpSpeed;
+    state.events.push(SoundEvent.JUMP);
+  }
   player.jumpHeld = input[Input.JUMP];
 
   const moved = moveBoxes(state.level, carriedBoxes(state), player.vx * dt, player.vy * dt, solids);
@@ -149,6 +156,7 @@ export function updatePlayer(state, input, dt) {
   if (moved.hitLeft || moved.hitRight) player.vx = 0;
   if (moved.onGround || moved.hitCeiling) player.vy = 0;
   if (moved.onGround) player.knockedBack = false;
+  if (moved.onGround && wasFalling) state.events.push(SoundEvent.LAND);
 
   if (player.y >= state.level.height) fallIntoPit(state);
 }
@@ -164,6 +172,7 @@ function fallIntoPit(state) {
   const { player, start } = state;
   letGo(state);
   player.health = Math.max(0, player.health - 1);
+  state.events.push(SoundEvent.PLAYER_HURT);
   player.x = start.x;
   player.y = start.y;
   player.vx = 0;

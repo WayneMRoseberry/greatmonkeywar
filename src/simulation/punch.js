@@ -3,7 +3,7 @@
 // updatePunch changes `state`, which must be step()'s fresh copy of the
 // previous state, never a state someone else still holds.
 
-import { Facing } from './constants.js';
+import { Facing, SoundEvent } from './constants.js';
 import { Input } from './input.js';
 import { touches } from './collision.js';
 import { defeatEnemy, liveEnemies } from './enemies.js';
@@ -71,9 +71,10 @@ export function updatePunch(state, input, dt) {
   if (!pressed || heldObject(state)) return;
 
   player.punchTime = state.data.tuning.punchSeconds;
+  state.events.push(SoundEvent.PUNCH);
   const damage = state.data.characters.player.punchDamage ?? DEFAULT_PUNCH_DAMAGE;
   for (const enemy of enemiesInReach(state)) {
     enemy.health = Math.max(0, enemy.health - damage);
-    if (enemy.health === 0) defeatEnemy(state, enemy);
+    if (enemy.health === 0) defeatEnemy(state, enemy, SoundEvent.ENEMY_DEFEATED);
   }
 }

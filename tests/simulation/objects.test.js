@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player } from '../../src/simulation/player.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
-import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, Facing, SoundEvent } from '../../src/simulation/constants.js';
 import { overlapsSolid, overlapsBox } from '../../src/simulation/collision.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
@@ -1236,5 +1236,37 @@ describe('pit respawns (task 4.10)', () => {
       assertNear(back.objects[0].x, start.x, 'x');
       assertNear(back.objects[0].y, start.y, 'y');
     });
+  });
+});
+
+describe('sound events (sound PRD req 14)', () => {
+  const DOWN_ACTION = holding(Input.DOWN, Input.ACTION);
+  // A crate right of the player, to pick up.
+  const GRID = ['.....', '.Pc.G', '#####'];
+
+  /** Picks up the crate, then releases action, so the next press is new. */
+  const holdingCrate = () => step(step(stateFor(GRID), PRESS_ACTION, FIXED_DT), NO_INPUT, FIXED_DT);
+
+  test('pickUp: on the step an object is picked up', () => {
+    assert.deepEqual(step(stateFor(GRID), PRESS_ACTION, FIXED_DT).events, [SoundEvent.PICK_UP]);
+  });
+
+  test('no pickUp when there is no room to pick the object up', () => {
+    assert.deepEqual(step(stateFor(['#####', '.Pc.G', '#####']), PRESS_ACTION, FIXED_DT).events, []);
+  });
+
+  test('throw: on the step a held object is thrown', () => {
+    assert.deepEqual(step(holdingCrate(), PRESS_ACTION, FIXED_DT).events, [SoundEvent.THROW]);
+  });
+
+  test('drop: on the step a held object is put down', () => {
+    assert.deepEqual(step(holdingCrate(), DOWN_ACTION, FIXED_DT).events, [SoundEvent.DROP]);
+  });
+
+  test('no drop when there is no room on either side, and the player keeps holding it', () => {
+    const state = stateFor(['.....', '.#P#G', '#####']);
+    const { player } = state;
+    const crate = new CarriableObject({ type: 'crate', ...ONE_TILE, x: player.x, y: player.y - ONE_TILE.height, held: true });
+    assert.deepEqual(step({ ...state, objects: [crate] }, DOWN_ACTION, FIXED_DT).events, []);
   });
 });

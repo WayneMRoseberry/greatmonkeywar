@@ -4,10 +4,10 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player, damagePlayer } from '../../src/simulation/player.js';
-import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, Facing, SoundEvent } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
-import { runSteps } from '../helpers/run.js';
+import { runSteps, runStepsWithEvents } from '../helpers/run.js';
 import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/input.js';
 
 function assertNear(actual, expected, label) {
@@ -710,5 +710,64 @@ describe('facing', () => {
   test('with nothing held from the start, keeps the starting facing', () => {
     const startFacing = createLevelState(buildData(GRID), TEST_LEVEL).player.facing;
     assert.deepEqual(facingAfterEach(NO_INPUT, NO_INPUT), [startFacing, startFacing]);
+  });
+});
+
+describe('sound events (sound PRD req 14)', () => {
+  const stateFor = (grid) => createLevelState(buildData(grid), TEST_LEVEL);
+  /** The steps (counting from 0) whose events include `event`. */
+  const stepsWith = (events, event) => events.flatMap((list, i) => (list.includes(event) ? [i] : []));
+  const ONE_SECOND = STEPS_PER_SECOND;
+
+  // Open air above the start, so a jump rises and falls back to where it began.
+  const OPEN = ['.......G', '........', '........', '.P......', '########'];
+  // A ledge to walk off: the player starts on it, the ground is two rows lower.
+  const LEDGE = ['......G', '.P.....', '###....', '.......', '#######'];
+  // A pit two tiles right of the start.
+  const PIT = ['.....G', 'P.....', '##.###'];
+
+  test('jump: on the step a jump starts, and only then', () => {
+    const { events } = runStepsWithEvents(step, stateFor(OPEN), holding(Input.JUMP), ONE_SECOND, FIXED_DT);
+    assert.deepEqual(stepsWith(events, SoundEvent.JUMP), [0], 'holding jump through the landing doesn\'t jump again');
+  });
+
+  test('land: once, on the first step a jump is back on the ground (even arriving exactly level with it)', () => {
+    const states = [];
+    let state = stateFor(OPEN);
+    for (let i = 0; i < 2 * ONE_SECOND; i++) {
+      state = step(state, i === 0 ? holding(Input.JUMP) : NO_INPUT, FIXED_DT);
+      states.push(state);
+    }
+    const backOnGround = states.findIndex((s, i) => i > 0 && s.player.onGround);
+    assert.deepEqual(stepsWith(states.map((s) => s.events), SoundEvent.LAND), [backOnGround]);
+  });
+
+  test('walking off a ledge: no jump, but a landing at the bottom', () => {
+    const { events, state } = runStepsWithEvents(step, stateFor(LEDGE), holding(Input.RIGHT), 2 * ONE_SECOND, FIXED_DT);
+    assert.ok(state.player.y > stateFor(LEDGE).player.y, 'the player went down off the ledge');
+    assert.deepEqual(stepsWith(events, SoundEvent.JUMP), []);
+    assert.equal(stepsWith(events, SoundEvent.LAND).length, 1);
+  });
+
+  test('no landing when the level starts with the player standing at the start', () => {
+    const { events } = runStepsWithEvents(step, stateFor(OPEN), NO_INPUT, ONE_SECOND, FIXED_DT);
+    assert.deepEqual(events.flat(), []);
+  });
+
+  test('falling into a pit: playerHurt on the step the player falls out, and no landing after the respawn', () => {
+    let state = stateFor(PIT);
+    const health = state.player.health;
+    while (state.player.health === health) state = step(state, holding(Input.RIGHT), FIXED_DT);
+    assert.deepEqual(state.events, [SoundEvent.PLAYER_HURT]);
+    const { events } = runStepsWithEvents(step, state, NO_INPUT, ONE_SECOND, FIXED_DT);
+    assert.deepEqual(events.flat(), []);
+  });
+
+  test('damage: playerHurt when the player loses health, not while invincible', () => {
+    const state = stateFor(OPEN);
+    const source = { x: 0, y: 0, width: 1, height: 1 };
+    damagePlayer(state, source);
+    damagePlayer(state, source);   // invincible now: no damage, no sound
+    assert.deepEqual(state.events, [SoundEvent.PLAYER_HURT]);
   });
 });

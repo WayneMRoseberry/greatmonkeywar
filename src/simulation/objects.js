@@ -7,7 +7,7 @@
 // updateObjects changes `state`, which must be step()'s fresh copy of the
 // previous state, never a state someone else still holds.
 
-import { Facing } from './constants.js';
+import { Facing, SoundEvent } from './constants.js';
 import { Input } from './input.js';
 import { withoutNegativeZero } from './numbers.js';
 import { touches, fitsIn, moveBox, isSupported, isOnTopOf, freeYAbove } from './collision.js';
@@ -164,7 +164,10 @@ export function updateObjects(state, input) {
   if (held) {
     placeAboveHead(held, player);
     if (actionPressed && input[Input.DOWN]) dropObject(state, held);
-    else if (actionPressed) throwObject(held, player, state.data.tuning.throwSpeed);
+    else if (actionPressed) {
+      throwObject(held, player, state.data.tuning.throwSpeed);
+      state.events.push(SoundEvent.THROW);
+    }
   } else if (actionPressed) {
     const chosen = objectToPickUp(state);
     const solids = solidObjects(state).filter((o) => o !== chosen);
@@ -174,6 +177,7 @@ export function updateObjects(state, input) {
       chosen.vx = 0;
       chosen.vy = 0;
       placeAboveHead(chosen, player);
+      state.events.push(SoundEvent.PICK_UP);
     }
   }
 }
@@ -204,6 +208,7 @@ function dropObject(state, object) {
   object.y = y;
   object.vx = withoutNegativeZero(side * dropSpeed.x);
   object.vy = withoutNegativeZero(-dropSpeed.y);   // y increases downwards
+  state.events.push(SoundEvent.DROP);
 }
 
 function throwObject(object, player, throwSpeed) {

@@ -10,6 +10,7 @@ import { createLevelState } from './state.js';
 import { cutsceneAt } from './cutscene.js';
 import { overlapsBox } from './collision.js';
 import { Input } from './input.js';
+import { SoundEvent } from './constants.js';
 
 /** The screens the game can be on. */
 export const Screen = Object.freeze({
@@ -46,6 +47,7 @@ export function createGame(data) {
     level: null,      // the current level's state (state.js), or null
     cutscene: null,   // { name, time } while a cut scene plays
     held: Object.fromEntries(MENU_INPUTS.map((name) => [name, false])),
+    events: [],       // the SoundEvents of the latest step or choice: the level's, plus the flow's own
   };
 }
 
@@ -56,6 +58,7 @@ function copyGame(game) {
     menu: game.menu && { options: [...game.menu.options], selected: game.menu.selected },
     cutscene: game.cutscene && { ...game.cutscene },
     held: { ...game.held },
+    events: [],   // each step or choice records its own
   };
 }
 
@@ -79,6 +82,7 @@ const reachedGoal = (level) => overlapsBox(level.player, level.goal);
 
 /** Choosing a menu option. */
 function choose(game, option) {
+  game.events.push(SoundEvent.MENU_CHOOSE);
   if (option === MenuOption.START) startLevel(game, 0);
   else if (option === MenuOption.EXIT) {
     game.screen = Screen.FINISHED;
@@ -112,8 +116,10 @@ export function chooseMenuOption(game, index) {
 /** Up and down move the selection one place, stopping at the ends; confirm chooses (req 19). */
 function updateMenu(game, pressed) {
   const { menu: current } = game;
+  const before = current.selected;
   if (pressed[Input.DOWN]) current.selected = Math.min(current.selected + 1, current.options.length - 1);
   if (pressed[Input.UP]) current.selected = Math.max(current.selected - 1, 0);
+  if (current.selected !== before) game.events.push(SoundEvent.MENU_MOVE);
   if (pressed[Input.CONFIRM]) choose(game, current.options[current.selected]);
 }
 
@@ -126,6 +132,9 @@ function updateMenu(game, pressed) {
  *  - cut scene: its time advances by dt; when it has ended, or confirm is
  *    pressed, the next level starts (req 63);
  *  - finished: nothing more happens (the presentation quits through the platform).
+ * The returned game's `events` are this step's SoundEvents: while playing, the
+ * level step's, then reachGoal if the goal was reached; on a menu, menuMove
+ * when the selection changes and menuChoose when an option is chosen.
  */
 export function stepGame(game, input, dt) {
   const next = copyGame(game);
@@ -139,7 +148,9 @@ export function stepGame(game, input, dt) {
       break;
     case Screen.PLAYING:
       next.level = step(game.level, input, dt);
+      next.events.push(...next.level.events);
       if (reachedGoal(next.level)) {
+        next.events.push(SoundEvent.REACH_GOAL);
         const isLast = next.levelIndex === next.data.levelList.levels.length - 1;
         next.screen = Screen.LEVEL_COMPLETE;
         next.menu = menu(isLast ? [MenuOption.EXIT] : [MenuOption.NEXT_LEVEL, MenuOption.EXIT]);

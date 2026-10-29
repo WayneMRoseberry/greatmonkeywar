@@ -153,31 +153,39 @@ Every sub-task that creates or changes code is done test-first. Each code sub-ta
     - Code: `src/data/load.js`
     - Decided: `referencesOf` now returns `{ json, images, sounds }` (existing tests updated for the extra list). Sound files are told apart from images by extension. A sound that is missing or fails to load (`loadSound` gives `null`) is left out of `sounds`, so validation reports it as `missing-sound`, the same as the tool does. The browser `loadSound` fetches with the normal HTTP cache (unlike JSON, which uses `no-store`), since sound files are large and rarely change. `main.js` doesn't use `sounds` yet (task 4.10).
 
-- [ ] 2.0 Record sound events in the simulation and the game flow (reqs 12, 14)
-  - [ ] 2.1 The level state's `events` list: starts empty (`createLevelState`), is emptied at the start of every `step`, and is part of the state's copy (`copyState`), so a step never changes the events of the state passed in.
+- [x] 2.0 Record sound events in the simulation and the game flow (reqs 12, 14)
+  - [x] 2.1 The level state's `events` list: starts empty (`createLevelState`), is emptied at the start of every `step`, and is part of the state's copy (`copyState`), so a step never changes the events of the state passed in.
     - Test: `tests/simulation/state.test.js`, `tests/simulation/step.test.js`
     - Code: `src/simulation/state.js`, `src/simulation/step.js`
-  - [ ] 2.2 Player: `jump` when a jump starts (not when walking off a ledge); `land` when `onGround` turns from false to true, but not on the level's first step or after a respawn; `playerHurt` when the player loses health from an enemy or a pit.
+    - Decided: `state.events` is a plain list of `SoundEvent` values, in the order things happened within the step; modules record with `state.events.push(SoundEvent.X)`. `copyState` already copied it (plain data), and `step` replaces it with a new empty list before updating. Also added a test helper, `runStepsWithEvents` (`tests/helpers/run.js`, tested in `helpers.test.js`): like `runSteps`, but also returns each step's events.
+  - [x] 2.2 Player: `jump` when a jump starts (not when walking off a ledge); `land` when `onGround` turns from false to true, but not on the level's first step or after a respawn; `playerHurt` when the player loses health from an enemy or a pit.
     - Test: `tests/simulation/player.test.js` (each event, and each "not" case in req 14)
     - Code: `src/simulation/player.js`
-  - [ ] 2.3 Objects: `pickUp`, `drop` (including onto a stack), and `throw`, each once, on the step it happens.
+    - Decided: `land` is recorded when the step's move ends on the ground and the player was **falling** before it (not on the ground, and `vy` > 0). "Was standing at the start of the step" didn't work: a jump can come down exactly level with the ground (an existing test, "m = d"), so the player is already standing on the step that lands. At the level start and after a respawn the player is at rest (`vy` 0), so neither lands. (A level whose start is in mid-air would land after the first fall; no level does that.) `playerHurt` is recorded in `damagePlayer` (only when not invincible) and in `fallIntoPit`.
+  - [x] 2.3 Objects: `pickUp`, `drop` (including onto a stack), and `throw`, each once, on the step it happens.
     - Test: `tests/simulation/objects.test.js`
     - Code: `src/simulation/objects.js`
-  - [ ] 2.4 Punch: `punch` when a punch starts, whether or not it hits anything.
+    - Decided: recorded only when the action really happens: no `pickUp` when there's no room above the head, no `drop` when there's no room on either side. Letting go when falling into a pit (`letGo`) is not a drop and plays nothing.
+  - [x] 2.4 Punch: `punch` when a punch starts, whether or not it hits anything.
     - Test: `tests/simulation/punch.test.js`
     - Code: `src/simulation/punch.js`
-  - [ ] 2.5 Enemies: `stomp` for a stomp; `enemyDefeated` for a punch or a thrown object; never both for one enemy. One event per enemy defeated (two enemies in one step: two events).
+    - Decided: not recorded for a press while carrying (no punch happens), nor while punch is held.
+  - [x] 2.5 Enemies: `stomp` for a stomp; `enemyDefeated` for a punch or a thrown object; never both for one enemy. One event per enemy defeated (two enemies in one step: two events).
     - Test: `tests/simulation/enemies.test.js`
     - Code: `src/simulation/enemies.js`
-  - [ ] 2.6 Rewards: `collectReward` for each reward collected.
+    - Decided: `defeatEnemy(state, enemy, event)` takes the event for how the enemy was defeated, and records it only if the enemy wasn't already defeated. Callers: stomps pass `STOMP`; thrown objects and punches (`punch.js`) pass `ENEMY_DEFEATED`. A punch that only lowers an enemy's health records just `punch`. Within a step, a punch's events come in order: `punch`, then `enemyDefeated`.
+  - [x] 2.6 Rewards: `collectReward` for each reward collected.
     - Test: `tests/simulation/rewards.test.js`
     - Code: `src/simulation/rewards.js`
-  - [ ] 2.7 Restart: when health reaches 0 and the level restarts, the step's events include `playerDefeated` and not `playerHurt` for the hit that took the last health (req 14). The events survive `restartLevel`.
+    - Decided: one event per reward, whatever its value.
+  - [x] 2.7 Restart: when health reaches 0 and the level restarts, the step's events include `playerDefeated` and not `playerHurt` for the hit that took the last health (req 14). The events survive `restartLevel`.
     - Test: `tests/simulation/step.test.js` (by enemy contact and by a pit)
     - Code: `src/simulation/step.js`
-  - [ ] 2.8 Game flow events: the game state gains `events`, emptied at the start of each `stepGame` and `chooseMenuOption`. While playing, it holds the level step's events; `reachGoal` when the level is completed; `menuMove` when up or down actually changes the selection (not at the ends); `menuChoose` when an option is chosen, by confirm or by `chooseMenuOption` (a click). Cut scene timed sounds are **not** flow events; the audio player works them out from the cut scene clock (task 3.4).
+    - Decided: on restart, `step` removes the step's `playerHurt` events and adds `playerDefeated` at the end; the step's other events are kept. `restartLevel` doesn't touch `events`.
+  - [x] 2.8 Game flow events: the game state gains `events`, emptied at the start of each `stepGame` and `chooseMenuOption`. While playing, it holds the level step's events; `reachGoal` when the level is completed; `menuMove` when up or down actually changes the selection (not at the ends); `menuChoose` when an option is chosen, by confirm or by `chooseMenuOption` (a click). Cut scene timed sounds are **not** flow events; the audio player works them out from the cut scene clock (task 3.4).
     - Test: `tests/simulation/flow.test.js`
     - Code: `src/simulation/flow.js`
+    - Decided: `copyGame` starts every new game state with an empty `events` list, so both `stepGame` and `chooseMenuOption` begin empty. `choose` records `menuChoose`, so confirm and clicks share it. While playing, the game's events are the level step's, then `reachGoal` if the goal was reached that step. Under the level-complete panel the level isn't stepped, so its old events aren't repeated. Cut scene steps have no events.
 
 - [ ] 3.0 Build the audio player: which music plays on each screen, jingles, cut scene sounds, sound effects, mute, and browser unlock (reqs 8–13, 15, 17–18, 20–22, 25)
   - [ ] 3.1 Test helper: a recording fake audio backend. It has the operations the player needs (for example `playMusic(path, { loop })`, `stopMusic()`, `playSound(path)`, `setMuted(muted)`, `isLocked()`, `unlock()`), and it records each call in order. A test can set whether it starts locked and which paths fail to play.
