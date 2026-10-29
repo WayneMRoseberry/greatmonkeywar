@@ -268,6 +268,12 @@ describe('goal, rewards, and time', () => {
   });
 });
 
+describe('sound events (sound PRD req 14)', () => {
+  test('a new level has no sound events yet', () => {
+    assert.deepEqual(stateFor().events, []);
+  });
+});
+
 describe('level-start snapshot (req 27)', () => {
   test('records the player, enemies, objects, rewards, and reward count as they were when the level started', () => {
     const state = stateFor(['P.e.c.o.b.G', '###########']);

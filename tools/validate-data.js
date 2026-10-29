@@ -12,6 +12,7 @@ import { validateData, formatProblem } from '../src/data/validate.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg']);
+const SOUND_EXTENSIONS = new Set(['.ogg', '.opus']);
 
 function listFiles(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -28,10 +29,11 @@ export function pngSize(buffer) {
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
 }
 
-/** Reads a data folder into the { files, images } form that validateData expects. */
+/** Reads a data folder into the { files, images, sounds } form that validateData expects. */
 export function readDataFolder(dataDir) {
   const files = {};
   const images = {};
+  const sounds = {};
   for (const full of listFiles(dataDir)) {
     const relative = path.relative(dataDir, full).split(path.sep).join('/');
     const ext = path.extname(full).toLowerCase();
@@ -39,14 +41,16 @@ export function readDataFolder(dataDir) {
       files[relative] = fs.readFileSync(full, 'utf8');
     } else if (IMAGE_EXTENSIONS.has(ext)) {
       images[relative] = ext === '.png' ? pngSize(fs.readFileSync(full)) : null;
+    } else if (SOUND_EXTENSIONS.has(ext)) {
+      sounds[relative] = true;   // only whether it exists is checked
     }
   }
-  return { files, images };
+  return { files, images, sounds };
 }
 
 function main() {
   const dataDir = path.resolve(process.argv[2] ?? path.join(REPO_ROOT, 'data'));
-  const { files, images } = readDataFolder(dataDir);
+  const { files, images, sounds } = readDataFolder(dataDir);
   const count = Object.keys(files).length;
 
   if (count === 0) {
@@ -55,7 +59,7 @@ function main() {
     return;
   }
 
-  const { errors, warnings } = validateData({ files, images });
+  const { errors, warnings } = validateData({ files, images, sounds });
 
   if (warnings.length > 0) {
     console.log(`Data validation: ${warnings.length} warning(s) (these don't block):`);

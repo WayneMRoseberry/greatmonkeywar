@@ -4,19 +4,24 @@
 // A browser can't list the files in a folder, so loading starts from the
 // required files (validate.js REQUIRED_FILES) and follows references between
 // files: level list → levels → characters, objects, cut scenes, images →
-// sprite sheets → sprite images; display settings → start screen image. Files that nothing refers to are not loaded.
+// sprite sheets → sprite images; display settings → start screen image;
+// audio settings, levels, and cut scenes → sound files. Files that nothing
+// refers to are not loaded.
 //
 // loadGameData(options) resolves to
-//   { ok, errors, warnings, data, images }
+//   { ok, errors, warnings, data, images, sounds }
 //   ok:     true if there are no errors
 //   data:   parsed data grouped by kind (see validate.js), frozen: read-only
 //   images: { 'sprites/player.png': <loaded image>, ... } ready for drawing
+//   sounds: { 'audio/sounds/jump.ogg': <ArrayBuffer>, ... } the files' bytes;
+//           the presentation decodes them (that needs an AudioContext)
 // It never throws for bad or missing data; problems are reported in `errors`.
 
 import { validateData, classifyFile, REQUIRED_FILES } from './validate.js';
 
 const NAME = /^[A-Za-z0-9_-]+$/;
 const IMAGE_PATH = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*\.(png|jpg|jpeg)$/;
+const SOUND_PATH = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*\.(ogg|opus)$/;
 
 /** Fetches a text file; resolves to null if it doesn't exist or can't be read. */
 async function browserFetchText(url) {
@@ -38,12 +43,24 @@ function browserLoadImage(url) {
   });
 }
 
-/** The data and image files that a parsed data file refers to. */
+/** Fetches a sound file's bytes; resolves to an ArrayBuffer, or null if it doesn't exist or can't be read. */
+async function browserLoadSound(url) {
+  try {
+    const response = await fetch(url);
+    return response.ok ? await response.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The data, image, and sound files that a parsed data file refers to. */
 export function referencesOf(kind, value) {
   const json = [];
   const images = [];
+  const sounds = [];
   const name = (folder, n) => { if (typeof n === 'string' && NAME.test(n)) json.push(`${folder}/${n}.json`); };
   const image = (p) => { if (typeof p === 'string' && IMAGE_PATH.test(p)) images.push(p); };
+  const sound = (p) => { if (typeof p === 'string' && SOUND_PATH.test(p)) sounds.push(p); };
 
   if (kind === 'level-list') {
     for (const level of value?.levels ?? []) name('levels', level);
@@ -54,17 +71,24 @@ export function referencesOf(kind, value) {
     }
     name('cutscenes', value?.cutscene);
     for (const layer of value?.background?.layers ?? []) image(layer?.image);
+    sound(value?.music);
+    sound(value?.completeJingle);
   } else if (kind === 'character' || kind === 'object') {
     name('sprites', value?.sprite);
   } else if (kind === 'cutscene') {
     for (const actor of value?.actors ?? []) name('characters', actor?.character);
     image(value?.background);
+    sound(value?.music);
+    for (const timed of value?.sounds ?? []) sound(timed?.sound);
   } else if (kind === 'sprite') {
     image(value?.image);
   } else if (kind === 'display') {
     image(value?.startBackground);
+  } else if (kind === 'audio') {
+    sound(value?.startMusic);
+    for (const file of Object.values(value?.sounds ?? {})) sound(file);
   }
-  return { json, images };
+  return { json, images, sounds };
 }
 
 /**
@@ -91,10 +115,12 @@ export async function loadGameData({
   baseUrl = 'data/',
   fetchText = browserFetchText,
   loadImage = browserLoadImage,
+  loadSound = browserLoadSound,
 } = {}) {
   const files = {};
   const imageInfo = {};
   const images = {};
+  const sounds = {};
   const requested = new Set();
 
   // Load in waves: each wave fetches everything the previous wave referred to.
@@ -105,16 +131,19 @@ export async function loadGameData({
 
     const results = await Promise.all(fresh.map(async (path) => {
       if (/\.json$/.test(path)) return { path, text: await fetchText(baseUrl + path) };
+      if (SOUND_PATH.test(path)) return { path, sound: await loadSound(baseUrl + path) };
       return { path, loaded: await loadImage(baseUrl + path) };
     }));
 
     wave = [];
-    for (const { path, text, loaded } of results) {
+    for (const { path, text, sound, loaded } of results) {
       if (text !== undefined) {
         if (text === null) continue; // Missing; validateData reports it if it matters.
         files[path] = text;
         const refs = referencesOf(classifyFile(path), tryParse(text));
-        wave.push(...refs.json, ...refs.images);
+        wave.push(...refs.json, ...refs.images, ...refs.sounds);
+      } else if (sound !== undefined) {
+        if (sound !== null) sounds[path] = sound;
       } else if (loaded) {
         imageInfo[path] = { width: loaded.width, height: loaded.height };
         images[path] = loaded.image;
@@ -122,7 +151,7 @@ export async function loadGameData({
     }
   }
 
-  const { errors, warnings, data } = validateData({ files, images: imageInfo });
+  const { errors, warnings, data } = validateData({ files, images: imageInfo, sounds });
   // The game treats data as read-only; freezing makes that a guarantee.
-  return { ok: errors.length === 0, errors, warnings, data: deepFreeze(data), images };
+  return { ok: errors.length === 0, errors, warnings, data: deepFreeze(data), images, sounds };
 }

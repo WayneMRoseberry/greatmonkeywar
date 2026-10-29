@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "startMusic": "audio/music/start.ogg",
+  "sounds": {
+    "jump": "audio/sounds/jump.ogg",
+    "land": "audio/sounds/land.ogg",
+    "punch": "audio/sounds/punch.ogg",
+    "pickUp": "audio/sounds/pickUp.ogg",
+    "drop": "audio/sounds/drop.ogg",
+    "throw": "audio/sounds/throw.ogg",
+    "stomp": "audio/sounds/stomp.ogg",
+    "enemyDefeated": "audio/sounds/enemyDefeated.ogg",
+    "playerHurt": "audio/sounds/playerHurt.ogg",
+    "playerDefeated": "audio/sounds/playerDefeated.ogg",
+    "collectReward": "audio/sounds/collectReward.ogg",
+    "reachGoal": "audio/sounds/reachGoal.ogg",
+    "menuMove": "audio/sounds/menuMove.ogg",
+    "menuChoose": "audio/sounds/menuChoose.ogg"
+  }
+}

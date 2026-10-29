@@ -44,12 +44,21 @@
         }
       }
     },
-    "cutscene": { "$ref": "#/$defs/name" }
+    "cutscene": { "$ref": "#/$defs/name" },
+    "music": {
+      "description": "Plays, looping, while the level is played.",
+      "$ref": "#/$defs/soundPath"
+    },
+    "completeJingle": {
+      "description": "Plays once when the level is completed, instead of the music. Without it, the music keeps playing.",
+      "$ref": "#/$defs/soundPath"
+    }
   },
   "$defs": {
     "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
     "name": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
     "imagePath": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(png|jpg|jpeg)$" },
+    "soundPath": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(ogg|opus)$" },
     "legendEntry": {
       "description": "Exactly one of tile, playerStart, goal, enemy, object, reward (checked by validate.js). 'color' belongs with goal; 'facing' belongs with enemy.",
       "type": "object",

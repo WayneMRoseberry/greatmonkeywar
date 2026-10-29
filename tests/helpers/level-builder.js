@@ -2,7 +2,7 @@
 //
 // buildData(grid, overrides) returns data in the same shape the loader returns
 // (see src/data/validate.js), holding one level named TEST_LEVEL that uses
-// `grid`, plus default definitions, tuning, bindings, and display settings.
+// `grid`, plus default definitions, tuning, bindings, display, and audio settings.
 //
 // Standard legend characters (see docs/data-formats.md for the level format):
 //   #  solid ground          P  player start       G  goal
@@ -16,6 +16,7 @@
 //   enemy:   fields merged into the beetle definition
 //   tuning:  fields merged into tuning
 //   display: fields merged into display
+//   audio:   fields merged into audio (by default no music and no sounds)
 
 export const TEST_LEVEL = 'test';
 
@@ -55,7 +56,7 @@ const DEFAULT_BINDINGS = {
   keyboard: {
     left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
     jump: ['Space', 'ArrowUp', 'KeyW'], action: ['KeyE', 'KeyX'], punch: ['KeyQ', 'KeyC'],
-    confirm: ['Enter', 'Space'], fullscreen: ['F11'], debug: ['F3'],
+    confirm: ['Enter', 'Space'], fullscreen: ['F11'], debug: ['F3'], mute: ['KeyM'],
   },
   gamepad: {
     left: ['dpadLeft', 'stickLeft'], right: ['dpadRight', 'stickRight'], up: ['dpadUp', 'stickUp'],
@@ -64,6 +65,9 @@ const DEFAULT_BINDINGS = {
 };
 
 const DEFAULT_DISPLAY = { formatVersion: 1, visibleHeight: 12, stickDeadZone: 0.3 };
+
+/** No music and no sounds: tests that need them pass them in `overrides.audio`. */
+const DEFAULT_AUDIO = { formatVersion: 1 };
 
 /** A deep copy, so tests can change the result without affecting other tests. */
 const copy = (value) => structuredClone(value);
@@ -91,5 +95,6 @@ export function buildData(grid, overrides = {}) {
     tuning: { ...copy(DEFAULT_TUNING), ...copy(overrides.tuning ?? {}) },
     bindings: copy(DEFAULT_BINDINGS),
     display: { ...copy(DEFAULT_DISPLAY), ...copy(overrides.display ?? {}) },
+    audio: { ...copy(DEFAULT_AUDIO), ...copy(overrides.audio ?? {}) },
   };
 }

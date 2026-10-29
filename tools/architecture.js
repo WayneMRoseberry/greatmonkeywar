@@ -10,6 +10,8 @@ const SIMULATION_DIR = path.join(REPO_ROOT, 'src', 'simulation');
 const BROWSER_GLOBALS = [
   'window', 'document', 'navigator', 'requestAnimationFrame', 'cancelAnimationFrame',
   'Image', 'fetch', 'localStorage', 'sessionStorage',
+  // Sound is played by the presentation; the simulation only records events (sound PRD).
+  'AudioContext', 'webkitAudioContext', 'Audio',
 ];
 
 const UNREPEATABLE = [

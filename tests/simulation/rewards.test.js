@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { step } from '../../src/simulation/step.js';
 import { Player } from '../../src/simulation/player.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
-import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, SoundEvent } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
@@ -148,5 +148,21 @@ describe('restarting the level brings the rewards back (req 27)', () => {
     const state = stateFor(['P..b..G', '#######']);
     const restarted = step({ ...state, player: new Player({ ...state.player, health: 0 }) }, NO_INPUT, FIXED_DT);
     assert.notEqual(restarted.rewards, restarted.levelStart.rewards);
+  });
+});
+
+describe('sound events (sound PRD req 14)', () => {
+  test('collectReward: on the step a reward is collected, once', () => {
+    const state = stateFor(['P.b.G', '#####']);
+    const collected = stepUntil(state, holding(Input.RIGHT), (s) => s.rewardCount > state.rewardCount);
+    assert.deepEqual(collected.events, [SoundEvent.COLLECT_REWARD]);
+    assert.deepEqual(step(collected, holding(Input.RIGHT), FIXED_DT).events, []);
+  });
+
+  test('two rewards collected in the same step: one collectReward each', () => {
+    const state = stateFor(['P...G', '#####']);
+    const { x, y } = state.player;
+    const twoHere = { ...state, rewards: [{ x, y, ...ONE_TILE, value: 1 }, { x, y, ...ONE_TILE, value: 1 }] };
+    assert.deepEqual(step(twoHere, NO_INPUT, FIXED_DT).events, [SoundEvent.COLLECT_REWARD, SoundEvent.COLLECT_REWARD]);
   });
 });

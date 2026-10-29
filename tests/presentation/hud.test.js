@@ -11,7 +11,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawHud, hudFontSize, HUD_FONT_SHARE, MIN_HUD_FONT, HUD_MARGIN } from '../../src/presentation/hud.js';
+import { drawHud, hudFontSize, HUD_FONT_SHARE, MIN_HUD_FONT, HUD_MARGIN, drawSoundOff, SOUND_OFF_TEXT } from '../../src/presentation/hud.js';
 import { createFakeContext } from '../helpers/fake-canvas.js';
 
 const STATUS = { health: 3, rewardCount: 7 };
@@ -58,5 +58,32 @@ describe('the HUD (req 44)', () => {
     assert.equal(fill.style.fillStyle, '#ffffff');
     assert.ok(stroke, 'an outline');
     assert.ok(ctx.calls.indexOf(stroke) < ctx.calls.indexOf(fill), 'the outline first, so the text is on top');
+  });
+});
+
+describe('the "Sound off" label (sound PRD req 19)', () => {
+  const VIEWPORT = { width: 1280, height: 720 };
+
+  function drawn() {
+    const ctx = createFakeContext();
+    drawSoundOff(ctx, VIEWPORT);
+    return ctx;
+  }
+
+  test('it says "Sound off", in the HUD\'s font, white over a dark outline', () => {
+    const ctx = drawn();
+    const [text] = ctx.callsOf('fillText');
+    assert.equal(text.args[0], SOUND_OFF_TEXT);
+    assert.ok(text.style.font.includes(`${hudFontSize(VIEWPORT.height)}px`), text.style.font);
+    assert.equal(text.style.fillStyle, '#ffffff');
+    assert.equal(ctx.callsOf('strokeText').length, 1);
+  });
+
+  test('it sits in the top-right corner, set in by the HUD\'s margin', () => {
+    const [text] = drawn().callsOf('fillText');
+    const margin = HUD_MARGIN * hudFontSize(VIEWPORT.height);
+    assert.equal(text.style.textAlign, 'right');
+    assert.equal(text.style.textBaseline, 'top');
+    assert.deepEqual(text.args.slice(1), [VIEWPORT.width - margin, margin]);
   });
 });

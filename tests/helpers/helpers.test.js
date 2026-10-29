@@ -3,7 +3,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildData, TEST_LEVEL } from './level-builder.js';
-import { runSteps } from './run.js';
+import { runSteps, runStepsWithEvents } from './run.js';
 import { seededRandom } from './random.js';
 import { Input, NO_INPUT, createInput, holding } from '../../src/simulation/input.js';
 import { validateData } from '../../src/data/validate.js';
@@ -15,6 +15,7 @@ function asFiles(data) {
     'config/tuning.json': data.tuning,
     'config/bindings.json': data.bindings,
     'config/display.json': data.display,
+    'config/audio.json': data.audio,
   };
   for (const [name, level] of Object.entries(data.levels)) files[`levels/${name}.json`] = level;
   for (const [name, c] of Object.entries(data.characters)) files[`characters/${name}.json`] = c;
@@ -101,6 +102,23 @@ describe('seededRandom', () => {
     const max = 5;
     const values = Array.from({ length: 1000 }, () => random.between(min, max));
     assert.ok(values.every((v) => v >= min && v < max));
+  });
+});
+
+describe('runStepsWithEvents', () => {
+  test('runs like runSteps and also returns each step\'s events, in order', () => {
+    // A fake step that records the step's count as its only event.
+    const fakeStep = (state, inp, dt) => ({ count: state.count + 1, events: [`step ${state.count + 1}`] });
+    const result = runStepsWithEvents(fakeStep, { count: 0, events: [] }, NO_INPUT, 3, 0.5);
+    assert.deepEqual(result.state, { count: 3, events: ['step 3'] });
+    assert.deepEqual(result.events, [['step 1'], ['step 2'], ['step 3']]);
+  });
+
+  test('takes an input function, like runSteps', () => {
+    const inputs = [];
+    const fakeStep = (state, inp) => { inputs.push(inp); return { events: [] }; };
+    runStepsWithEvents(fakeStep, { events: [] }, (i) => (i === 0 ? holding(Input.JUMP) : NO_INPUT), 2, 0.5);
+    assert.deepEqual(inputs, [holding(Input.JUMP), NO_INPUT]);
   });
 });
 

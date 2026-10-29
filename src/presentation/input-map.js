@@ -44,10 +44,18 @@ export function inputFromDevices({ keys, gamepads, bindings, deadZone }) {
   return createInput(held);
 }
 
-/** Whether the keyboard-only presentation keys are held: { fullscreen, debug }. */
-export function presentationKeys(keys, bindings) {
+/**
+ * Whether the presentation keys are held: { fullscreen, debug, mute }.
+ * Fullscreen and debug are keyboard only; mute can also have gamepad buttons
+ * (sound PRD req 16), read like inputFromDevices's.
+ */
+export function presentationKeys({ keys, gamepads, bindings, deadZone }) {
+  const byKey = (name) => bindings.keyboard[name].some((code) => keys.has(code));
+  const muteButtons = bindings.gamepad.mute ?? [];
+  const muteByPad = standardPads(gamepads).some((pad) => muteButtons.some((button) => gamepadHeld(pad, button, deadZone)));
   return {
-    fullscreen: bindings.keyboard.fullscreen.some((code) => keys.has(code)),
-    debug: bindings.keyboard.debug.some((code) => keys.has(code)),
+    fullscreen: byKey('fullscreen'),
+    debug: byKey('debug'),
+    mute: byKey('mute') || muteByPad,
   };
 }

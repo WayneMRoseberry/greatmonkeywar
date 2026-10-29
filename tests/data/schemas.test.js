@@ -15,7 +15,7 @@ const DOC = path.resolve('docs/data-formats.md');
 
 const SCHEMA_NAMES = [
   'level', 'level-list', 'character', 'object', 'cutscene',
-  'sprite', 'tuning', 'bindings', 'display',
+  'sprite', 'tuning', 'bindings', 'display', 'audio',
 ];
 
 // Must match the list in docs/data-formats.md ("Schemas and the validator").
@@ -37,6 +37,7 @@ const DOC_SECTIONS = {
   '### Tuning': 'tuning',
   '### Bindings': 'bindings',
   '### Display': 'display',
+  '### Audio': 'audio',
 };
 
 function loadSchema(name) {
@@ -106,10 +107,11 @@ test('every format in docs/data-formats.md has at least one example', () => {
 // Complete data-file examples in the designer and artist guides: any ```json
 // block containing "formatVersion". Its format is worked out from its fields.
 function guideExamples() {
-  const guides = ['guide-levels.md', 'guide-characters-objects.md', 'guide-cutscenes.md', 'guide-sprites.md'];
+  const guides = ['guide-levels.md', 'guide-characters-objects.md', 'guide-cutscenes.md', 'guide-sprites.md', 'guide-sound.md'];
   const kindOf = (v) =>
     'grid' in v ? 'level' : 'levels' in v ? 'level-list' : 'kind' in v ? 'character'
-      : 'stage' in v ? 'cutscene' : 'frameWidth' in v ? 'sprite' : 'object';
+      : 'stage' in v ? 'cutscene' : 'frameWidth' in v ? 'sprite'
+        : 'startMusic' in v || 'sounds' in v ? 'audio' : 'object';
   return guides.flatMap((guide) => {
     const lines = fs.readFileSync(path.resolve('docs', guide), 'utf8').split(/\r?\n/);
     const found = [];

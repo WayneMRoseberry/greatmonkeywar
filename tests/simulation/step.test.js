@@ -6,7 +6,7 @@ import { step } from '../../src/simulation/step.js';
 import { Player, damagePlayer } from '../../src/simulation/player.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
 import { Enemy } from '../../src/simulation/enemies.js';
-import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, SoundEvent } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { runSteps } from '../helpers/run.js';
@@ -27,6 +27,37 @@ function newState() {
 function withoutData({ data, ...rest }) {
   return rest;
 }
+
+describe('sound events (sound PRD req 14)', () => {
+  test('each step starts with no events: the last step\'s events are not carried over', () => {
+    const state = { ...newState(), events: [SoundEvent.JUMP] };
+    assert.deepEqual(step(state, NO_INPUT, FIXED_DT).events, []);
+  });
+
+  describe('losing the last health: playerDefeated instead of playerHurt, and the events survive the restart', () => {
+    const LAST_HEALTH = 1;
+    /** Holds right from the start of `grid` until a step records events, and returns that step's events. */
+    function firstEvents(grid) {
+      let state = createLevelState(buildData(grid, { player: { health: LAST_HEALTH } }), TEST_LEVEL);
+      for (let i = 0; i < 10 * STEPS_PER_SECOND && state.events.length === 0; i++) state = step(state, holding(Input.RIGHT), FIXED_DT);
+      return state.events;
+    }
+
+    test('falling into a pit', () => {
+      assert.deepEqual(firstEvents(['.....G', 'P.....', '##.###']), [SoundEvent.PLAYER_DEFEATED]);
+    });
+
+    test('touched by an enemy', () => {
+      assert.deepEqual(firstEvents(['.....G', 'P..e..', '######']), [SoundEvent.PLAYER_DEFEATED]);
+    });
+  });
+
+  test('a step doesn\'t change the events of the state passed in', () => {
+    const state = newState();
+    step(state, holding(Input.JUMP), FIXED_DT);
+    assert.deepEqual(state.events, []);
+  });
+});
 
 describe('fixed time step', () => {
   test('there are 60 steps per second (req 4: 60 frames per second)', () => {

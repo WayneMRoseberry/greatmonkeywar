@@ -25,7 +25,7 @@ import { step } from '../../src/simulation/step.js';
 import { CarriableObject } from '../../src/simulation/objects.js';
 import { Enemy, liveEnemies } from '../../src/simulation/enemies.js';
 import { Player } from '../../src/simulation/player.js';
-import { FIXED_DT, STEPS_PER_SECOND, Facing } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, Facing, SoundEvent } from '../../src/simulation/constants.js';
 import { createLevelState } from '../../src/simulation/state.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
@@ -728,3 +728,42 @@ describe('defeat (req 53)', () => {
 function enemyAt(state, x, y) {
   return new Enemy({ type: 'beetle', ...ONE_TILE, x, y, facing: Facing.LEFT, health: 1, vx: -state.data.characters.beetle.speed });
 }
+
+describe('sound events (sound PRD req 14)', () => {
+  const DEFEATS = [SoundEvent.STOMP, SoundEvent.ENEMY_DEFEATED];
+  /** Only the events about defeating enemies, in order. */
+  const defeats = (state) => state.events.filter((event) => DEFEATS.includes(event));
+  const fewerEnemies = (than) => (s) => liveEnemies(s).length < liveEnemies(than).length;
+
+  test('stomp: a stomped enemy gives stomp, not enemyDefeated', () => {
+    // The enemy stands on a pillar; the player drops onto it from above.
+    const state = enemyState(['.....P...G', '..........', '..........', '.....e....', '.....#....', '##########']);
+    assert.deepEqual(defeats(stepUntil(state, fewerEnemies(state))), [SoundEvent.STOMP]);
+  });
+
+  test('two enemies stomped at once: one stomp each', () => {
+    const state = enemyState(['.........G', '..........', '..........', '..P.......', '##########']);
+    const player = new Player({ ...state.player, y: 1, vy: 3 });   // falling, just above the enemies
+    const feet = player.y + player.height + 0.01;
+    const twoUnder = { ...state, player, enemies: [enemyAt(state, player.x - 0.5, feet), enemyAt(state, player.x + 0.5, feet)] };
+    assert.deepEqual(defeats(step(twoUnder, NO_INPUT, FIXED_DT)), [SoundEvent.STOMP, SoundEvent.STOMP]);
+  });
+
+  test('a thrown object: one enemyDefeated for each enemy it hits', () => {
+    const state = enemyState(['..........G', '...........', 'P..........', '###########']);
+    const crate = new CarriableObject({ type: 'crate', ...ONE_TILE, x: 5, y: 1, vx: 8, vy: 0, thrown: true });
+    const twoEnemies = [enemyAt(state, crate.x + 0.5, crate.y), enemyAt(state, crate.x - 0.5, crate.y)];
+    const after = step({ ...state, objects: [crate], enemies: twoEnemies }, NO_INPUT, FIXED_DT);
+    assert.deepEqual(defeats(after), [SoundEvent.ENEMY_DEFEATED, SoundEvent.ENEMY_DEFEATED]);
+  });
+
+  test('a punch: enemyDefeated after the punch, only when the punch defeats the enemy', () => {
+    // The enemy stands still against the player's right side, which the player faces
+    // (if it walked into the player, a surviving enemy would also hurt them).
+    const grid = ['....G', '.Pe..', '#####'];
+    const punched = (health) => step(enemyState(grid, { enemy: { health, speed: 0 } }), holding(Input.PUNCH), FIXED_DT).events;
+    const damage = buildData(grid).characters.player.punchDamage;
+    assert.deepEqual(punched(damage), [SoundEvent.PUNCH, SoundEvent.ENEMY_DEFEATED], 'health equal to the punch damage');
+    assert.deepEqual(punched(damage + 1), [SoundEvent.PUNCH], 'more health than the punch damage');
+  });
+});

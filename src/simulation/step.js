@@ -13,6 +13,7 @@ import { updateObjects, updateFalling } from './objects.js';
 import { collectRewards } from './rewards.js';
 import { updateDefeated, updateEnemies, hitEnemiesWithThrownObjects, resolveEnemyContact } from './enemies.js';
 import { updatePunch } from './punch.js';
+import { SoundEvent } from './constants.js';
 
 const copyObjects = (objects) => objects.map((o) => o.copy());
 const copyEnemies = (enemies) => enemies.map((e) => e.copy());
@@ -58,6 +59,7 @@ function restartLevel(state) {
 export function step(state, input, dt) {
   const next = copyState(state);
   next.time += dt;
+  next.events = [];   // the update functions below record what happens this step (SoundEvent)
   updateDefeated(next, dt);     // first, so every way of defeating an enemy later in a step gets the full defeatSeconds
   updatePlayer(next, input, dt);
   updateObjects(next, input);   // after the player moves, so a held object follows them
@@ -71,6 +73,10 @@ export function step(state, input, dt) {
   resolveEnemyContact(next, state.player);   // stomps, then contact damage, once everything has moved; state.player is where the player started
   collectRewards(next);
   // Checked last, so health reaching 0 by any means (pits, damage) restarts the level.
-  if (next.player.health <= 0) restartLevel(next);
+  // The hit that took the last health is playerDefeated, not playerHurt.
+  if (next.player.health <= 0) {
+    restartLevel(next);
+    next.events = [...next.events.filter((event) => event !== SoundEvent.PLAYER_HURT), SoundEvent.PLAYER_DEFEATED];
+  }
   return next;
 }

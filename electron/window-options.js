@@ -11,7 +11,11 @@ import { resolveRequestPath } from '../tools/serve.js';
 export const APP_SCHEME = 'app';
 export const START_URL = `${APP_SCHEME}://game/index.html`;
 
-/** The BrowserWindow options: secure web preferences and the preload script. */
+/**
+ * The BrowserWindow options: secure web preferences and the preload script.
+ * Unlike a browser, the game may start its music before the player presses a
+ * key or clicks (sound PRD req 22).
+ */
 export function windowOptions(preloadPath) {
   return {
     width: 1280,
@@ -24,6 +28,7 @@ export function windowOptions(preloadPath) {
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
+      autoplayPolicy: 'no-user-gesture-required',
     },
   };
 }

@@ -203,6 +203,7 @@ export function createLevelState(data, levelName, carry) {
     rewards,
     rewardCount: carry?.rewardCount ?? 0,
     time: 0,
+    events: [],   // the SoundEvents of the latest step (constants.js); step() starts each one empty
   };
   state.levelStart = {
     player: player.copy(),

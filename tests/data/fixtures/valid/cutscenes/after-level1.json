@@ -24,5 +24,9 @@
   "narration": [
     { "start": 0.5, "end": 3, "text": "Our hero escapes the jungle edge..." },
     { "start": 3, "end": 5.5, "text": "...but a beetle follows." }
+  ],
+  "music": "audio/music/camp.ogg",
+  "sounds": [
+    { "time": 3, "sound": "audio/sounds/crash.ogg" }
   ]
 }

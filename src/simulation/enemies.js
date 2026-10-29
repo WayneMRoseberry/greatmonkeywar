@@ -6,7 +6,7 @@
 // player's, so every enemy's `type` names an enemy definition in
 // data.characters.
 
-import { Facing } from './constants.js';
+import { Facing, SoundEvent } from './constants.js';
 import { moveBox, isSupported, overlapsBox } from './collision.js';
 import { solidObjects } from './objects.js';
 import { damagePlayer } from './player.js';
@@ -155,11 +155,13 @@ export function liveEnemies(state) {
  * Defeats `enemy`, whatever its health (stomps, thrown objects, punches; req
  * 53). It goes into its defeat state for defeatSeconds (tuning): frozen where
  * it is and harmless, so the renderer can flash it, then removed
- * (updateDefeated). With defeatSeconds 0 it is removed at once. Defeating an
- * enemy that is already defeated does nothing.
+ * (updateDefeated). With defeatSeconds 0 it is removed at once. `event` is
+ * the SoundEvent for how it was defeated (STOMP or ENEMY_DEFEATED). Defeating
+ * an enemy that is already defeated does nothing, and records no event.
  */
-export function defeatEnemy(state, enemy) {
+export function defeatEnemy(state, enemy, event) {
   if (isDefeated(enemy)) return;
+  state.events.push(event);
   const { defeatSeconds } = state.data.tuning;
   if (defeatSeconds <= 0) {
     state.enemies = state.enemies.filter((e) => e !== enemy);
@@ -209,7 +211,7 @@ export function hitEnemiesWithThrownObjects(state) {
     // before and after the move, joined) instead of only its final box.
     const hit = liveEnemies(state).filter((enemy) => overlapsBox(object, enemy));
     if (hit.length === 0) continue;
-    for (const enemy of hit) defeatEnemy(state, enemy);
+    for (const enemy of hit) defeatEnemy(state, enemy, SoundEvent.ENEMY_DEFEATED);
     object.vx = 0;
     object.vy = 0;
     object.thrown = false;
@@ -234,7 +236,7 @@ export function resolveEnemyContact(state, before) {
   const { player } = state;
   const touched = liveEnemies(state).filter((enemy) => overlapsBox(player, enemy));
   const stomped = touched.filter((enemy) => touchesFromAbove(player, before, enemy));
-  for (const enemy of stomped) defeatEnemy(state, enemy);
+  for (const enemy of stomped) defeatEnemy(state, enemy, SoundEvent.STOMP);
   if (stomped.length > 0) {
     player.vy = withoutNegativeZero(-state.data.tuning.stompBounceSpeed);   // y increases downwards
     player.onGround = false;

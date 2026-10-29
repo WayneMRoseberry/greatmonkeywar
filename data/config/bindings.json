@@ -39,6 +39,9 @@
     ],
     "debug": [
       "F3"
+    ],
+    "mute": [
+      "KeyM"
     ]
   },
   "gamepad": {

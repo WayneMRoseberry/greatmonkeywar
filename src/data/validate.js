@@ -3,9 +3,10 @@
 // game when it loads data (browser), so this module never touches the file
 // system itself: the caller passes in the files' text and the images found.
 //
-// validateData({ files, images }) where
+// validateData({ files, images, sounds }) where
 //   files:  { 'levels/level1.json': '<file text>', ... }   paths relative to data/
 //   images: { 'sprites/player.png': { width, height } | null, ... }   null = size unknown
+//   sounds: { 'audio/sounds/jump.ogg': <anything>, ... }   only which sound files exist is checked
 // returns { errors, warnings, data }
 //   errors/warnings: [{ file, code, details, message }]
 //     code:    what kind of problem it is, e.g. 'row-length' (see MESSAGES below)
@@ -31,6 +32,7 @@ import spriteSchema from './schemas/sprite.schema.json' with { type: 'json' };
 import tuningSchema from './schemas/tuning.schema.json' with { type: 'json' };
 import bindingsSchema from './schemas/bindings.schema.json' with { type: 'json' };
 import displaySchema from './schemas/display.schema.json' with { type: 'json' };
+import audioSchema from './schemas/audio.schema.json' with { type: 'json' };
 
 export const SCHEMAS = {
   level: levelSchema,
@@ -42,6 +44,7 @@ export const SCHEMAS = {
   tuning: tuningSchema,
   bindings: bindingsSchema,
   display: displaySchema,
+  audio: audioSchema,
 };
 
 export const REQUIRED_FILES = [
@@ -50,6 +53,7 @@ export const REQUIRED_FILES = [
   'config/tuning.json',
   'config/bindings.json',
   'config/display.json',
+  'config/audio.json',
 ];
 
 const LEGEND_KINDS = Object.values(LegendKind);
@@ -65,7 +69,7 @@ export function classifyFile(path) {
   if (match) {
     return { levels: 'level', characters: 'character', objects: 'object', cutscenes: 'cutscene', sprites: 'sprite' }[match[1]];
   }
-  const config = /^config\/(tuning|bindings|display)\.json$/.exec(path);
+  const config = /^config\/(tuning|bindings|display|audio)\.json$/.exec(path);
   return config ? config[1] : null;
 }
 
@@ -73,7 +77,7 @@ function baseName(path) {
   return path.slice(path.lastIndexOf('/') + 1).replace(/\.json$/, '');
 }
 
-export function validateData({ files, images = {} }) {
+export function validateData({ files, images = {}, sounds = {} }) {
   const errors = [];
   const warnings = [];
   const problem = (file, code, details = {}) => ({ file, code, details, message: describeProblem(code, details) });
@@ -112,7 +116,7 @@ export function validateData({ files, images = {} }) {
 
   const data = groupByKind(parsed);
   const validFiles = new Set(parsed.filter((f) => f.valid).map((f) => f.path));
-  const context = { names, images, data, validFiles, error, warn };
+  const context = { names, images, sounds, data, validFiles, error, warn };
   for (const file of parsed.filter((f) => f.valid)) {
     CUSTOM_CHECKS[file.kind]?.(file, context);
   }
@@ -121,7 +125,7 @@ export function validateData({ files, images = {} }) {
 }
 
 function groupByKind(parsed) {
-  const data = { levelList: null, levels: {}, characters: {}, objects: {}, cutscenes: {}, sprites: {}, tuning: null, bindings: null, display: null };
+  const data = { levelList: null, levels: {}, characters: {}, objects: {}, cutscenes: {}, sprites: {}, tuning: null, bindings: null, display: null, audio: null };
   for (const { kind, name, value } of parsed) {
     if (kind === 'level-list') data.levelList = value;
     else if (kind === 'level') data.levels[name] = value;
@@ -165,6 +169,7 @@ const FORMAT_NAMES = new Map([
   [levelSchema.$defs.name.pattern, 'name'],
   [levelSchema.$defs.imagePath.pattern, 'image-path'],
   [spriteSchema.properties.image.pattern, 'png-path'],
+  [audioSchema.$defs.soundPath.pattern, 'sound-path'],
   [bindingsSchema.$defs.keys.items.pattern, 'key-code'],
   [levelSchema.properties.legend.propertyNames.pattern, 'legend-key'],
 ]);
@@ -214,6 +219,7 @@ const FORMAT_WORDS = {
   name: 'a name made only of letters, numbers, "-" and "_" (no spaces, folder, or ".json")',
   'image-path': 'an image path inside the data folder, like "images/sky.png"',
   'png-path': 'a PNG image path inside the data folder, like "sprites/player.png"',
+  'sound-path': 'a sound file path inside the data folder, ending in .ogg or .opus, like "audio/sounds/jump.ogg"',
   'key-code': 'a key code like "KeyA", "ArrowLeft", or "Space"',
   'legend-key': 'a single character other than "." or a space',
   other: 'in the expected form',
@@ -384,6 +390,13 @@ const MESSAGES = {
   'narration-end': ({ line, start, end }) => `narration, item ${line}: "end" (${end}) must be later than "start" (${start}).`,
   'narration-order': ({ line, start, previous }) =>
     `narration, item ${line}: "start" is ${start}, which is earlier than the line before it (${previous}). Narration lines must be listed in time order.`,
+  // Sounds (audio.json, levels, and cut scenes)
+  'missing-sound': ({ path, sound }) => {
+    const { prefix, label } = subject(path);
+    return `${prefix}${label} is "${sound}", but there is no file data/${sound}.`;
+  },
+  'cutscene-sound-order': ({ item, time, previous }) =>
+    `sounds, item ${item}: "time" is ${time}, which is earlier than the sound before it (${previous}). Sounds must be listed in time order.`,
 
   // Sprite sheets
   'missing-sprite-image': ({ image }) => `"image" is "${image}", but there is no file data/${image}.`,
@@ -412,9 +425,21 @@ const CUSTOM_CHECKS = {
   cutscene: checkCutscene,
   sprite: checkSprite,
   display: checkDisplay,
+  audio: checkAudio,
 };
 
-function checkLevel({ path, value: level }, { names, images, data, validFiles, error, warn }) {
+/** Reports `sound` (at `fieldPath` in the file) if it is named but its file isn't there. */
+function checkSound(path, fieldPath, sound, { sounds, error }) {
+  if (sound !== undefined && !(sound in sounds)) error(path, 'missing-sound', { path: fieldPath, sound });
+}
+
+function checkAudio({ path, value }, context) {
+  checkSound(path, ['startMusic'], value.startMusic, context);
+  for (const [event, sound] of Object.entries(value.sounds ?? {})) checkSound(path, ['sounds', event], sound, context);
+}
+
+function checkLevel({ path, value: level }, context) {
+  const { names, images, data, validFiles, error, warn } = context;
   const { grid, legend } = level;
 
   // Row lengths
@@ -488,6 +513,8 @@ function checkLevel({ path, value: level }, { names, images, data, validFiles, e
   level.background.layers.forEach((layer, i) => {
     if (!(layer.image in images)) error(path, 'missing-layer-image', { layer: i + 1, image: layer.image });
   });
+  checkSound(path, ['music'], level.music, context);
+  checkSound(path, ['completeJingle'], level.completeJingle, context);
 }
 
 /**
@@ -577,8 +604,11 @@ function checkObject({ path, value }, { names, error }) {
   checkSpriteReference(path, value, names, error);
 }
 
-function checkCutscene({ path, value }, { names, images, data, error, warn }) {
+function checkCutscene({ path, value }, context) {
+  const { names, images, data, error, warn } = context;
   if (!(value.background in images)) error(path, 'missing-background-image', { image: value.background });
+  checkSound(path, ['music'], value.music, context);
+  (value.sounds ?? []).forEach((sound, s) => checkSound(path, ['sounds', s, 'sound'], sound.sound, context));
   value.actors.forEach((actor, a) => {
     if (!names.character.has(actor.character)) error(path, 'missing-character', { actor: a + 1, name: actor.character });
     actor.keyframes.forEach((frame, k) => {
@@ -602,6 +632,12 @@ function checkCutscene({ path, value }, { names, images, data, error, warn }) {
     const previous = value.narration[n - 1];
     if (previous && line.start < previous.start) {
       error(path, 'narration-order', { line: n + 1, start: line.start, previous: previous.start });
+    }
+  });
+  (value.sounds ?? []).forEach((sound, s) => {
+    const previous = value.sounds[s - 1];
+    if (previous && sound.time < previous.time) {
+      error(path, 'cutscene-sound-order', { item: s + 1, time: sound.time, previous: previous.time });
     }
   });
 }

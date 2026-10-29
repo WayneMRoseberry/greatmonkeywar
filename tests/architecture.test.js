@@ -83,6 +83,21 @@ describe('checkSimulationSource: detection', () => {
     ]);
   });
 
+  test('rejects audio APIs: sound is played by the presentation (sound PRD Technical Considerations)', () => {
+    assert.deepEqual(found(
+      'const context = new AudioContext();\n' +
+      'const old = new webkitAudioContext();\n' +
+      'new Audio("x.ogg").play();\n'), [
+      browserGlobal(1, 'AudioContext'),
+      browserGlobal(2, 'webkitAudioContext'),
+      browserGlobal(3, 'Audio'),
+    ]);
+  });
+
+  test('names that only contain an audio API\'s name are fine', () => {
+    assert.deepEqual(found('const playAudio = 1;\nconst AudioSettings = {};\nrecord(SoundEvent.JUMP);\n'), []);
+  });
+
   test('rejects hidden randomness and clock reads, which break determinism', () => {
     assert.deepEqual(found(
       'const r = Math.random();\n' +
