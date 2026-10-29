@@ -142,7 +142,7 @@ Things to know:
 
 ## Sound and video
 
-The prototype has no sound yet. When it does, use **Ogg** or **Opus** for audio and **WebM** for video (not MP3, AAC, or MP4).
+Music and sound effects are **Ogg Vorbis** or **Opus** files (not MP3, WAV, or AAC): see the [sound guide](guide-sound.md) for how to make them and where they go. The game has no video yet; when it does, use **WebM** (not MP4).
 
 ---
 

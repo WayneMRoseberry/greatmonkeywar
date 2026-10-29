@@ -30,6 +30,8 @@ Then open <http://localhost:8765> in Chrome or Edge. Use `PORT=9000 npm run web`
 
 The game can't be opened by double-clicking `index.html`. Browsers block JavaScript modules and JSON data files on pages opened straight from disk, so a local web server is needed. The server only serves `index.html`, `src/`, and `data/`.
 
+**Sound in browser mode** is silent until you press a key or click: browsers don't let a page play sound before that. The current screen's music then starts. The F3 overlay's `Sound:` line shows `locked` until then. The Electron app plays sound straight away.
+
 ## Running the game as a desktop app (Electron)
 
 ```
@@ -43,7 +45,20 @@ This opens the game in an Electron window. Electron serves the game's files itse
 - **steamworks.js** is a native module. If it can't load on your machine, the game runs without Steam and logs why.
 - If `npm start` fails with "The requested module 'electron' does not provide an export named 'BrowserWindow'", the environment variable `ELECTRON_RUN_AS_NODE` is set, so Electron is running as plain Node. Tools built on Electron (such as VS Code) can pass it on to programs they start. Clear it (`Remove-Item Env:ELECTRON_RUN_AS_NODE` in PowerShell, `unset ELECTRON_RUN_AS_NODE` in bash) and run `npm start` again.
 
-Things only a person can check (the Steam overlay, gamepads, resizing, cut scenes) are in the [manual test checklist](manual-test-checklist.md).
+Things only a person can check (the Steam overlay, gamepads, resizing, cut scenes, sound) are in the [manual test checklist](manual-test-checklist.md).
+
+## Sound
+
+- **How it fits together.** The simulation never plays sound: each step records what happened as `SoundEvent` values (`src/simulation/constants.js`) in the level's and the game flow's `events`. Each frame, the game controller hands that frame's events and the current screen to the audio player (`src/presentation/audio.js`), which decides what music and sounds should play and asks a backend to play them. The real backend (`src/presentation/web-audio.js`) uses the Web Audio API; tests use a recording fake (`tests/helpers/fake-audio.js`), the way drawing tests use the fake canvas.
+- **Which sounds play where** is data: `data/config/audio.json`, and the `music`, `completeJingle`, and cut scene `sounds` fields. See [data-formats.md](data-formats.md#audio) and the [sound guide](guide-sound.md).
+- **Placeholder sounds.** The files in `data/audio/` are generated tones. To make them again (after changing `tools/make-placeholder-sounds.js`, for example):
+
+  ```
+  npm run sounds
+  ```
+
+  This overwrites every placeholder file in `data/audio/` (it lists them as it goes). It never deletes other files, but a real sound saved under a placeholder's name would be replaced, so real sounds should have their own names. `node tools/make-placeholder-sounds.js <folder>` writes into another data folder instead. The sounds are built by `tools/sound-synth.js` and encoded as Ogg Vorbis with `wasm-media-encoders`, a dev dependency that only this tool uses.
+- **UI checks can't hear.** They read the music file and sound state (`on`, `muted`, or `locked`) from the test hook. Playwright's Chromium never starts sound locked, so the browser lock is covered by unit tests and the manual checklist.
 
 ## Tests
 
@@ -78,12 +93,12 @@ UI checks read the game's state through `window.gameTestHook.getState()` (browse
 | Folder | Contents |
 |---|---|
 | `src/simulation/` | Game logic. Must run in plain Node: no `window`, `document`, canvas, Electron, or Steam. |
-| `src/presentation/` | Rendering, input, HUD, and screens (browser code). |
+| `src/presentation/` | Rendering, input, HUD, screens, and sound (browser code). |
 | `src/platform/` | The platform layer: Electron+Steam, browser, and fake implementations. |
 | `src/data/` | Loading and validating data files. |
 | `electron/` | Electron main process and preload script. |
-| `data/` | Game content: levels, characters, objects, cut scenes, sprites, images, and config. |
-| `tools/` | Developer tools: local web server, data validator, hook installer, documentation-only commit check. |
+| `data/` | Game content: levels, characters, objects, cut scenes, sprites, images, sounds (`data/audio/`), and config. |
+| `tools/` | Developer tools: local web server, data validator, hook installer, documentation-only commit check, placeholder sound generator. |
 | `tests/` | Unit tests. |
 | `tests-ui/` | Playwright UI checks. |
 | `docs/` | Requirements and guides. |

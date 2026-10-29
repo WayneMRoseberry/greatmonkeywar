@@ -1,6 +1,6 @@
 # Designer's Guide: Cut Scenes
 
-A **cut scene** is a short scene that plays between levels. It has a background picture, characters that move and animate, and lines of narration text. This guide shows you how to write one. If you haven't used JSON before, read [Part 1 of the levels guide](guide-levels.md#part-1-json-in-five-minutes) first.
+A **cut scene** is a short scene that plays between levels. It has a background picture, characters that move and animate, lines of narration text, and optionally music and sounds. This guide shows you how to write one. If you haven't used JSON before, read [Part 1 of the levels guide](guide-levels.md#part-1-json-in-five-minutes) first.
 
 ---
 
@@ -107,9 +107,15 @@ Narration is text that appears on screen to tell the story.
 
 ---
 
+## Music and sounds
+
+A cut scene can have its own music, and sounds that play at set times (a crash, a shout). Add `"music"` and `"sounds"` to the file: see the [sound guide](guide-sound.md#a-cut-scenes-music-and-sounds-in-the-cut-scene-file).
+
+---
+
 ## When the scene ends
 
-The scene ends when the last thing in it finishes: the latest keyframe of any actor, or the end of the last narration line, whichever is later. The next level then starts.
+The scene ends when the last thing in it finishes: the latest keyframe of any actor, or the end of the last narration line, whichever is later. The next level then starts. Sounds don't count: a sound timed after this never plays.
 
 ---
 

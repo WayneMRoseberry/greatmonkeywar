@@ -118,6 +118,7 @@ Reading the grid, you can see:
 | `"legend"` | What each character in the grid means. |
 | `"background"` | The sky colour and the scrolling background pictures. |
 | `"cutscene"` | *Optional.* The cut scene that plays after this level, when the player chooses Next level. Leave it out for no cut scene. |
+| `"music"`, `"completeJingle"` | *Optional.* The level's music, and a short piece to play once when it is completed. See the [sound guide](guide-sound.md#a-levels-music-in-the-level-file). |
 
 ### Where level files go
 

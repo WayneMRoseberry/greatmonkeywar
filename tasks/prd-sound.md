@@ -127,6 +127,10 @@ As with everything else in the engine, *which* sound plays is data, not code. Le
 19. While muted, a small "Sound off" label is shown in the top-right corner of the window, on every screen. It disappears when sound is turned back on.
 20. Muting lasts until the game is closed. The game always starts with sound on.
 
+### Window focus
+
+32. While the game's window isn't focused (the player has switched to another window or app), all sound is paused. When the window is focused again, the music carries on from where it paused. Sound effects and cut scene sounds that happen while unfocused are not played later, as while muted (req 18). Pausing and muting are separate: unfocusing doesn't change the mute setting, and the "Sound off" label is only for mute. (Added from Open Question 1; numbered after the original requirements so their numbers don't change.)
+
 ### Browser mode and Electron
 
 21. **Browser mode:** browsers don't let a page play sound until the player has pressed a key or clicked (the "autoplay policy"). Until then, the game runs normally but silently. On the first key press or click, sound is unlocked and the music for the current screen starts (from the beginning). Sound effects that happened before that are not played.
@@ -204,8 +208,11 @@ As with everything else in the engine, *which* sound plays is data, not code. Le
 
 ## 9. Open Questions
 
-1. Should sound pause when the window loses focus or the Steam overlay opens? (Proposed: no, for this version.)
-2. Should the mouse moving onto a different menu option play `menuMove`? (Proposed: no; it's listed as a non-goal.)
-3. Should there be a default gamepad button for `mute`? (Proposed: none; the gamepad's buttons are all in use and players rarely mute mid-game.)
-4. Should `land` play after very small drops, for example stepping off a single crate? (Proposed: yes, any landing after being in the air; revisit if it's too noisy.)
-5. Which way to make the placeholder Ogg files (Section 7)?
+All answered (2026-10-28):
+
+1. Should sound pause when the window loses focus or the Steam overlay opens? **Answered: pause all sound while the window isn't focused** (requirement 32). The Steam overlay draws inside the game's window and doesn't usually take its focus, so sound keeps playing under it; pausing for the overlay itself would need Steam's overlay notification and is not part of this.
+2. Should the mouse moving onto a different menu option play `menuMove`? **Answered: no.** The mouse doesn't change the selection; it stays a non-goal.
+3. Should there be a default gamepad button for `mute`? **Answered: no.** A designer can bind one in `bindings.json`; the game supports it.
+4. Should `land` play after very small drops, for example stepping off a single crate? **Answered: yes**, any landing after falling, as built.
+5. Which way to make the placeholder Ogg files (Section 7)? **Answered: option (a)**, the `wasm-media-encoders` dev dependency (task 5.1).
+6. (Found while writing the docs.) A cut scene sound timed after the scene ends never plays, because sounds don't count towards a cut scene's length. **Answered: leave it**; `docs/data-formats.md` and the sound guide say so.

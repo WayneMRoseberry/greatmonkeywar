@@ -9,6 +9,7 @@ You can change levels, characters, cut scenes, and art without writing code. Sta
 - [Characters and objects](docs/guide-characters-objects.md): the hero, enemies, and objects the hero can pick up.
 - [Cut scenes](docs/guide-cutscenes.md): the scenes that play between levels.
 - [Sprites, art, and animation](docs/guide-sprites.md): getting backgrounds and animated art into the game.
+- [Music and sound effects](docs/guide-sound.md): making sound files and choosing where each one plays.
 
 ## For developers
 

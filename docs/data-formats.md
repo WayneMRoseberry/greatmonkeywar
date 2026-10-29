@@ -10,6 +10,7 @@ Requirement numbers refer to the [engine prototype PRD](../tasks/prd-engine-prot
 - **Coordinates.** `x` increases to the right and `y` increases downwards. The top-left corner of a level is (0, 0). This matches reading the tile grid as text: row 0 is the top line.
 - **References to other data files** use the file's name without folder or extension. For example, `"enemy": "beetle"` means `data/characters/beetle.json`. The folder is implied by the field name.
 - **References to images** are paths relative to the `data/` folder, with the extension. For example, `"images/jungle-far.png"`.
+- **References to sound files** work the same way, and must end in `.ogg` (Ogg Vorbis) or `.opus` (Opus): for example `"audio/music/level1.ogg"` for the file `data/audio/music/level1.ogg`. Music goes in `data/audio/music/` and sound effects in `data/audio/sounds/` by convention. See [Audio](#audio) and the [sound guide](guide-sound.md).
 - **Colours** are CSS hex colours: `"#7a5230"` (or `"#7a5230cc"` with transparency).
 - **`formatVersion`.** Every file starts with `"formatVersion": 1`. If a format changes in a way that breaks existing files, the version goes up and the validator reports files that use an old version.
 - **`$schema` (optional).** Any file may include a `"$schema"` field pointing at its schema in `src/data/schemas/`. Editors such as VS Code then check the file and suggest field names while it is being edited. The game ignores this field.
@@ -61,7 +62,9 @@ Everything placed in the level goes in the grid, not just the ground and walls: 
       { "image": "images/jungle-near.png", "scrollFactor": 0.7 }
     ]
   },
-  "cutscene": "after-level1"
+  "cutscene": "after-level1",
+  "music": "audio/music/level1.ogg",
+  "completeJingle": "audio/music/jingle.ogg"
 }
 ```
 
@@ -75,6 +78,8 @@ Everything placed in the level goes in the grid, not just the ground and walls: 
 | `legend` | yes | object | Maps single characters to what they mean (see below). |
 | `background` | yes | object | Background colour and parallax layers (see below). |
 | `cutscene` | no | string | Name of a cut scene in `data/cutscenes/` that plays after this level is completed and the player chooses Next level (reqs 59, 61). |
+| `music` | no | sound path | Plays, looping, while the level is played. It keeps going when the level restarts. If the next screen names the same file, it carries on without starting over. Without it, the level is silent apart from sound effects. |
+| `completeJingle` | no | sound path | Plays once when the level is completed, in place of `music`; after it ends there is silence until the next screen. Without it, `music` keeps playing under the level-complete panel. |
 
 ### Grid characters
 
@@ -140,6 +145,7 @@ Errors:
 - `enemy` names a character file that doesn't exist, or `object` names an object file that doesn't exist;
 - `cutscene` names a cut scene file that doesn't exist;
 - a layer `image` file doesn't exist;
+- `music` or `completeJingle` isn't a sound path, or names a sound file that doesn't exist;
 - `scrollFactor` outside 0–1; a reward `value` that isn't a positive number; an invalid colour.
 
 Warnings (shown, but do not block):
@@ -261,6 +267,10 @@ All objects can be picked up, dropped, and thrown in the prototype.
   "narration": [
     { "start": 0.5, "end": 3,   "text": "Our hero escapes the jungle edge..." },
     { "start": 3,   "end": 5.5, "text": "...and stops to catch their breath." }
+  ],
+  "music": "audio/music/cutscene.ogg",
+  "sounds": [
+    { "time": 4, "sound": "audio/sounds/cutscene-crash.ogg" }
   ]
 }
 ```
@@ -281,10 +291,15 @@ All objects can be picked up, dropped, and thrown in the prototype.
 | `narration` | yes | array (may be empty) | Lines of narration text. |
 | `narration[].start`, `narration[].end` | yes | numbers ≥ 0, seconds | When the line appears and disappears. `end` must be greater than `start`, and lines must be listed in order of `start`. |
 | `narration[].text` | yes | string, not empty | The text shown. |
+| `music` | no | sound path | Plays, looping, while the cut scene shows, and stops when it ends or is skipped. |
+| `sounds` | no | array | Sounds played once each at set times, for example a crash timed to the action. |
+| `sounds[].time` | yes | number ≥ 0, seconds | When the sound plays, from the start of the cut scene. Sounds must be listed in time order; two may share a time. |
+| `sounds[].sound` | yes | sound path | The sound to play. |
 
 Timing rules:
 - Between two keyframes, the actor moves in a straight line at an even speed. Before its first keyframe an actor is not shown; after its last keyframe it stays where it is.
 - The cut scene ends at the latest of every actor's last keyframe time and every narration line's end (req 63). The player can skip at any time with confirm.
+- Sounds don't make a cut scene longer: a sound timed after the cut scene ends never plays, and neither does any sound not yet reached when the player skips.
 
 ## Sprite sheet format
 
@@ -439,9 +454,36 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
 |---|---|---|---|
 | `formatVersion` | yes | number | Always `1`. |
 | `startMusic` | no | sound path | The start screen's music. It loops. |
-| `sounds` | no | object | The sound for each sound event, by event name. An event that isn't listed is silent. The event names are `jump`, `land`, `punch`, `pickUp`, `drop`, `throw`, `stomp`, `enemyDefeated`, `playerHurt`, `playerDefeated`, `collectReward`, `reachGoal`, `menuMove`, and `menuChoose`. |
+| `sounds` | no | object | The sound for each sound event, by event name (below). An event that isn't listed is silent. |
 
 A **sound path** is like an image path, but to an Ogg Vorbis (`.ogg`) or Opus (`.opus`) file: for example `"audio/sounds/jump.ogg"` for the file `data/audio/sounds/jump.ogg`.
+
+**Sound events.** These are the only names allowed in `sounds`; a misspelled one is an error that lists them. In code they are the `SoundEvent` names in `src/simulation/constants.js`, and a test keeps the two in sync.
+
+| Event | When it plays |
+|---|---|
+| `jump` | The player jumps (not when walking off a ledge). |
+| `land` | The player comes down onto something solid after being in the air. Not at the level start or after a respawn. |
+| `punch` | The player punches, whether or not it hits anything. |
+| `pickUp` | The player picks up an object. |
+| `drop` | The player puts down a held object (down + action). |
+| `throw` | The player throws a held object. |
+| `stomp` | The player defeats an enemy by landing on it. |
+| `enemyDefeated` | An enemy is defeated by a punch or a thrown object (a stomp plays `stomp` instead). |
+| `playerHurt` | The player loses health, from an enemy or a pit. |
+| `playerDefeated` | The player's health reaches 0 and the level restarts (plays instead of `playerHurt`). |
+| `collectReward` | The player collects a reward. |
+| `reachGoal` | The player reaches the goal. |
+| `menuMove` | The selected menu option changes (keyboard or gamepad). |
+| `menuChoose` | A menu option is chosen, by confirm or a click. |
+
+How sounds play:
+- Each event's sound plays once, from the start, each time the event happens; sounds overlap each other and the music. If the same event happens more than once within one frame, its sound plays once.
+- The **mute** key (`mute` in `bindings.json`) turns all sound off and on; "Sound off" shows while muted. Music carries on silently, so unmuting picks up where it has got to.
+- In **browser mode** sound stays off until the first key press or click (browsers require it); then the current screen's music starts. The Electron (Steam) build plays sound straight away.
+- A sound file that exists but can't be played (for example a damaged file) is logged as a warning and stays silent; the game carries on.
+
+Validation: `startMusic` and every file in `sounds` must be a sound path to a file that exists, and every key in `sounds` must be a sound event name.
 
 ## Schemas and the validator
 
