@@ -12,7 +12,8 @@
 //    gamepad that doesn't report the standard mapping is ignored;
 //  - the left stick counts as a direction only past the dead zone (strictly
 //    more than deadZone from the centre, display.json);
-//  - presentationKeys gives the keyboard-only fullscreen and debug keys.
+//  - presentationKeys gives the keyboard-only fullscreen and debug keys, and
+//    mute, from the keyboard or a gamepad button if one is bound to it.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,7 +24,7 @@ const BINDINGS = {
   keyboard: {
     left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
     jump: ['Space', 'ArrowUp', 'KeyW'], action: ['KeyE', 'KeyX'], punch: ['KeyQ', 'KeyC'],
-    confirm: ['Enter', 'Space'], fullscreen: ['F11'], debug: ['F3'],
+    confirm: ['Enter', 'Space'], fullscreen: ['F11'], debug: ['F3'], mute: ['KeyM'],
   },
   gamepad: {
     left: ['dpadLeft', 'stickLeft'], right: ['dpadRight', 'stickRight'], up: ['dpadUp', 'stickUp'],
@@ -113,9 +114,22 @@ describe('both at once (req 14)', () => {
 });
 
 describe('presentation keys', () => {
-  test('fullscreen and debug come from their keyboard bindings', () => {
-    assert.deepEqual(presentationKeys(new Set(['F11']), BINDINGS), { fullscreen: true, debug: false });
-    assert.deepEqual(presentationKeys(new Set(['F3']), BINDINGS), { fullscreen: false, debug: true });
-    assert.deepEqual(presentationKeys(new Set(), BINDINGS), { fullscreen: false, debug: false });
+  const keysFor = ({ keys = [], gamepads = [], bindings = BINDINGS } = {}) =>
+    presentationKeys({ keys: new Set(keys), gamepads, bindings, deadZone: DEAD_ZONE });
+
+  test('fullscreen, debug, and mute come from their keyboard bindings', () => {
+    assert.deepEqual(keysFor({ keys: ['F11'] }), { fullscreen: true, debug: false, mute: false });
+    assert.deepEqual(keysFor({ keys: ['F3'] }), { fullscreen: false, debug: true, mute: false });
+    assert.deepEqual(keysFor({ keys: ['KeyM'] }), { fullscreen: false, debug: false, mute: true });
+    assert.deepEqual(keysFor(), { fullscreen: false, debug: false, mute: false });
+  });
+
+  test('mute also comes from a gamepad button, if one is bound to it (sound PRD req 16)', () => {
+    const muteButton = 'back';
+    const pressed = [gamepad({ held: [muteButton] })];
+    assert.equal(keysFor({ gamepads: pressed }).mute, false, 'no gamepad button bound');
+    const bindings = { ...BINDINGS, gamepad: { ...BINDINGS.gamepad, mute: [muteButton] } };
+    assert.equal(keysFor({ gamepads: pressed, bindings }).mute, true, 'bound');
+    assert.equal(keysFor({ gamepads: [gamepad({ held: [muteButton], mapping: '' })], bindings }).mute, false, 'not a standard gamepad');
   });
 });

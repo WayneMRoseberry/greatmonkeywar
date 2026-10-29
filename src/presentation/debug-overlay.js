@@ -8,11 +8,13 @@ const fixed = (n) => n.toFixed(2);
 /**
  * The overlay's text, one line each: frames per second, the player's position
  * and velocity, whether they are on the ground, the held object, the input
- * device, the window size, the visible world area, and Steam's status and
- * user name (from the platform). With no level, the player lines show "-".
- * `info` is { fps, player, held (object type or null), device, viewport, area, platform }.
+ * device, the window size, the visible world area, the music playing and the
+ * sound state (sound PRD req 26), and Steam's status and user name (from the
+ * platform). With no level, the player lines show "-".
+ * `info` is { fps, player, held (object type or null), device, viewport, area,
+ * platform, music (file or null), sound (SoundState, audio.js) }.
  */
-export function debugLines({ fps, player, held, device, viewport, area, platform }) {
+export function debugLines({ fps, player, held, device, viewport, area, platform, music, sound }) {
   const steamName = platform.getSteamUserName();
   const steam = platform.getSteamStatus() === SteamStatus.CONNECTED ? `connected (${steamName})` : 'unavailable';
   return [
@@ -24,6 +26,8 @@ export function debugLines({ fps, player, held, device, viewport, area, platform
     `Input: ${device}`,
     `Window: ${viewport.width} × ${viewport.height} px`,
     `Visible: ${fixed(area.width)} × ${fixed(area.height)} tiles`,
+    `Music: ${music ?? 'none'}`,
+    `Sound: ${sound}`,
     `Steam: ${steam}`,
   ];
 }

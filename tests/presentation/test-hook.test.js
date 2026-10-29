@@ -12,7 +12,8 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { gameTestState, createTestHook, installTestHook, DATA_ERROR_SCREEN } from '../../src/presentation/test-hook.js';
+import { gameTestState, audioTestState, createTestHook, installTestHook, DATA_ERROR_SCREEN } from '../../src/presentation/test-hook.js';
+import { SoundState } from '../../src/presentation/audio.js';
 import { createGame, stepGame, Screen } from '../../src/simulation/flow.js';
 import { buildData } from '../helpers/level-builder.js';
 import { Input, holding } from '../../src/simulation/input.js';
@@ -73,5 +74,13 @@ describe('the hook (req 94)', () => {
     installTestHook(win, hook);
     assert.equal(win.gameTestHook, hook);
     assert.throws(() => { 'use strict'; win.gameTestHook = null; }, TypeError);
+  });
+});
+
+describe('sound, for UI checks (sound task 4.7)', () => {
+  test('audioTestState is the audio player\'s music and sound state', () => {
+    const music = 'audio/music/start.ogg';
+    const audio = { currentMusic: () => music, soundState: () => SoundState.MUTED };
+    assert.deepEqual(audioTestState(audio), { music, sound: SoundState.MUTED });
   });
 });

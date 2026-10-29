@@ -1,6 +1,8 @@
 {
   "formatVersion": 1,
   "name": "Jungle Edge",
+  "music": "audio/music/level1.ogg",
+  "completeJingle": "audio/music/jingle.ogg",
   "grid": [
     "............................................................",
     "............................................................",

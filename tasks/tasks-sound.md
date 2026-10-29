@@ -187,74 +187,96 @@ Every sub-task that creates or changes code is done test-first. Each code sub-ta
     - Code: `src/simulation/flow.js`
     - Decided: `copyGame` starts every new game state with an empty `events` list, so both `stepGame` and `chooseMenuOption` begin empty. `choose` records `menuChoose`, so confirm and clicks share it. While playing, the game's events are the level step's, then `reachGoal` if the goal was reached that step. Under the level-complete panel the level isn't stepped, so its old events aren't repeated. Cut scene steps have no events.
 
-- [ ] 3.0 Build the audio player: which music plays on each screen, jingles, cut scene sounds, sound effects, mute, and browser unlock (reqs 8–13, 15, 17–18, 20–22, 25)
-  - [ ] 3.1 Test helper: a recording fake audio backend. It has the operations the player needs (for example `playMusic(path, { loop })`, `stopMusic()`, `playSound(path)`, `setMuted(muted)`, `isLocked()`, `unlock()`), and it records each call in order. A test can set whether it starts locked and which paths fail to play.
+- [x] 3.0 Build the audio player: which music plays on each screen, jingles, cut scene sounds, sound effects, mute, and browser unlock (reqs 8–13, 15, 17–18, 20–22, 25)
+  - [x] 3.1 Test helper: a recording fake audio backend. It has the operations the player needs (for example `playMusic(path, { loop })`, `stopMusic()`, `playSound(path)`, `setMuted(muted)`, `isLocked()`, `unlock()`), and it records each call in order. A test can set whether it starts locked and which paths fail to play.
     - Test: `tests/helpers/fake-audio.test.js`
     - Code: `tests/helpers/fake-audio.js`
-  - [ ] 3.2 Music by screen: `createAudioPlayer({ data, backend, log })` with `update(game, events)`, called once per frame. Start screen → `startMusic`; playing → the level's `music`; cut scene → its `music`; anything not named → no music. Music loops (req 8). Changing screens cuts straight to the new track; if it's the same file, it keeps playing without restarting (req 9). Finished and "Thanks for playing" → silence (req 11).
+    - Decided: `createFakeAudioBackend({ locked, failing })` records `{ op, args }` in `calls` (with `callsOf(op)`), like the fake canvas; `isLocked()` is answered, not recorded; `playMusic`/`playSound` return false for paths in `failing`. The backend's operations are documented once, at the top of `src/presentation/audio.js`.
+  - [x] 3.2 Music by screen: `createAudioPlayer({ data, backend, log })` with `update(game, events)`, called once per frame. Start screen → `startMusic`; playing → the level's `music`; cut scene → its `music`; anything not named → no music. Music loops (req 8). Changing screens cuts straight to the new track; if it's the same file, it keeps playing without restarting (req 9). Finished and "Thanks for playing" → silence (req 11).
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
-  - [ ] 3.3 Level complete and restart: with a `completeJingle`, the level music stops and the jingle plays once, not looping; without one, the level music keeps playing (req 10). A level restart doesn't restart the music (req 11).
+    - Decided: `wantedMusic(data, game)` gives `{ path, loop }` or null for the screen; the player only calls the backend when the path changes (`stopMusic` when it becomes null), so nothing named and nothing playing makes no calls at all. `currentMusic()` is the path playing, or null.
+  - [x] 3.3 Level complete and restart: with a `completeJingle`, the level music stops and the jingle plays once, not looping; without one, the level music keeps playing (req 10). A level restart doesn't restart the music (req 11).
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
-  - [ ] 3.4 Cut scene sounds: each timed sound plays once, on the first frame where the cut scene's time has reached its `time`, including several in one frame. When the cut scene ends or is skipped, sounds not yet reached never play (req 11–12).
+    - Decided: on the level-complete screen the wanted music is the jingle with `loop: false`; it replaces the level music (playMusic stops what was playing), and since its path stays the same under the panel it isn't restarted; after it ends there is silence until the next screen. A restart keeps the screen and level, so the music carries on.
+  - [x] 3.4 Cut scene sounds: each timed sound plays once, on the first frame where the cut scene's time has reached its `time`, including several in one frame. When the cut scene ends or is skipped, sounds not yet reached never play (req 11–12).
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
-  - [ ] 3.5 Sound effects: each event with a sound in `audio.json` plays it; events without one are silent. The same event several times in one frame plays once; different events in one frame all play (reqs 13, 15).
+    - Decided: the player keeps `{ name, next }` for the cut scene showing (the index of its next sound, the list being in time order) and forgets it when the screen isn't a cut scene, so seeing the cut scene again starts its sounds over.
+  - [x] 3.5 Sound effects: each event with a sound in `audio.json` plays it; events without one are silent. The same event several times in one frame plays once; different events in one frame all play (reqs 13, 15).
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
-  - [ ] 3.6 Mute: `toggleMute()` mutes and unmutes the backend; music keeps its place (the player doesn't restart it); effects and cut scene sounds while muted are skipped, not played later (reqs 17–18). Starts unmuted (req 20). `isMuted()` for the label and overlay.
+    - Decided: events are played in the order they first happened in the frame (a `Set` of the frame's events).
+  - [x] 3.6 Mute: `toggleMute()` mutes and unmutes the backend; music keeps its place (the player doesn't restart it); effects and cut scene sounds while muted are skipped, not played later (reqs 17–18). Starts unmuted (req 20). `isMuted()` for the label and overlay.
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
-  - [ ] 3.7 Browser lock: while the backend is locked, nothing is played and effects are dropped. `unlock()` unlocks the backend and starts the current screen's music from the beginning (req 21). A backend that starts unlocked (Electron) plays the start music at once (req 22).
+    - Decided: while muted the player still follows the screens' music (silently, through the backend's mute), so unmuting plays the right track at the point it has reached; effects aren't sent to the backend at all, and cut scene sounds reached while muted are passed over.
+  - [x] 3.7 Browser lock: while the backend is locked, nothing is played and effects are dropped. `unlock()` unlocks the backend and starts the current screen's music from the beginning (req 21). A backend that starts unlocked (Electron) plays the start music at once (req 22).
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
-  - [ ] 3.8 A sound that fails to play: the backend reports the failure; the player logs one warning naming the file (not one per frame) and carries on (req 25).
+    - Decided: the player reads `backend.isLocked()` once, when created, and keeps its own `locked` flag: the real backend's context resumes asynchronously, but sources started right after `resume()` play once it has. `unlock()` does nothing when not locked. Added `soundState()` (`SoundState.ON`, `MUTED`, `LOCKED`; locked shows first) for the overlay and test hook (task 4.6).
+  - [x] 3.8 A sound that fails to play: the backend reports the failure; the player logs one warning naming the file (not one per frame) and carries on (req 25).
     - Test: `tests/presentation/audio.test.js`
     - Code: `src/presentation/audio.js`
+    - Decided: one warning per file: "Couldn't play the sound file data/<path>, so it will be silent. Check that it is a working Ogg Vorbis or Opus file." Music that fails still counts as playing, so it isn't retried every frame.
 
-- [ ] 4.0 Connect sound to the game: the controller, the Web Audio backend, the mute key and "Sound off" label, the debug overlay, and Electron's autoplay setting (reqs 16–19, 21–22, 26)
-  - [ ] 4.1 Controller: `createGameController` takes an `audio` player. After each `update`, it collects `game.events`; in `draw` (once per frame), it calls the audio player's `update` with the current game and the frame's collected events, then clears them.
+- [x] 4.0 Connect sound to the game: the controller, the Web Audio backend, the mute key and "Sound off" label, the debug overlay, and Electron's autoplay setting (reqs 16–19, 21–22, 26)
+  - [x] 4.1 Controller: `createGameController` takes an `audio` player. After each `update`, it collects `game.events`; in `draw` (once per frame), it calls the audio player's `update` with the current game and the frame's collected events, then clears them.
     - Test: `tests/presentation/game.test.js` (events from several updates reach the audio player once, in the next draw)
     - Code: `src/presentation/game.js`
-  - [ ] 4.2 Web Audio backend: `createWebAudioBackend({ context, sounds, log })`, where `context` is an `AudioContext` (a fake in tests). Decodes the loaded `ArrayBuffer`s once at start-up (a file that fails to decode is logged and silent, req 25); plays music looping through one gain node and effects through new buffer sources (so they overlap, req 13); mutes with a master gain of 0; `isLocked()` is the context's `state === 'suspended'`; `unlock()` calls `context.resume()`.
+    - Decided: events are collected after a menu click (`chooseMenuOption`) as well as after `stepGame`, since the step that follows a click starts with no events. The game tests use a small recording stand-in for the audio player (`fakeAudioPlayer` in `game.test.js`).
+  - [x] 4.2 Web Audio backend: `createWebAudioBackend({ context, sounds, log })`, where `context` is an `AudioContext` (a fake in tests). Decodes the loaded `ArrayBuffer`s once at start-up (a file that fails to decode is logged and silent, req 25); plays music looping through one gain node and effects through new buffer sources (so they overlap, req 13); mutes with a master gain of 0; `isLocked()` is the context's `state === 'suspended'`; `unlock()` calls `context.resume()`.
     - Test: `tests/presentation/web-audio.test.js` (with a fake `AudioContext` that records nodes and calls)
     - Code: `src/presentation/web-audio.js`
-  - [ ] 4.3 Mute key: `presentationKeys` reports `mute`; a new press toggles the audio player's mute (like F3 and F11 in `update`).
+    - Decided: `createWebAudioBackend({ context, sounds })` (no `log`): a file that fails to decode is left out silently, and playing it returns false, so the audio player's single warning is the only one (otherwise one broken file gave two). It resolves once every file is decoded; `main.js` awaits it before starting the loop. Each effect's source disconnects itself when it ends.
+  - [x] 4.3 Mute key: `presentationKeys` reports `mute`; a new press toggles the audio player's mute (like F3 and F11 in `update`).
     - Test: `tests/presentation/input-map.test.js`, `tests/presentation/game.test.js`
     - Code: `src/presentation/input-map.js`, `src/presentation/game.js`
-  - [ ] 4.4 Unlocking on the first key press or click: the input reader reports a new key press or click (`activated`), and the controller calls the audio player's `unlock()` on the first one.
+    - Decided: `presentationKeys` now takes `{ keys, gamepads, bindings, deadZone }` (like `inputFromDevices`), because `mute` may also have gamepad buttons (the bindings schema allows it, sound PRD req 16); fullscreen and debug stay keyboard only. Existing tests updated for the new shape and the extra `mute` field.
+  - [x] 4.4 Unlocking on the first key press or click: the input reader reports a new key press or click (`activated`), and the controller calls the audio player's `unlock()` on the first one.
     - Test: `tests/presentation/input.test.js`, `tests/presentation/game.test.js`
     - Code: `src/presentation/input.js`, `src/presentation/game.js`
-  - [ ] 4.5 "Sound off" label: drawn in the top-right corner, in the HUD's font, on every screen while muted, and not otherwise (req 19).
+    - Decided: any key counts, bound or not, and any mouse button on the canvas. The controller calls `unlock()` only while the player says it is locked. Chrome's user activation is sticky, so resuming from the next game frame (not inside the event handler) is allowed.
+  - [x] 4.5 "Sound off" label: drawn in the top-right corner, in the HUD's font, on every screen while muted, and not otherwise (req 19).
     - Test: `tests/presentation/hud.test.js`, `tests/presentation/game.test.js` (on the start screen, while playing, in a cut scene)
     - Code: `src/presentation/hud.js`, `src/presentation/game.js`
-  - [ ] 4.6 Debug overlay: two more lines, the music playing (or "none") and the sound state (on, muted, or locked) (req 26).
+    - Decided: `drawSoundOff(ctx, viewport)` and `SOUND_OFF_TEXT` in `hud.js`: right-aligned, set in by `HUD_MARGIN` font sizes, white over a dark outline like the HUD. Drawn after the screen and before the debug overlay (which covers it when shown).
+  - [x] 4.6 Debug overlay: two more lines, the music playing (or "none") and the sound state (on, muted, or locked) (req 26).
     - Test: `tests/presentation/debug-overlay.test.js`
     - Code: `src/presentation/debug-overlay.js`, `src/presentation/game.js`
-  - [ ] 4.7 Test hook: the state gains `music` and `sound` (on, muted, locked), so UI checks can confirm audio without hearing it.
+    - Decided: "Music: <path>" and "Sound: <state>", just before the Steam line (which stays last). The state comes from the audio player's `soundState()` (task 3.7).
+  - [x] 4.7 Test hook: the state gains `music` and `sound` (on, muted, locked), so UI checks can confirm audio without hearing it.
     - Test: `tests/presentation/test-hook.test.js`
     - Code: `src/presentation/test-hook.js`
-  - [ ] 4.8 Electron autoplay: the window's `webPreferences` include `autoplayPolicy: 'no-user-gesture-required'` (req 22).
+    - Decided: a separate `audioTestState(audio)` gives `{ music, sound }`, and `main.js` merges it into the hook's state, so `gameTestState(game)` and its tests are unchanged.
+  - [x] 4.8 Electron autoplay: the window's `webPreferences` include `autoplayPolicy: 'no-user-gesture-required'` (req 22).
     - Test: `tests/electron/window-options.test.js`
     - Code: `electron/window-options.js`
-  - [ ] 4.9 Architecture rule: simulation files may not use `AudioContext`, `Audio`, or other audio APIs.
+  - [x] 4.9 Architecture rule: simulation files may not use `AudioContext`, `Audio`, or other audio APIs.
     - Test: `tests/architecture.test.js`
     - Code: `tools/architecture.js`
-  - [ ] 4.10 Start-up glue: `main.js` creates the `AudioContext`, the Web Audio backend (with `loaded.sounds`), and the audio player, and passes the player to the controller.
+    - Decided: `AudioContext`, `webkitAudioContext`, and `Audio` join the browser globals the simulation may not use; names that only contain them (`playAudio`) are fine.
+  - [x] 4.10 Start-up glue: `main.js` creates the `AudioContext`, the Web Audio backend (with `loaded.sounds`), and the audio player, and passes the player to the controller.
     - Test: `tests-ui/sound.spec.js` (red first): in browser mode the start screen's music is the one in `audio.json` and sound is locked; after a key press it is on; after pressing M it is muted. No console errors.
     - Code: `src/presentation/main.js`
+    - Decided: the check reads the expected music and mute key from `data/config/audio.json` and `bindings.json`. Playwright's Chromium starts every `AudioContext` running, even with its default `--autoplay-policy` flag removed and `user-gesture-required` set (probed headless and headed), so the lock before the first key press can't be seen there: the check confirms that after a key press sound is on with the start music, and that the mute key mutes and unmutes. The lock is covered by unit tests and needs a manual check in a real browser (task 6.4).
 
 - [ ] 5.0 Create the placeholder audio and add it to the game data (reqs 27–28)
-  - [ ] 5.1 **(no code)** Choose the Ogg encoder (PRD open question 5). Preferred: an npm dev dependency that encodes Ogg Vorbis in Node, with no native build step (for example a WebAssembly encoder). Check its licence is compatible, that it installs on Windows with plain `npm install`, and that a file it makes plays in Electron's Chromium. Record the choice under this sub-task.
-  - [ ] 5.2 Sound synthesis: pure functions that return sample arrays, for example `tone({ frequency, seconds, shape, sampleRate })`, `sweep(...)` (rising or falling pitch), `envelope(samples, { attack, release })`, `noise(...)`, and `sequence(notes)` for simple melodies. Loops must end where they began, so music joins up smoothly.
+  - [x] 5.1 **(no code)** Choose the Ogg encoder (PRD open question 5). Preferred: an npm dev dependency that encodes Ogg Vorbis in Node, with no native build step (for example a WebAssembly encoder). Check its licence is compatible, that it installs on Windows with plain `npm install`, and that a file it makes plays in Electron's Chromium. Record the choice under this sub-task.
+    - Decided: `wasm-media-encoders` 0.7.0 (MIT; WebAssembly, no native build; one dependency, `@swc/helpers`), pinned exactly as a dev dependency. It installed on Windows with plain `npm install`, and a tone it encoded decoded in Playwright's Chromium (the engine Electron uses). Only `tools/make-placeholder-sounds.js` uses it; the game never loads it. (`npm audit` reports a moderate advisory for `fast-uri`, which comes from the existing `ajv` dev dependency, not from this package.)
+  - [x] 5.2 Sound synthesis: pure functions that return sample arrays, for example `tone({ frequency, seconds, shape, sampleRate })`, `sweep(...)` (rising or falling pitch), `envelope(samples, { attack, release })`, `noise(...)`, and `sequence(notes)` for simple melodies. Loops must end where they began, so music joins up smoothly.
     - Test: `tests/tools/sound-synth.test.js` (length from duration and sample rate; values stay within -1..1; the envelope starts and ends at 0; a sequence is the sum of its notes' lengths)
     - Code: `tools/sound-synth.js`
-  - [ ] 5.3 The generator: `tools/make-placeholder-sounds.js` lists every placeholder (start music, one track per level, cut scene music, a jingle, every `SoundEvent`, one cut scene sound), builds each with the synth, encodes it, and writes it under a folder it is given (default `data/audio/`). Add `"sounds": "node tools/make-placeholder-sounds.js"` to `package.json`.
+    - Decided: `Waveform` (`SINE`, `SQUARE`, `TRIANGLE`), `tone`, `sweep`, `noise` (seeded, so remaking the files gives the same noise), `envelope`, `sequence` (each note fades in and out over 5 ms; `frequency: null` is a rest), `mix` (clipped to ±1), and `concat`. The envelope turns `-0` into `0`.
+  - [x] 5.3 The generator: `tools/make-placeholder-sounds.js` lists every placeholder (start music, one track per level, cut scene music, a jingle, every `SoundEvent`, one cut scene sound), builds each with the synth, encodes it, and writes it under a folder it is given (default `data/audio/`). Add `"sounds": "node tools/make-placeholder-sounds.js"` to `package.json`.
     - Test: `tests/tools/make-placeholder-sounds.test.js` (into a temporary folder: one Ogg file per listed sound, each starting with the Ogg signature `OggS`; the list covers every `SoundEvent`)
     - Code: `tools/make-placeholder-sounds.js`, `package.json`
+    - Decided: the folder argument is a data folder (default `data/`) and the files go under its `audio/`, so `PLACEHOLDERS` paths are the same paths the JSON files use. `PlaceholderMusic` names the music files; each event's file is `audio/sounds/<event>.ogg` (`soundFor(event)`); the cut scene sound is `audio/sounds/cutscene-crash.ogg`. Mono, 44.1 kHz, Vorbis quality 3. Music loops are 4–4.8 s, each in its own key and sound; effects are 0.05–1.1 s.
   - [ ] 5.4 **(no code)** Run `npm run sounds` and commit the files in `data/audio/`. Listen to each one: they should be short, clearly different from each other, and the music loops should join smoothly.
-  - [ ] 5.5 **(no code)** Game data: create `data/config/audio.json` (start music and every event's sound); add `"mute": ["KeyM"]` to `bindings.json`; give both levels `music`, and give **one** a `completeJingle` so both behaviours of req 10 can be heard; give the cut scene `music` and at least one timed sound. `npm test` (data validation) passes.
+    - Done so far: generated the 20 files (about 247 KB). Decoded every one in Chromium: lengths as designed, no clipping (loudest peak 0.71), and the music loops start and end within 0.011 of silence. Still to do: listen to them, and commit.
+  - [x] 5.5 **(no code)** Game data: create `data/config/audio.json` (start music and every event's sound); add `"mute": ["KeyM"]` to `bindings.json`; give both levels `music`, and give **one** a `completeJingle` so both behaviours of req 10 can be heard; give the cut scene `music` and at least one timed sound. `npm test` (data validation) passes.
+    - Decided: level 1 has the jingle (it is followed by the cut scene), level 2 keeps its music playing under the panel. The cut scene's crash plays at 4 s, when the beetle comes in. (`"mute": ["KeyM"]` was added in task 1.5.)
 
 - [ ] 6.0 Write the documentation and verify the whole feature (reqs 29–31; success metrics 1–8)
   - [ ] 6.1 **(no code)** `docs/data-formats.md`: the `audio.json` format, the new level and cut scene fields, sound path rules, the `mute` binding, and the list of sound event names.

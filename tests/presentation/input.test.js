@@ -30,7 +30,7 @@ import { Input, NO_INPUT } from '../../src/simulation/input.js';
 const BINDINGS = {
   keyboard: {
     left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], jump: ['Space'],
-    action: ['KeyE'], punch: ['KeyQ'], confirm: ['Enter'], fullscreen: ['F11'], debug: ['F3'],
+    action: ['KeyE'], punch: ['KeyQ'], confirm: ['Enter'], fullscreen: ['F11'], debug: ['F3'], mute: ['KeyM'],
   },
   gamepad: {
     left: ['dpadLeft', 'stickLeft'], right: ['dpadRight', 'stickRight'], up: ['dpadUp'], down: ['dpadDown'],
@@ -132,10 +132,13 @@ describe('keyboard', () => {
     assert.deepEqual(reader.read().input, NO_INPUT);
   });
 
-  test('the fullscreen and debug keys are reported separately', () => {
+  test('the fullscreen, debug, and mute keys are reported separately', () => {
     const { win, reader } = setUp();
     win.key('keydown', 'F3');
-    assert.deepEqual(reader.read().presentation, { fullscreen: false, debug: true });
+    assert.deepEqual(reader.read().presentation, { fullscreen: false, debug: true, mute: false });
+    win.key('keyup', 'F3');
+    win.key('keydown', 'KeyM');
+    assert.deepEqual(reader.read().presentation, { fullscreen: false, debug: false, mute: true });
   });
 });
 
@@ -222,5 +225,26 @@ describe('cleaning up', () => {
     reader.dispose();
     for (const type of ['keydown', 'keyup', 'blur']) assert.deepEqual(win.listeners[type], []);
     assert.deepEqual(canvas.listeners.click, []);
+  });
+});
+
+describe('activation: the first key press or click, for unlocking sound (sound PRD req 21)', () => {
+  test('nothing pressed or clicked: not activated', () => {
+    const { reader } = setUp();
+    assert.equal(reader.read().activated, false);
+  });
+
+  test('any key press since the last read activates, once', () => {
+    const { win, reader } = setUp();
+    win.key('keydown', 'KeyZ');   // not bound to anything: it still counts
+    assert.equal(reader.read().activated, true);
+    assert.equal(reader.read().activated, false);
+  });
+
+  test('a click since the last read activates, once', () => {
+    const { canvas, reader } = setUp();
+    canvas.click({ clientX: 0, clientY: 0 });
+    assert.equal(reader.read().activated, true);
+    assert.equal(reader.read().activated, false);
   });
 });

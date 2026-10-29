@@ -27,6 +27,21 @@ export function outlinedText(ctx, text, x, y, size) {
   ctx.fillText(text, x, y);
 }
 
+/** What the label shown while sound is muted says (sound PRD req 19). */
+export const SOUND_OFF_TEXT = 'Sound off';
+
+/** Draws the "Sound off" label in the viewport's top-right corner, in the HUD's font and style. */
+export function drawSoundOff(ctx, viewport) {
+  const size = hudFontSize(viewport.height);
+  const margin = HUD_MARGIN * size;
+  ctx.save();
+  ctx.font = `bold ${size}px sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  outlinedText(ctx, SOUND_OFF_TEXT, viewport.width - margin, margin, size);
+  ctx.restore();
+}
+
 /** Draws the HUD for `status` ({ health, rewardCount }) on a viewport of { width, height } pixels. */
 export function drawHud(ctx, status, viewport) {
   const size = hudFontSize(viewport.height);

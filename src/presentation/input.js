@@ -27,10 +27,11 @@ const MAIN_BUTTON = 0;
 /**
  * Reads input from `target`'s keyboard events, clicks on `pointerTarget` (the
  * canvas), and `getGamepads()`.
- * read() gives { input, presentation, device, click }: the input state, the
- * fullscreen and debug keys, the device used last (InputDevice), and the last
- * main-button click since the previous read, as { x, y } in canvas pixels (or
- * null). A bound key's browser default is prevented; losing focus releases
+ * read() gives { input, presentation, device, click, activated }: the input
+ * state, the fullscreen, debug, and mute keys, the device used last
+ * (InputDevice), the last main-button click since the previous read, as
+ * { x, y } in canvas pixels (or null), and whether any key was pressed or the
+ * canvas clicked since then (a browser lets sound play only after that). A bound key's browser default is prevented; losing focus releases
  * every key. dispose() removes the event listeners.
  */
 export function createInputReader({ target, pointerTarget, getGamepads, bindings, deadZone }) {
@@ -41,8 +42,10 @@ export function createInputReader({ target, pointerTarget, getGamepads, bindings
   const bound = boundKeys(bindings);
   let device = InputDevice.KEYBOARD;
   let click = null;
+  let activated = false;   // a key pressed or the canvas clicked since the last read
 
   const onKeyDown = (event) => {
+    activated = true;
     keys.add(event.code);
     tapped.add(event.code);
     device = InputDevice.KEYBOARD;
@@ -59,6 +62,7 @@ export function createInputReader({ target, pointerTarget, getGamepads, bindings
   // The canvas is drawn in device pixels but shown at its CSS size, so the
   // click is scaled from where it is on the page to the canvas's own pixels.
   const onClick = (event) => {
+    activated = true;
     if (event.button !== MAIN_BUTTON) return;
     const rect = pointerTarget.getBoundingClientRect();
     click = {
@@ -79,11 +83,14 @@ export function createInputReader({ target, pointerTarget, getGamepads, bindings
       tapped.clear();
       const clicked = click;
       click = null;
+      const wasActivated = activated;
+      activated = false;
       return {
         input: inputFromDevices({ keys: held, gamepads, bindings, deadZone }),
-        presentation: presentationKeys(held, bindings),
+        presentation: presentationKeys({ keys: held, gamepads, bindings, deadZone }),
         device,
         click: clicked,
+        activated: wasActivated,
       };
     },
     dispose() {

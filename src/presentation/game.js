@@ -7,7 +7,7 @@ import { cutsceneAt } from '../simulation/cutscene.js';
 import { heldObject } from '../simulation/objects.js';
 import { visibleArea } from '../simulation/camera.js';
 import { levelView, drawLevel } from './renderer.js';
-import { drawHud } from './hud.js';
+import { drawHud, drawSoundOff } from './hud.js';
 import {
   drawStartScreen, drawLevelComplete, drawThanks, startMenuBoxes, levelCompleteMenuBoxes, optionAt,
 } from './screens.js';
@@ -22,20 +22,26 @@ const FPS_SMOOTHING = 0.2;
  *  - data, images: loaded game data and images (src/data/load.js);
  *  - platform: the platform (src/platform/platform.js);
  *  - canvas: the canvas, already sized in device pixels (canvas-size.js);
- *  - inputReader: read() gives { input, presentation, device, click } (input.js);
+ *  - inputReader: read() gives { input, presentation, device, click, activated } (input.js);
  *  - now(): the clock in milliseconds, for the fps reading;
- *  - log(message): for warnings (a missing sprite, req 79).
+ *  - log(message): for warnings (a missing sprite, req 79);
+ *  - audio: the audio player (audio.js). Each draw hands it the game and the
+ *    sound events of every update since the last draw (sound PRD reqs 13-15).
  * update(dt): reads input; a new press of the debug key shows or hides the
- * overlay and of the fullscreen key toggles fullscreen through the platform;
- * a click on a menu option chooses it; then steps the game flow. When the flow reaches the finished screen, the
+ * overlay, of the fullscreen key toggles fullscreen through the platform, and
+ * of the mute key toggles the audio player's mute; the first key press or
+ * click unlocks sound if the browser has it locked; a click on a menu option
+ * chooses it; then steps the game flow. When the flow reaches the finished screen, the
  * platform's quit is called once, and its { showThanks } decides whether
- * "Thanks for playing" is drawn. draw(): draws the current screen, and the
- * debug overlay if shown. getGame(): the current game flow state.
+ * "Thanks for playing" is drawn. draw(): updates the audio player, draws the
+ * current screen, "Sound off" while muted, and the debug overlay if shown.
+ * getGame(): the current game flow state.
  */
-export function createGameController({ data, images, platform, canvas, inputReader, now, log }) {
+export function createGameController({ data, images, platform, canvas, inputReader, now, log, audio }) {
   let game = createGame(data);
+  let frameEvents = [];   // the sound events of every update since the last draw
   let lastRead = inputReader.read();
-  let held = { fullscreen: false, debug: false };
+  let held = { fullscreen: false, debug: false, mute: false };
   let showDebug = false;
   let quitResult = null;
   let lastDraw = null;
@@ -47,11 +53,19 @@ export function createGameController({ data, images, platform, canvas, inputRead
     const { presentation } = lastRead;
     if (presentation.debug && !held.debug) showDebug = !showDebug;
     if (presentation.fullscreen && !held.fullscreen) platform.toggleFullscreen();
+    if (presentation.mute && !held.mute) audio.toggleMute();
     held = { ...presentation };
+    if (lastRead.activated && audio.isLocked()) audio.unlock();
 
     if (game.screen === Screen.FINISHED) return;
-    if (lastRead.click) game = clickMenu(game, lastRead.click);
-    if (game.screen !== Screen.FINISHED) game = stepGame(game, lastRead.input, dt);
+    if (lastRead.click) {
+      game = clickMenu(game, lastRead.click);
+      frameEvents.push(...game.events);
+    }
+    if (game.screen !== Screen.FINISHED) {
+      game = stepGame(game, lastRead.input, dt);
+      frameEvents.push(...game.events);
+    }
     if (game.screen === Screen.FINISHED) quitResult = platform.quit();
   }
 
@@ -102,9 +116,13 @@ export function createGameController({ data, images, platform, canvas, inputRead
     }
     lastDraw = time;
 
+    audio.update(game, frameEvents);
+    frameEvents = [];
+
     const ctx = canvas.getContext('2d');
     const viewport = { width: canvas.width, height: canvas.height };
     drawScreen(ctx, viewport);
+    if (audio.isMuted()) drawSoundOff(ctx, viewport);
     if (showDebug) {
       const playing = game.screen === Screen.PLAYING || game.screen === Screen.LEVEL_COMPLETE;
       const carried = playing ? heldObject(game.level) : null;
@@ -116,6 +134,8 @@ export function createGameController({ data, images, platform, canvas, inputRead
         viewport,
         area: visibleArea(viewport.width, viewport.height, data.display.visibleHeight),
         platform,
+        music: audio.currentMusic(),
+        sound: audio.soundState(),
       }), viewport);
     }
   }

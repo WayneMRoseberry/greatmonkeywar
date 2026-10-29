@@ -3,12 +3,13 @@
 //
 // debugLines(info) is the overlay's text; drawDebugOverlay(ctx, lines,
 // viewport) draws it. `info` is what the game controller gathers each frame:
-// { fps, player, held, device, viewport, area, platform }.
+// { fps, player, held, device, viewport, area, platform, music, sound }.
 // Decided:
 //  - one line each for: frames per second, the player's position, their
 //    velocity, whether they are on the ground, the held object, the input
-//    device, the window size, the visible world area, and Steam's status with
-//    the user's name (from the platform);
+//    device, the window size, the visible world area, the music playing ("none"
+//    if none), the sound state (SoundState: on, muted, or locked), and Steam's
+//    status with the user's name (from the platform);
 //  - numbers are shown to 2 decimal places (fps as a whole number);
 //  - with no level (start screen, cut scene), the player lines show "-";
 //  - the overlay is drawn in the top-right corner, on a half-transparent dark box.
@@ -20,6 +21,7 @@ import { createFakeContext } from '../helpers/fake-canvas.js';
 import { createFakePlatform } from '../../src/platform/fake-platform.js';
 import { SteamStatus } from '../../src/platform/platform.js';
 import { InputDevice } from '../../src/presentation/input.js';
+import { SoundState } from '../../src/presentation/audio.js';
 
 const PLAYER = { x: 3.25, y: 7, vx: 6, vy: -2.5, onGround: false };
 const INFO = {
@@ -30,10 +32,12 @@ const INFO = {
   viewport: { width: 1280, height: 720 },
   area: { width: 21.333333, height: 12 },
   platform: createFakePlatform({ steam: SteamStatus.CONNECTED, userName: 'Wayne' }),
+  music: 'audio/music/level1.ogg',
+  sound: SoundState.ON,
 };
 
 describe('the overlay\'s lines (Design Considerations)', () => {
-  test('frames per second, player position, velocity, on the ground, held object, device, window, visible area, and Steam', () => {
+  test('frames per second, player position, velocity, on the ground, held object, device, window, visible area, music, sound, and Steam', () => {
     assert.deepEqual(debugLines(INFO), [
       'FPS: 60',
       'Player: x 3.25, y 7.00',
@@ -43,8 +47,15 @@ describe('the overlay\'s lines (Design Considerations)', () => {
       'Input: gamepad',
       'Window: 1280 × 720 px',
       'Visible: 21.33 × 12.00 tiles',
+      `Music: ${INFO.music}`,
+      `Sound: ${INFO.sound}`,
       'Steam: connected (Wayne)',
     ]);
+  });
+
+  test('no music playing, and each sound state (sound PRD req 26)', () => {
+    assert.ok(debugLines({ ...INFO, music: null }).includes('Music: none'));
+    for (const sound of Object.values(SoundState)) assert.ok(debugLines({ ...INFO, sound }).includes(`Sound: ${sound}`), sound);
   });
 
   test('Steam unavailable has no user name (req 10)', () => {

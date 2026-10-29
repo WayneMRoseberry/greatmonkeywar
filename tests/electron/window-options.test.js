@@ -27,7 +27,11 @@ describe('the window (req 2, Technical Considerations)', () => {
     assert.equal(webPreferences.preload, PRELOAD);
   });
 
-  test('a 1280 × 720 window titled Great Monkey War, on black, that can go fullscreen', () => {
+  test('sound may play without a key press or click first (sound PRD req 22)', () => {
+  assert.equal(windowOptions(PRELOAD).webPreferences.autoplayPolicy, 'no-user-gesture-required');
+});
+
+test('a 1280 × 720 window titled Great Monkey War, on black, that can go fullscreen', () => {
     const options = windowOptions(PRELOAD);
     assert.equal(options.width, 1280);
     assert.equal(options.height, 720);

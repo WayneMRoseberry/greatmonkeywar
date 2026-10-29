@@ -4,8 +4,9 @@
 //
 // It loads and validates the data, shows the error screen if the data is
 // invalid (req 85), picks the platform (Electron's, if the preload bridge is
-// on the window, otherwise the browser's), creates the game, installs the
-// test hook in browser mode (req 94), and starts the loop.
+// on the window, otherwise the browser's), sets up sound (decoding the sound
+// files), creates the game, installs the test hook in browser mode (req 94),
+// and starts the loop.
 
 import { loadGameData } from '../data/load.js';
 import { formatProblem } from '../data/validate.js';
@@ -16,7 +17,9 @@ import { createInputReader } from './input.js';
 import { createLoop } from './loop.js';
 import { createGameController } from './game.js';
 import { drawDataErrors } from './screens.js';
-import { createTestHook, installTestHook, gameTestState, DATA_ERROR_SCREEN } from './test-hook.js';
+import { createAudioPlayer } from './audio.js';
+import { createWebAudioBackend } from './web-audio.js';
+import { createTestHook, installTestHook, gameTestState, audioTestState, DATA_ERROR_SCREEN } from './test-hook.js';
 
 const canvas = document.getElementById('game');
 const bridge = window[ELECTRON_BRIDGE];   // only in the Electron app (electron/preload.cjs)
@@ -40,10 +43,15 @@ if (!loaded.ok) {
     target: window, pointerTarget: canvas, getGamepads: () => navigator.getGamepads?.(),
     bindings: data.bindings, deadZone: data.display.stickDeadZone,
   });
+  // A browser starts the AudioContext suspended until a key press or click; Electron doesn't.
+  const backend = await createWebAudioBackend({ context: new AudioContext(), sounds: loaded.sounds });
+  const audio = createAudioPlayer({ data, backend, log });
   const controller = createGameController({
-    data, images, platform, canvas, inputReader, now: () => performance.now(), log,
+    data, images, platform, canvas, inputReader, now: () => performance.now(), log, audio,
   });
-  if (!bridge) installTestHook(window, createTestHook(() => gameTestState(controller.getGame())));
+  if (!bridge) {
+    installTestHook(window, createTestHook(() => ({ ...gameTestState(controller.getGame()), ...audioTestState(audio) })));
+  }
   createLoop({
     update: controller.update, draw: controller.draw, now: () => performance.now(), schedule: (fn) => requestAnimationFrame(fn),
   }).start();

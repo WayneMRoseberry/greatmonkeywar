@@ -63,5 +63,12 @@
       "end": 7.5,
       "text": "But a beetle is never far behind. Onward, to the ridge!"
     }
+  ],
+  "music": "audio/music/cutscene.ogg",
+  "sounds": [
+    {
+      "time": 4,
+      "sound": "audio/sounds/cutscene-crash.ogg"
+    }
   ]
 }

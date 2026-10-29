@@ -20,6 +20,15 @@ export function gameTestState(game) {
   };
 }
 
+/**
+ * What the hook reports about sound, from the audio player (audio.js):
+ * { music (file or null), sound (SoundState) }, so a UI check can confirm
+ * audio without hearing it.
+ */
+export function audioTestState(audio) {
+  return { music: audio.currentMusic(), sound: audio.soundState() };
+}
+
 /** The hook: getState() gives a fresh copy of what `currentState()` returns. The hook itself is frozen. */
 export function createTestHook(currentState) {
   return Object.freeze({ getState: () => structuredClone(currentState()) });

@@ -21,19 +21,23 @@ import { createFakePlatform } from '../../src/platform/fake-platform.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
 import { InputDevice } from '../../src/presentation/input.js';
+import { SOUND_OFF_TEXT } from '../../src/presentation/hud.js';
+import { SoundState } from '../../src/presentation/audio.js';
 import { GAME_TITLE, menuHint, startMenuBoxes, levelCompleteMenuBoxes } from '../../src/presentation/screens.js';
 import { Screen, MenuOption } from '../../src/simulation/flow.js';
-import { FIXED_DT, STEPS_PER_SECOND } from '../../src/simulation/constants.js';
+import { FIXED_DT, STEPS_PER_SECOND, SoundEvent } from '../../src/simulation/constants.js';
 
-const NO_KEYS = { fullscreen: false, debug: false };
+const NO_KEYS = { fullscreen: false, debug: false, mute: false };
+const MUTE_KEY = { ...NO_KEYS, mute: true };
 
 /** A fake input reader: read() gives what `set` was last told. */
 function fakeReader() {
-  let current = { input: NO_INPUT, presentation: NO_KEYS, device: InputDevice.KEYBOARD, click: null };
+  let current = { input: NO_INPUT, presentation: NO_KEYS, device: InputDevice.KEYBOARD, click: null, activated: false };
   return {
     read: () => current,
     set(input = NO_INPUT, presentation = NO_KEYS) { current = { ...current, input, presentation }; },
     setClick(click) { current = { ...current, click }; },
+    setActivated(activated) { current = { ...current, activated }; },
   };
 }
 
@@ -47,17 +51,37 @@ const VIEWPORT = { width: 800, height: 600 };
 /** The centre of a menu option's box. */
 const centreOf = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
 
-function setUp({ data = oneLevel(), images = {}, platform = createFakePlatform() } = {}) {
+/**
+ * A stand-in for the audio player (audio.js) that records each update as
+ * { screen, events }, and keeps mute and lock state like the real one.
+ */
+function fakeAudioPlayer({ locked = false, music = null } = {}) {
+  let muted = false;
+  let isLocked = locked;
+  return {
+    updates: [],
+    unlocks: 0,
+    update(game, events) { this.updates.push({ screen: game.screen, events: [...events] }); },
+    toggleMute() { muted = !muted; },
+    isMuted: () => muted,
+    unlock() { this.unlocks += 1; isLocked = false; },
+    isLocked: () => isLocked,
+    currentMusic: () => music,
+    soundState: () => (isLocked ? SoundState.LOCKED : muted ? SoundState.MUTED : SoundState.ON),
+  };
+}
+
+function setUp({ data = oneLevel(), images = {}, platform = createFakePlatform(), audio = fakeAudioPlayer() } = {}) {
   const canvas = createFakeCanvas(VIEWPORT.width, VIEWPORT.height);
   const reader = fakeReader();
   let time = 0;
   const logs = [];
   const controller = createGameController({
-    data, images, platform, canvas, inputReader: reader, now: () => time, log: (m) => logs.push(m),
+    data, images, platform, canvas, inputReader: reader, now: () => time, log: (m) => logs.push(m), audio,
   });
   const ctx = canvas.getContext('2d');
   return {
-    controller, reader, platform, ctx, logs,
+    controller, reader, platform, ctx, logs, audio,
     tick: (ms) => { time += ms; },
     /** Holds `input` for one update, then releases it for one, so the next press is new. */
     press(input = NO_INPUT, presentation = NO_KEYS) {
@@ -245,5 +269,108 @@ describe('quitting (req 60)', () => {
     const game = setUp({ platform: createFakePlatform({ showThanks: false }) });
     exited(game);
     assert.deepEqual(game.drawTexts(), []);
+  });
+});
+
+describe('sound (sound PRD reqs 13-15)', () => {
+  test('the events of every update since the last draw reach the audio player together, once, in the next draw', () => {
+    const game = setUp();
+    game.press(holding(Input.CONFIRM));        // menuChoose, then a level step
+    game.reader.set(holding(Input.JUMP));
+    game.controller.update(FIXED_DT);           // jump
+    game.controller.draw();
+    game.controller.draw();
+    const [first, second] = game.audio.updates;
+    assert.deepEqual(first, { screen: Screen.PLAYING, events: [SoundEvent.MENU_CHOOSE, SoundEvent.JUMP] });
+    assert.deepEqual(second, { screen: Screen.PLAYING, events: [] });
+  });
+
+  test('a click on a menu option reaches the audio player as menuChoose', () => {
+    const game = setUp();
+    const [start] = startMenuBoxes(game.ctx, game.controller.getGame().menu, VIEWPORT);
+    game.click(centreOf(start));
+    game.controller.draw();
+    assert.deepEqual(game.audio.updates[0].events, [SoundEvent.MENU_CHOOSE]);
+  });
+
+  test('every draw updates the audio player, even with no events', () => {
+    const game = setUp();
+    game.controller.draw();
+    assert.deepEqual(game.audio.updates, [{ screen: Screen.START, events: [] }]);
+  });
+});
+
+describe('the mute key (sound PRD reqs 16-17)', () => {
+  test('a new press toggles the audio player\'s mute, once per press', () => {
+    const game = setUp();
+    game.reader.set(NO_INPUT, MUTE_KEY);
+    game.controller.update(FIXED_DT);
+    game.controller.update(FIXED_DT);   // still held: no second toggle
+    assert.equal(game.audio.isMuted(), true);
+    game.press(NO_INPUT, NO_KEYS);
+    game.press(NO_INPUT, MUTE_KEY);
+    assert.equal(game.audio.isMuted(), false);
+  });
+});
+
+describe('unlocking sound (sound PRD req 21)', () => {
+  test('the first key press or click unlocks the audio player', () => {
+    const game = setUp({ audio: fakeAudioPlayer({ locked: true }) });
+    game.controller.update(FIXED_DT);
+    assert.equal(game.audio.unlocks, 0, 'nothing pressed yet');
+    game.reader.setActivated(true);
+    game.controller.update(FIXED_DT);
+    game.controller.update(FIXED_DT);
+    assert.equal(game.audio.unlocks, 1, 'once: it is no longer locked');
+  });
+
+  test('when sound isn\'t locked, a key press doesn\'t unlock again', () => {
+    const game = setUp();
+    game.reader.setActivated(true);
+    game.controller.update(FIXED_DT);
+    assert.equal(game.audio.unlocks, 0);
+  });
+});
+
+describe('the "Sound off" label (sound PRD req 19)', () => {
+  /** Mutes with a press of the mute key; returns the game. */
+  function muted(options) {
+    const game = setUp(options);
+    game.press(NO_INPUT, MUTE_KEY);
+    return game;
+  }
+
+  test('while muted it is drawn on the start screen, while playing, and in a cut scene', () => {
+    const data = buildData(['P.G', '###'], { level: { cutscene: 'between' } });
+    data.levels.second = { ...data.levels[TEST_LEVEL], grid: ['P..G', '####'] };
+    delete data.levels.second.cutscene;
+    data.levelList.levels.push('second');
+    data.cutscenes.between = {
+      formatVersion: 1, stage: { width: 16, height: 9 }, background: 'images/c.png', backgroundColor: '#000000',
+      actors: [], narration: [{ start: 0, end: 5, text: 'Meanwhile...' }],   // 5 seconds long, so it is still showing
+    };
+    const game = muted({ data });
+    assert.ok(game.drawTexts().includes(SOUND_OFF_TEXT), 'start screen');
+    toLevelComplete(game);
+    assert.ok(game.drawTexts().includes(SOUND_OFF_TEXT), 'level complete');
+    game.press(holding(Input.CONFIRM));   // Next level: the cut scene first
+    assert.equal(game.controller.getGame().screen, Screen.CUTSCENE);
+    assert.ok(game.drawTexts().includes(SOUND_OFF_TEXT), 'cut scene');
+  });
+
+  test('not drawn while sound is on', () => {
+    const game = setUp();
+    assert.ok(!game.drawTexts().includes(SOUND_OFF_TEXT));
+  });
+});
+
+describe('the debug overlay\'s sound lines (sound PRD req 26)', () => {
+  test('they show the audio player\'s music and sound state', () => {
+    const music = 'audio/music/start.ogg';
+    const game = setUp({ audio: fakeAudioPlayer({ locked: true, music }) });
+    game.press(NO_INPUT, { ...NO_KEYS, debug: true });
+    const texts = game.drawTexts();
+    assert.ok(texts.includes(`Music: ${music}`), 'music');
+    assert.ok(texts.includes(`Sound: ${SoundState.LOCKED}`), 'sound');
   });
 });
