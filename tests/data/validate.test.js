@@ -13,12 +13,16 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { validateData, describeProblem, formatProblem } from '../../src/data/validate.js';
 import { readDataFolder } from '../../tools/validate-data.js';
+import { SoundEvent } from '../../src/simulation/constants.js';
 
 const VALID_DIR = path.resolve('tests/data/fixtures/valid');
 const VALID = readDataFolder(VALID_DIR);
 
-/** The valid fixture set with some files replaced (object → JSON text, string → raw text, undefined → removed). */
-function dataWith(fileChanges = {}, imageChanges = {}) {
+/**
+ * The valid fixture set with some files replaced (object → JSON text, string → raw text, undefined → removed),
+ * some images replaced or removed (undefined), and some sound files removed (soundsRemoved, a list of paths).
+ */
+function dataWith(fileChanges = {}, imageChanges = {}, soundsRemoved = []) {
   const files = { ...VALID.files };
   for (const [file, content] of Object.entries(fileChanges)) {
     if (content === undefined) delete files[file];
@@ -29,7 +33,9 @@ function dataWith(fileChanges = {}, imageChanges = {}) {
     if (size === undefined) delete images[file];
     else images[file] = size;
   }
-  return { files, images };
+  const sounds = { ...VALID.sounds };
+  for (const file of soundsRemoved) delete sounds[file];
+  return { files, images, sounds };
 }
 
 /** A fixture file, parsed, for editing. */
@@ -120,6 +126,144 @@ describe('req 83: missing required fields', () => {
     assertErrors({ 'config/tuning.json': undefined }, [
       { file: 'config/tuning.json', code: 'missing-file', details: {} },
     ]);
+  });
+});
+
+describe('audio settings (sound PRD reqs 4, 24)', () => {
+  test('audio.json is required', () => {
+    assertErrors({ 'config/audio.json': undefined }, [
+      { file: 'config/audio.json', code: 'missing-file', details: {} },
+    ]);
+  });
+
+  test('its parsed data is returned as data.audio', () => {
+    const { data } = validateData(VALID);
+    assert.deepEqual(data.audio, fixture('config/audio.json'));
+  });
+
+  test('only formatVersion is needed: no music and no sounds is valid', () => {
+    assertErrors({ 'config/audio.json': { formatVersion: 1 } }, []);
+  });
+
+  test('a sound path that isn\'t an Ogg or Opus file inside the data folder (sound PRD reqs 2-3)', () => {
+    for (const startMusic of ['audio/music/start.mp3', '../start.ogg', 'audio/music/start']) {
+      assertErrors({ 'config/audio.json': { ...fixture('config/audio.json'), startMusic } }, [
+        { file: 'config/audio.json', code: 'bad-format', details: { path: ['startMusic'], format: 'sound-path', value: startMusic } },
+      ]);
+    }
+  });
+
+  test('a sound for something that isn\'t a sound event is reported, listing the event names', () => {
+    const audio = fixture('config/audio.json');
+    audio.sounds.jmup = audio.sounds[SoundEvent.JUMP];
+    assertErrors({ 'config/audio.json': audio }, [
+      { file: 'config/audio.json', code: 'unknown-field', details: { path: ['sounds'], field: 'jmup', allowed: Object.values(SoundEvent) } },
+    ]);
+  });
+});
+
+describe('level music (sound PRD reqs 5, 10)', () => {
+  test('a level may have music and a level-complete jingle', () => {
+    const { music, completeJingle } = fixture('levels/level1.json');   // sound files in the fixture set
+    assertErrors({ 'levels/level2.json': { ...fixture('levels/level2.json'), music, completeJingle } }, []);
+  });
+
+  test('both must be sound paths', () => {
+    for (const field of ['music', 'completeJingle']) {
+      const value = 'audio/music/level2.wav';
+      assertErrors({ 'levels/level2.json': { ...fixture('levels/level2.json'), [field]: value } }, [
+        { file: 'levels/level2.json', code: 'bad-format', details: { path: [field], format: 'sound-path', value } },
+      ]);
+    }
+  });
+});
+
+describe('cut scene music and sounds (sound PRD reqs 6, 12, 24)', () => {
+  const FILE = 'cutscenes/after-level1.json';
+  // Sound files in the fixture set.
+  const CRASH = fixture(FILE).sounds[0].sound;
+  const JUMP = fixture('config/audio.json').sounds[SoundEvent.JUMP];
+  const withSounds = (sounds, more = {}) => ({ ...fixture(FILE), sounds, ...more });
+
+  test('a cut scene may have music and timed sounds; two sounds may share a time', () => {
+    assertErrors({ [FILE]: withSounds([
+      { time: 0, sound: CRASH },
+      { time: 1.5, sound: JUMP },
+      { time: 1.5, sound: CRASH },
+    ]) }, []);
+  });
+
+  test('music and each sound must be sound paths', () => {
+    const value = 'audio/sounds/crash.mp3';
+    assertErrors({ [FILE]: withSounds([{ time: 0, sound: value }], { music: value }) }, [
+      { file: FILE, code: 'bad-format', details: { path: ['music'], format: 'sound-path', value } },
+      { file: FILE, code: 'bad-format', details: { path: ['sounds', 0, 'sound'], format: 'sound-path', value } },
+    ]);
+  });
+
+  test('a sound needs a time of 0 or more', () => {
+    assertErrors({ [FILE]: withSounds([{ time: -1, sound: CRASH }]) }, [
+      { file: FILE, code: 'too-small', details: { path: ['sounds', 0, 'time'], limit: 0, inclusive: true, value: -1 } },
+    ]);
+  });
+
+  test('sounds must be listed in time order', () => {
+    const later = 2;
+    const earlier = 1;
+    assertErrors({ [FILE]: withSounds([
+      { time: later, sound: CRASH },
+      { time: earlier, sound: JUMP },
+    ]) }, [
+      { file: FILE, code: 'cutscene-sound-order', details: { item: 2, time: earlier, previous: later } },
+    ]);
+  });
+});
+
+describe('the mute binding (sound PRD req 16)', () => {
+  const FILE = 'config/bindings.json';
+
+  test('the keyboard needs a mute key', () => {
+    const bindings = fixture(FILE);
+    delete bindings.keyboard.mute;
+    assertErrors({ [FILE]: bindings }, [
+      { file: FILE, code: 'missing-field', details: { path: ['keyboard'], field: 'mute' } },
+    ]);
+  });
+
+  test('a gamepad mute button is optional, and allowed', () => {
+    const bindings = fixture(FILE);
+    bindings.gamepad.mute = ['back'];
+    assertErrors({ [FILE]: bindings }, []);
+  });
+});
+
+describe('missing sound files (sound PRD req 24)', () => {
+  /** The errors from removing the sound file `sound` from the valid fixture set. */
+  const errorsWithout = (sound) => validateData(dataWith({}, {}, [sound])).errors.map(strip);
+
+  test('every sound the valid fixture set names is there', () => {
+    assert.deepEqual(validateData(dataWith()).errors, []);
+  });
+
+  for (const [file, path, read] of [
+    ['config/audio.json', ['startMusic'], (v) => v.startMusic],
+    ['config/audio.json', ['sounds', SoundEvent.JUMP], (v) => v.sounds[SoundEvent.JUMP]],
+    ['levels/level1.json', ['music'], (v) => v.music],
+    ['levels/level1.json', ['completeJingle'], (v) => v.completeJingle],
+    ['cutscenes/after-level1.json', ['music'], (v) => v.music],
+    ['cutscenes/after-level1.json', ['sounds', 0, 'sound'], (v) => v.sounds[0].sound],
+  ]) {
+    test(`${file}: ${path.join(' → ')}`, () => {
+      const sound = read(fixture(file));
+      assert.deepEqual(errorsWithout(sound), [{ file, code: 'missing-sound', details: { path, sound } }]);
+    });
+  }
+
+  test('the message names the field and the missing file', () => {
+    assert.equal(describeProblem('missing-sound', { path: ['startMusic'], sound: 'audio/music/start.ogg' }),
+      '"startMusic" is "audio/music/start.ogg", but there is no file data/audio/music/start.ogg.');
+    assert.equal(describeProblem('missing-sound', { path: ['sounds', 0, 'sound'], sound: 'audio/sounds/crash.ogg' }),
+      'in sounds → item 1, "sound" is "audio/sounds/crash.ogg", but there is no file data/audio/sounds/crash.ogg.');
   });
 });
 
@@ -811,6 +955,8 @@ describe('describeProblem: plain-language messages', () => {
     'narration-end': [{ line: 1, start: 0.5, end: 0.5 }, 'narration, item 1: "end" (0.5) must be later than "start" (0.5).'],
     'narration-order': [{ line: 2, start: 0.2, previous: 0.5 },
       'narration, item 2: "start" is 0.2, which is earlier than the line before it (0.5). Narration lines must be listed in time order.'],
+    'cutscene-sound-order': [{ item: 2, time: 1, previous: 2 },
+      'sounds, item 2: "time" is 1, which is earlier than the sound before it (2). Sounds must be listed in time order.'],
     'missing-sprite-image': [{ image: 'sprites/hero.png' }, '"image" is "sprites/hero.png", but there is no file data/sprites/hero.png.'],
     'frame-too-big': [{ frameWidth: 32, frameHeight: 64, imageWidth: 64, imageHeight: 48 },
       'each frame is 32 × 64 pixels, which is bigger than the whole image (64 × 48).'],
@@ -821,6 +967,11 @@ describe('describeProblem: plain-language messages', () => {
   for (const [code, [details, expected]] of Object.entries(cases)) {
     test(code, () => assert.equal(describeProblem(code, details), expected));
   }
+
+  test('bad-format names the sound path format in plain words', () => {
+    assert.equal(describeProblem('bad-format', { path: ['startMusic'], format: 'sound-path', value: 'audio/music/start.mp3' }),
+      '"startMusic" is "audio/music/start.mp3", which is not a sound file path inside the data folder, ending in .ogg or .opus, like "audio/sounds/jump.ogg".');
+  });
 
   test('unknown-character mentions repeats', () => {
     assert.equal(describeProblem('unknown-character', { character: 'x', row: 1, column: 1, count: 3 }),
@@ -843,10 +994,25 @@ describe('tools/validate-data.js', () => {
     }
   };
 
+  test('finds the Ogg and Opus sound files in the data folder (sound PRD req 24)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmw-sounds-'));
+    try {
+      const soundFiles = ['audio/music/start.ogg', 'audio/sounds/jump.opus', 'audio/sounds/LOUD.OGG'];
+      for (const file of [...soundFiles, 'audio/notes.txt']) {
+        fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
+        fs.writeFileSync(path.join(dir, file), 'x');
+      }
+      assert.deepEqual(readDataFolder(dir).sounds, Object.fromEntries(soundFiles.map((file) => [file, true])));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('passes a valid data folder', () => {
     const { code, output } = run(VALID_DIR);
     assert.equal(code, 0);
-    assert.match(output, /Data validation passed \(12 data file\(s\) checked\)/);
+    const fileCount = Object.keys(VALID.files).length;
+    assert.ok(output.includes(`Data validation passed (${fileCount} data file(s) checked)`), output);
   });
 
   test('fails a broken data folder, printing every problem with its file', () => {

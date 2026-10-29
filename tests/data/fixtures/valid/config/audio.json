@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "startMusic": "audio/music/start.ogg",
+  "sounds": {
+    "jump": "audio/sounds/jump.ogg",
+    "menuChoose": "audio/sounds/choose.opus"
+  }
+}

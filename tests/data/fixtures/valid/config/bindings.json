@@ -10,7 +10,8 @@
     "punch": ["KeyQ", "KeyC"],
     "confirm": ["Enter", "Space"],
     "fullscreen": ["F11"],
-    "debug": ["F3"]
+    "debug": ["F3"],
+    "mute": ["KeyM"]
   },
   "gamepad": {
     "left": ["dpadLeft", "stickLeft"],

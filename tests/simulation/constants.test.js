@@ -2,7 +2,8 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { Facing, LegendKind, LegendField, CharacterKind } from '../../src/simulation/constants.js';
+import { Facing, LegendKind, LegendField, CharacterKind, SoundEvent } from '../../src/simulation/constants.js';
+import audioSchema from '../../src/data/schemas/audio.schema.json' with { type: 'json' };
 import cutsceneSchema from '../../src/data/schemas/cutscene.schema.json' with { type: 'json' };
 import levelSchema from '../../src/data/schemas/level.schema.json' with { type: 'json' };
 import characterSchema from '../../src/data/schemas/character.schema.json' with { type: 'json' };
@@ -49,6 +50,26 @@ describe('LegendKind and LegendField', () => {
   test('neither can be changed', () => {
     assert.ok(Object.isFrozen(LegendKind));
     assert.ok(Object.isFrozen(LegendField));
+  });
+});
+
+describe('SoundEvent', () => {
+  // The sound PRD (tasks/prd-sound.md), req 14.
+  test('is exactly the sound events in the sound PRD\'s list, in its order', () => {
+    assert.deepEqual(Object.values(SoundEvent), [
+      'jump', 'land', 'punch', 'pickUp', 'drop', 'throw',
+      'stomp', 'enemyDefeated', 'playerHurt', 'playerDefeated',
+      'collectReward', 'reachGoal',
+      'menuMove', 'menuChoose',
+    ]);
+  });
+
+  test('its values are exactly the event names audio.json may give sounds, so the two stay in sync', () => {
+    assert.deepEqual(Object.values(SoundEvent), Object.keys(audioSchema.properties.sounds.properties));
+  });
+
+  test('can not be changed', () => {
+    assert.ok(Object.isFrozen(SoundEvent));
   });
 });
 

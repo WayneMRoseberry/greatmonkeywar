@@ -2,6 +2,8 @@
   "$schema": "../../../../../src/data/schemas/level.schema.json",
   "formatVersion": 1,
   "name": "Test Level One",
+  "music": "audio/music/level1.ogg",
+  "completeJingle": "audio/music/jingle.ogg",
   "grid": [
     "............",
     "......bb....",

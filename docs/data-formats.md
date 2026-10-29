@@ -378,7 +378,8 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
     "punch":      ["KeyQ", "KeyC"],
     "confirm":    ["Enter", "Space"],
     "fullscreen": ["F11"],
-    "debug":      ["F3"]
+    "debug":      ["F3"],
+    "mute":       ["KeyM"]
   },
   "gamepad": {
     "left":    ["dpadLeft", "stickLeft"],
@@ -393,8 +394,8 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
 }
 ```
 
-- **Inputs.** `left`, `right`, `up`, `down`, `jump`, `action`, `punch`, and `confirm` make up the input state passed to the simulation (req 18). In code they are the `Input` names in `src/simulation/input.js`; a test keeps those and this file's required names in sync. `fullscreen` and `debug` are keyboard-only and handled by the presentation layer. `up` and `down` move menu selections; drop is `down` + `action`.
-- **Required.** Every input must be listed under `keyboard`. Every input except `fullscreen` and `debug` must be listed under `gamepad`. Each list must have at least one entry.
+- **Inputs.** `left`, `right`, `up`, `down`, `jump`, `action`, `punch`, and `confirm` make up the input state passed to the simulation (req 18). In code they are the `Input` names in `src/simulation/input.js`; a test keeps those and this file's required names in sync. `fullscreen`, `debug`, and `mute` are handled by the presentation layer; `mute` turns all sound off and on. `up` and `down` move menu selections; drop is `down` + `action`.
+- **Required.** Every input must be listed under `keyboard`. Every input except `fullscreen`, `debug`, and `mute` must be listed under `gamepad`. `mute` may also be given a gamepad button; `fullscreen` and `debug` are keyboard only. Each list must have at least one entry.
 - **Keyboard names** are the browser's physical key codes (`KeyboardEvent.code`), for example `KeyA`, `ArrowLeft`, `Space`, `Enter`, `F3`. Because they name physical key positions, W/A/S/D stay in the same place on non-QWERTY keyboards.
 - **Gamepad names** use the standard (Xbox-style) layout. Buttons: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `back`, `start`, `ls`, `rs`, `dpadUp`, `dpadDown`, `dpadLeft`, `dpadRight`. Left-stick directions: `stickLeft`, `stickRight`, `stickUp`, `stickDown`.
 - The same key or button may be bound to more than one input (for example `Space` is both `jump` and `confirm`). Which one applies depends on the screen.
@@ -419,6 +420,29 @@ In this file `y` means "upward", so every value is positive. (In world coordinat
 | `stickDeadZone` | yes | number ≥ 0 and < 1 | How far the analog stick must move (0 = centre, 1 = fully pushed) before it counts (req 16). |
 | `startBackground` | no | image path | The start screen's background picture. It covers the whole window, keeping its proportions and centred, so its edges may be cut off on a window of a different shape. Without it, the start screen is a plain dark colour. |
 
+### Audio
+
+**Location:** `data/config/audio.json`. Required, but it may be just `{ "formatVersion": 1 }`: anything left out is silent.
+
+```json
+{
+  "formatVersion": 1,
+  "startMusic": "audio/music/start.ogg",
+  "sounds": {
+    "jump": "audio/sounds/jump.ogg",
+    "collectReward": "audio/sounds/reward.ogg"
+  }
+}
+```
+
+| Field | Required | Type | Meaning |
+|---|---|---|---|
+| `formatVersion` | yes | number | Always `1`. |
+| `startMusic` | no | sound path | The start screen's music. It loops. |
+| `sounds` | no | object | The sound for each sound event, by event name. An event that isn't listed is silent. The event names are `jump`, `land`, `punch`, `pickUp`, `drop`, `throw`, `stomp`, `enemyDefeated`, `playerHurt`, `playerDefeated`, `collectReward`, `reachGoal`, `menuMove`, and `menuChoose`. |
+
+A **sound path** is like an image path, but to an Ogg Vorbis (`.ogg`) or Opus (`.opus`) file: for example `"audio/sounds/jump.ogg"` for the file `data/audio/sounds/jump.ogg`.
+
 ## Schemas and the validator
 
 Each format has a JSON Schema in `src/data/schemas/`:
@@ -434,6 +458,7 @@ Each format has a JSON Schema in `src/data/schemas/`:
 | Tuning | `tuning.schema.json` |
 | Bindings | `bindings.schema.json` |
 | Display | `display.schema.json` |
+| Audio | `audio.schema.json` |
 
 The schemas check each file's **structure**: fields, types, and ranges. Rules that span files or compare fields are custom checks in `src/data/validate.js`. Examples are row lengths, references to other files, exactly one player start, increasing times, `punchDamage` only on the player, and frame numbers fitting the image.
 

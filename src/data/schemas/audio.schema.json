@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audio.schema.json",
+  "title": "Audio",
+  "description": "Audio settings (data/config/audio.json): the start screen's music and each sound event's sound. The event names match SoundEvent (src/simulation/constants.js); a test keeps them in sync. See docs/data-formats.md.",
+  "type": "object",
+  "required": ["formatVersion"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "startMusic": { "$ref": "#/$defs/soundPath" },
+    "sounds": {
+      "description": "The sound for each sound event. An event not listed is silent.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jump": { "$ref": "#/$defs/soundPath" },
+        "land": { "$ref": "#/$defs/soundPath" },
+        "punch": { "$ref": "#/$defs/soundPath" },
+        "pickUp": { "$ref": "#/$defs/soundPath" },
+        "drop": { "$ref": "#/$defs/soundPath" },
+        "throw": { "$ref": "#/$defs/soundPath" },
+        "stomp": { "$ref": "#/$defs/soundPath" },
+        "enemyDefeated": { "$ref": "#/$defs/soundPath" },
+        "playerHurt": { "$ref": "#/$defs/soundPath" },
+        "playerDefeated": { "$ref": "#/$defs/soundPath" },
+        "collectReward": { "$ref": "#/$defs/soundPath" },
+        "reachGoal": { "$ref": "#/$defs/soundPath" },
+        "menuMove": { "$ref": "#/$defs/soundPath" },
+        "menuChoose": { "$ref": "#/$defs/soundPath" }
+      }
+    }
+  },
+  "$defs": {
+    "soundPath": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(ogg|opus)$" }
+  }
+}

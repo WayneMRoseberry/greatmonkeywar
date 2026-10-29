@@ -11,7 +11,7 @@
     "formatVersion": { "const": 1 },
     "keyboard": {
       "type": "object",
-      "required": ["left", "right", "up", "down", "jump", "action", "punch", "confirm", "fullscreen", "debug"],
+      "required": ["left", "right", "up", "down", "jump", "action", "punch", "confirm", "fullscreen", "debug", "mute"],
       "additionalProperties": false,
       "properties": {
         "left": { "$ref": "#/$defs/keys" },
@@ -23,7 +23,8 @@
         "punch": { "$ref": "#/$defs/keys" },
         "confirm": { "$ref": "#/$defs/keys" },
         "fullscreen": { "$ref": "#/$defs/keys" },
-        "debug": { "$ref": "#/$defs/keys" }
+        "debug": { "$ref": "#/$defs/keys" },
+        "mute": { "$ref": "#/$defs/keys" }
       }
     },
     "gamepad": {
@@ -38,7 +39,8 @@
         "jump": { "$ref": "#/$defs/buttons" },
         "action": { "$ref": "#/$defs/buttons" },
         "punch": { "$ref": "#/$defs/buttons" },
-        "confirm": { "$ref": "#/$defs/buttons" }
+        "confirm": { "$ref": "#/$defs/buttons" },
+        "mute": { "$ref": "#/$defs/buttons" }
       }
     }
   },

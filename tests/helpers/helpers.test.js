@@ -15,6 +15,7 @@ function asFiles(data) {
     'config/tuning.json': data.tuning,
     'config/bindings.json': data.bindings,
     'config/display.json': data.display,
+    'config/audio.json': data.audio,
   };
   for (const [name, level] of Object.entries(data.levels)) files[`levels/${name}.json`] = level;
   for (const [name, c] of Object.entries(data.characters)) files[`characters/${name}.json`] = c;

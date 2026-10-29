@@ -15,7 +15,7 @@ const DOC = path.resolve('docs/data-formats.md');
 
 const SCHEMA_NAMES = [
   'level', 'level-list', 'character', 'object', 'cutscene',
-  'sprite', 'tuning', 'bindings', 'display',
+  'sprite', 'tuning', 'bindings', 'display', 'audio',
 ];
 
 // Must match the list in docs/data-formats.md ("Schemas and the validator").
@@ -37,6 +37,7 @@ const DOC_SECTIONS = {
   '### Tuning': 'tuning',
   '### Bindings': 'bindings',
   '### Display': 'display',
+  '### Audio': 'audio',
 };
 
 function loadSchema(name) {

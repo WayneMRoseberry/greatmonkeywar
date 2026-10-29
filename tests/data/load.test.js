@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadGameData, referencesOf } from '../../src/data/load.js';
 import { pngSize } from '../../tools/validate-data.js';
+import { SoundEvent } from '../../src/simulation/constants.js';
 
 const VALID_DIR = path.resolve('tests/data/fixtures/valid');
 
@@ -33,6 +34,12 @@ function fixtureLoader(overrides = {}) {
         const size = pngSize(fs.readFileSync(file));
         return { image: `<image ${rel}>`, ...size };
       },
+      loadSound: async (url) => {
+        const rel = url.replace(/^data\//, '');
+        requested.push(rel);
+        if (rel in overrides) return overrides[rel];
+        return fs.existsSync(path.join(VALID_DIR, rel)) ? `<sound ${rel}>` : null;
+      },
     },
   };
 }
@@ -51,6 +58,12 @@ test('loads and validates the whole valid data set by following references', asy
     'images/camp.png', 'images/far.png', 'images/mid.png', 'images/near.png', 'images/title.png', 'sprites/hero.png',
   ]);
   assert.equal(result.images['sprites/hero.png'], '<image sprites/hero.png>');
+  // Every sound the fixture's audio.json, level, and cut scene name (see their files), as loadSound gave it.
+  const soundFiles = [
+    'audio/music/camp.ogg', 'audio/music/jingle.ogg', 'audio/music/level1.ogg', 'audio/music/start.ogg',
+    'audio/sounds/choose.opus', 'audio/sounds/crash.ogg', 'audio/sounds/jump.ogg',
+  ];
+  assert.deepEqual(result.sounds, Object.fromEntries(soundFiles.map((file) => [file, `<sound ${file}>`])));
 
   // Every file is requested exactly once, even when several files refer to it.
   assert.equal(requested.length, new Set(requested).size);
@@ -82,6 +95,16 @@ test('an image that fails to load is reported as missing', async () => {
   assert.deepEqual(found(result.errors), [
     { file: 'sprites/hero.json', code: 'missing-sprite-image', details: { image: 'sprites/hero.png' } },
   ]);
+});
+
+test('a sound file that is missing or fails to load is reported as missing (sound PRD req 24)', async () => {
+  const music = 'audio/music/level1.ogg';
+  const { options } = fixtureLoader({ [music]: null });
+  const result = await loadGameData(options);
+  assert.deepEqual(found(result.errors), [
+    { file: 'levels/level1.json', code: 'missing-sound', details: { path: ['music'], sound: music } },
+  ]);
+  assert.ok(!(music in result.sounds));
 });
 
 test('invalid JSON is reported, and loading continues for everything else', async () => {
@@ -133,12 +156,35 @@ test('references with unsafe names are not fetched', () => {
     legend: { e: { enemy: '../../secret' }, o: { object: 'crate' } },
     background: { layers: [{ image: '../outside.png' }, { image: 'images/far.png' }] },
   });
-  assert.deepEqual(refs, { json: ['objects/crate.json'], images: ['images/far.png'] });
+  assert.deepEqual(refs, { json: ['objects/crate.json'], images: ['images/far.png'], sounds: [] });
 });
 
 test('the display settings refer to the start screen background image, if it has a safe name', () => {
   const startBackground = 'images/title.png';
-  assert.deepEqual(referencesOf('display', { startBackground }), { json: [], images: [startBackground] });
-  assert.deepEqual(referencesOf('display', { startBackground: '../title.png' }), { json: [], images: [] });
-  assert.deepEqual(referencesOf('display', {}), { json: [], images: [] });
+  assert.deepEqual(referencesOf('display', { startBackground }), { json: [], images: [startBackground], sounds: [] });
+  assert.deepEqual(referencesOf('display', { startBackground: '../title.png' }), { json: [], images: [], sounds: [] });
+  assert.deepEqual(referencesOf('display', {}), { json: [], images: [], sounds: [] });
+});
+
+describe('references to sound files (sound PRD req 23), only with safe paths', () => {
+  const SAFE = 'audio/sounds/safe.ogg';
+  const UNSAFE = '../outside.ogg';
+
+  test('audio settings: the start music and every event\'s sound', () => {
+    const startMusic = 'audio/music/start.ogg';
+    const refs = referencesOf('audio', { startMusic, sounds: { [SoundEvent.JUMP]: SAFE, [SoundEvent.LAND]: UNSAFE } });
+    assert.deepEqual(refs, { json: [], images: [], sounds: [startMusic, SAFE] });
+  });
+
+  test('a level: its music and level-complete jingle', () => {
+    const music = 'audio/music/level.ogg';
+    assert.deepEqual(referencesOf('level', { music, completeJingle: UNSAFE }).sounds, [music]);
+    assert.deepEqual(referencesOf('level', { music: UNSAFE, completeJingle: SAFE }).sounds, [SAFE]);
+  });
+
+  test('a cut scene: its music and each timed sound', () => {
+    const music = 'audio/music/scene.opus';
+    const refs = referencesOf('cutscene', { music, sounds: [{ time: 0, sound: SAFE }, { time: 1, sound: UNSAFE }] });
+    assert.deepEqual(refs.sounds, [music, SAFE]);
+  });
 });

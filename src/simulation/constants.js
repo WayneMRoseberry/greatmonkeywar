@@ -51,3 +51,25 @@ export const CharacterKind = Object.freeze({
   PLAYER: 'player',
   ENEMY: 'enemy',
 });
+
+/**
+ * The things that happen in the game that can have a sound (sound PRD req 14).
+ * The simulation and the game flow record these; audio.json gives each one a
+ * sound file (src/data/schemas/audio.schema.json). A test keeps the two in sync.
+ */
+export const SoundEvent = Object.freeze({
+  JUMP: 'jump',
+  LAND: 'land',
+  PUNCH: 'punch',
+  PICK_UP: 'pickUp',
+  DROP: 'drop',
+  THROW: 'throw',
+  STOMP: 'stomp',
+  ENEMY_DEFEATED: 'enemyDefeated',
+  PLAYER_HURT: 'playerHurt',
+  PLAYER_DEFEATED: 'playerDefeated',
+  COLLECT_REWARD: 'collectReward',
+  REACH_GOAL: 'reachGoal',
+  MENU_MOVE: 'menuMove',
+  MENU_CHOOSE: 'menuChoose',
+});

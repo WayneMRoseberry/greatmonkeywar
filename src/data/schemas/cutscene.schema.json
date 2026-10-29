@@ -59,6 +59,26 @@
           "text": { "type": "string", "minLength": 1 }
         }
       }
+    },
+    "music": {
+      "description": "Plays, looping, while the cut scene shows.",
+      "$ref": "#/$defs/soundPath"
+    },
+    "sounds": {
+      "description": "Sounds played once each, at their times (seconds from the start). Time order is checked by validate.js.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time", "sound"],
+        "additionalProperties": false,
+        "properties": {
+          "time": { "type": "number", "minimum": 0 },
+          "sound": { "$ref": "#/$defs/soundPath" }
+        }
+      }
     }
+  },
+  "$defs": {
+    "soundPath": { "type": "string", "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(ogg|opus)$" }
   }
 }
