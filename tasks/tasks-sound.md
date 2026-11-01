@@ -278,7 +278,7 @@ Every sub-task that creates or changes code is done test-first. Each code sub-ta
   - [x] 5.5 **(no code)** Game data: create `data/config/audio.json` (start music and every event's sound); add `"mute": ["KeyM"]` to `bindings.json`; give both levels `music`, and give **one** a `completeJingle` so both behaviours of req 10 can be heard; give the cut scene `music` and at least one timed sound. `npm test` (data validation) passes.
     - Decided: level 1 has the jingle (it is followed by the cut scene), level 2 keeps its music playing under the panel. The cut scene's crash plays at 4 s, when the beetle comes in. (`"mute": ["KeyM"]` was added in task 1.5.)
 
-- [ ] 6.0 Write the documentation and verify the whole feature (reqs 29–31; success metrics 1–8)
+- [x] 6.0 Write the documentation and verify the whole feature (reqs 29–31; success metrics 1–8)
   - [x] 6.1 **(no code)** `docs/data-formats.md`: the `audio.json` format, the new level and cut scene fields, sound path rules, the `mute` binding, and the list of sound event names.
     - Decided: sound paths are in the Conventions list; the level and cut scene examples and field tables show `music`, `completeJingle`, and `sounds`; the Audio section has a table of every sound event and when it plays, how sounds play (overlap, once per frame, mute, the browser lock, unplayable files), and its validation rules. A new timing rule: sounds don't make a cut scene longer, so one timed after the end never plays.
   - [x] 6.2 **(no code)** `docs/guide-sound.md`: where files go; Ogg Vorbis or Opus, and how to export them from common tools (for example Audacity); music loops, so the end must join the start; keep effects short; keep loudness consistent; how to name music and sounds in each file; the sound event list; the `reachGoal` and jingle advice (PRD Section 6); the common error messages and what they mean. Point to it from `docs/guide-sprites.md` ("Sound and video"), `docs/guide-levels.md`, and `docs/guide-cutscenes.md`.
@@ -289,8 +289,8 @@ Every sub-task that creates or changes code is done test-first. Each code sub-ta
     - Decided: a new section 7, "Sound", with a row in the results table; it includes the frame rate check with sound playing (task 6.7, success metric 8) and checking the console for sound warnings.
   - [x] 6.5 **(no code)** Run `npm test` and `npm run test:ui`; all pass.
     - Done: 1307 unit tests and data validation pass; all 5 UI checks pass.
-  - [ ] 6.6 **(no code)** Manual play-through in Electron (`npm start`) following the new checklist (success metrics 1–3), and in browser mode (`npm run web`; success metric 4). Record any problems as new sub-tasks.
-  - [ ] 6.7 **(no code)** Performance: play a level for a minute with music and frequent effects (punching, jumping, collecting) with the debug overlay on; fps stays at about 60 (success metric 8).
+  - [x] 6.6 **(no code)** Manual play-through in Electron (`npm start`) following the new checklist (success metrics 1–3), and in browser mode (`npm run web`; success metric 4). Record any problems as new sub-tasks.
+  - [x] 6.7 **(no code)** Performance: play a level for a minute with music and frequent effects (punching, jumping, collecting) with the debug overlay on; fps stays at about 60 (success metric 8).
   - [x] 6.8 **(no code)** Answer the PRD's remaining open questions (1–4) with the user and update `prd-sound.md`; add any resulting work as new sub-tasks.
     - Decided (answers 2026-10-28): 1, pause all sound while the window isn't focused (new PRD req 32; work in task 7.0); 2, no `menuMove` on mouse hover; 3, no default gamepad mute button; 4, `land` after any fall, as built; and a new question 6, cut scene sounds after the scene's end stay unplayed, as documented. Do the manual checks in 6.6 and 6.7 after task 7.0, so they cover focus too.
 

@@ -7,11 +7,17 @@
 //  - the font size grows with the viewport's height (HUD_FONT_SHARE of it),
 //    but is never smaller than MIN_HUD_FONT pixels, so it stays readable;
 //  - the text is set in from the corner by HUD_MARGIN font sizes, and is
-//    white with a dark outline, so it reads over any background.
+//    white with a dark outline, so it reads over any background;
+//  - while the player carries an object, a carry hint along the bottom shows
+//    how to throw and drop it (down + action), in the names of the device used
+//    last: "E: throw · Down + E: drop" or "X: throw · D-pad down + X: drop".
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawHud, hudFontSize, HUD_FONT_SHARE, MIN_HUD_FONT, HUD_MARGIN, drawSoundOff, SOUND_OFF_TEXT } from '../../src/presentation/hud.js';
+import {
+  drawHud, hudFontSize, HUD_FONT_SHARE, MIN_HUD_FONT, HUD_MARGIN, drawSoundOff, SOUND_OFF_TEXT, carryHint, drawCarryHint,
+} from '../../src/presentation/hud.js';
+import { InputDevice } from '../../src/presentation/input.js';
 import { createFakeContext } from '../helpers/fake-canvas.js';
 
 const STATUS = { health: 3, rewardCount: 7 };
@@ -85,5 +91,40 @@ describe('the "Sound off" label (sound PRD req 19)', () => {
     assert.equal(text.style.textAlign, 'right');
     assert.equal(text.style.textBaseline, 'top');
     assert.deepEqual(text.args.slice(1), [VIEWPORT.width - margin, margin]);
+  });
+});
+
+describe('the carry hint (req 32)', () => {
+  const VIEWPORT = { width: 1280, height: 720 };
+  const BINDINGS = {
+    keyboard: { action: ['KeyE'], down: ['ArrowDown'] },
+    gamepad: { action: ['x'], down: ['dpadDown'] },
+  };
+
+  test('on the keyboard it names the first action key, and down + action for dropping', () => {
+    assert.equal(carryHint(BINDINGS, InputDevice.KEYBOARD), 'E: throw · Down + E: drop');
+  });
+
+  test('on a gamepad it names the first action button, and down + action for dropping', () => {
+    assert.equal(carryHint(BINDINGS, InputDevice.GAMEPAD), 'X: throw · D-pad down + X: drop');
+  });
+
+  test('a left-stick direction is named as the stick', () => {
+    const bindings = { ...BINDINGS, gamepad: { action: ['y'], down: ['stickDown'] } };
+    assert.equal(carryHint(bindings, InputDevice.GAMEPAD), 'Y: throw · Stick down + Y: drop');
+  });
+
+  test('it is drawn centred along the bottom, in the HUD\'s font, white over a dark outline', () => {
+    const ctx = createFakeContext();
+    drawCarryHint(ctx, BINDINGS, InputDevice.KEYBOARD, VIEWPORT);
+    const [text] = ctx.callsOf('fillText');
+    const margin = HUD_MARGIN * hudFontSize(VIEWPORT.height);
+    assert.equal(text.args[0], carryHint(BINDINGS, InputDevice.KEYBOARD));
+    assert.equal(text.style.textAlign, 'center');
+    assert.equal(text.style.textBaseline, 'bottom');
+    assert.deepEqual(text.args.slice(1), [VIEWPORT.width / 2, VIEWPORT.height - margin]);
+    assert.ok(text.style.font.includes(`${hudFontSize(VIEWPORT.height)}px`), text.style.font);
+    assert.equal(text.style.fillStyle, '#ffffff');
+    assert.equal(ctx.callsOf('strokeText').length, 1);
   });
 });

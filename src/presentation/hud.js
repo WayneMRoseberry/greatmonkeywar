@@ -1,5 +1,10 @@
 // The HUD (PRD req 44): health and reward count in the top-left corner, at a
-// size that stays readable at any window size.
+// size that stays readable at any window size. Also the "Sound off" label and
+// the carry hint.
+
+import { Input } from '../simulation/input.js';
+import { InputDevice } from './input.js';
+import { firstKeyName, firstButtonName } from './binding-names.js';
 
 /** The HUD's font size is this share of the viewport's height... */
 export const HUD_FONT_SHARE = 0.045;
@@ -39,6 +44,28 @@ export function drawSoundOff(ctx, viewport) {
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
   outlinedText(ctx, SOUND_OFF_TEXT, viewport.width - margin, margin, size);
+  ctx.restore();
+}
+
+/**
+ * The carry hint (req 32): how to throw and drop the held object, in the names
+ * of `device` (InputDevice), e.g. "E: throw · Down + E: drop".
+ */
+export function carryHint(bindings, device) {
+  const name = device === InputDevice.GAMEPAD ? firstButtonName : firstKeyName;
+  const action = name(bindings, Input.ACTION);
+  return `${action}: throw · ${name(bindings, Input.DOWN)} + ${action}: drop`;
+}
+
+/** Draws the carry hint centred along the viewport's bottom edge, in the HUD's font and style. */
+export function drawCarryHint(ctx, bindings, device, viewport) {
+  const size = hudFontSize(viewport.height);
+  const margin = HUD_MARGIN * size;
+  ctx.save();
+  ctx.font = `bold ${size}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  outlinedText(ctx, carryHint(bindings, device), viewport.width / 2, viewport.height - margin, size);
   ctx.restore();
 }
 

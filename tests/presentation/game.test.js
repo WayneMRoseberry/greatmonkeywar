@@ -21,7 +21,7 @@ import { createFakePlatform } from '../../src/platform/fake-platform.js';
 import { buildData, TEST_LEVEL } from '../helpers/level-builder.js';
 import { Input, NO_INPUT, holding } from '../../src/simulation/input.js';
 import { InputDevice } from '../../src/presentation/input.js';
-import { SOUND_OFF_TEXT } from '../../src/presentation/hud.js';
+import { SOUND_OFF_TEXT, carryHint } from '../../src/presentation/hud.js';
 import { SoundState } from '../../src/presentation/audio.js';
 import { GAME_TITLE, menuHint, startMenuBoxes, levelCompleteMenuBoxes } from '../../src/presentation/screens.js';
 import { Screen, MenuOption } from '../../src/simulation/flow.js';
@@ -38,6 +38,7 @@ function fakeReader() {
     set(input = NO_INPUT, presentation = NO_KEYS) { current = { ...current, input, presentation }; },
     setClick(click) { current = { ...current, click }; },
     setActivated(activated) { current = { ...current, activated }; },
+    setDevice(device) { current = { ...current, device }; },
   };
 }
 
@@ -166,6 +167,35 @@ describe('stepping and drawing the screens', () => {
     const texts = game.drawTexts();
     assert.ok(texts.includes('Meanwhile...'));
     assert.ok(texts.some((t) => t.endsWith(': skip')));
+  });
+});
+
+describe('the carry hint (req 32)', () => {
+  /** Starts a level, walks right into the crate next to the player for a second, and picks it up. */
+  function carrying() {
+    const game = setUp({ data: buildData(['Pc..G', '#####']) });
+    game.press(holding(Input.CONFIRM));
+    game.reader.set(holding(Input.RIGHT));
+    for (let i = 0; i < STEPS_PER_SECOND; i++) game.controller.update(FIXED_DT);
+    assert.ok(!game.drawTexts().some((t) => t.endsWith(': drop')), 'no hint before picking anything up');
+    game.press(holding(Input.ACTION));
+    assert.ok(game.controller.getGame().level.objects[0].held, 'the crate is picked up');
+    return game;
+  }
+
+  test('while carrying, the hint for the device used last is drawn', () => {
+    const game = carrying();
+    const { bindings } = game.controller.getGame().data;
+    assert.ok(game.drawTexts().includes(carryHint(bindings, InputDevice.KEYBOARD)), 'keyboard');
+    game.reader.setDevice(InputDevice.GAMEPAD);
+    game.controller.update(FIXED_DT);
+    assert.ok(game.drawTexts().includes(carryHint(bindings, InputDevice.GAMEPAD)), 'gamepad');
+  });
+
+  test('after dropping the object, the hint goes away', () => {
+    const game = carrying();
+    game.press({ ...holding(Input.ACTION), [Input.DOWN]: true });
+    assert.ok(!game.drawTexts().some((t) => t.endsWith(': drop')));
   });
 });
 
