@@ -7,7 +7,7 @@ import { cutsceneAt } from '../simulation/cutscene.js';
 import { heldObject } from '../simulation/objects.js';
 import { visibleArea } from '../simulation/camera.js';
 import { levelView, drawLevel } from './renderer.js';
-import { drawHud, drawSoundOff } from './hud.js';
+import { drawHud, drawSoundOff, drawCarryHint } from './hud.js';
 import {
   drawStartScreen, drawLevelComplete, drawThanks, startMenuBoxes, levelCompleteMenuBoxes, optionAt,
 } from './screens.js';
@@ -90,6 +90,9 @@ export function createGameController({ data, images, platform, canvas, inputRead
       case Screen.LEVEL_COMPLETE:
         drawLevel(ctx, level, levelView(level, viewport, data.display.visibleHeight), assets);
         drawHud(ctx, { health: level.player.health, rewardCount: level.rewardCount }, viewport);
+        if (game.screen === Screen.PLAYING && heldObject(level)) {
+          drawCarryHint(ctx, data.bindings, lastRead.device, viewport);
+        }
         if (game.screen === Screen.LEVEL_COMPLETE) {
           drawLevelComplete(ctx, game.menu, level.rewardCount, viewport, data.bindings);
         }

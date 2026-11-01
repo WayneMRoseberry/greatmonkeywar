@@ -9,8 +9,8 @@
 //  - the start screen's background image (display.json "startBackground"),
 //    when loaded, covers the whole canvas over the dark background, keeping
 //    its proportions and centred, so its edges may be cut off (coverFit);
-//  - both menus show a hint, "Enter / A or click: choose", from the first
-//    confirm bindings (like the cut scene's skip hint);
+//  - both menus show a hint, "Press Enter (A on a gamepad) or click an
+//    option", from the first confirm bindings (like the cut scene's skip hint);
 //  - each menu option has a box for mouse clicks (startMenuBoxes,
 //    levelCompleteMenuBoxes): the same box the highlight is drawn in, so a
 //    click lands where the player sees the button; optionAt finds the box a
@@ -54,11 +54,11 @@ describe('menu labels', () => {
 
 describe('the menu hint', () => {
   test('it names the first keyboard key and gamepad button for confirm, and clicking', () => {
-    assert.equal(menuHint(BINDINGS), 'Enter / A or click: choose');
+    assert.equal(menuHint(BINDINGS), 'Press Enter (A on a gamepad) or click an option');
   });
 
   test('key codes are shown as their key names', () => {
-    assert.equal(menuHint({ keyboard: { confirm: ['KeyE'] }, gamepad: { confirm: ['b'] } }), 'E / B or click: choose');
+    assert.equal(menuHint({ keyboard: { confirm: ['KeyE'] }, gamepad: { confirm: ['b'] } }), 'Press E (B on a gamepad) or click an option');
   });
 });
 

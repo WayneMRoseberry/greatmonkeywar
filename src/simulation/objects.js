@@ -153,7 +153,8 @@ function placeAboveHead(object, player) {
  *    It is then `thrown` and can't be picked up until it lands (task 4.5).
  *    The press that picks an object up never throws it: only a later press.
  *  - Dropping (req 32): with down held, a new press of action drops the held
- *    object beside the player's feet instead of throwing it (dropObject).
+ *    object beside the player's feet, or on top of a crate or ledge there,
+ *    instead of throwing it (dropObject).
  */
 export function updateObjects(state, input) {
   const { player } = state;
@@ -189,19 +190,37 @@ function besideFeet(object, player, side) {
 }
 
 /**
- * Drops the held object beside the player's feet (req 32): on the side they
- * face if it fits there, else on the other side; if neither fits, the player
- * keeps holding it. It starts at dropSpeed (tuning), x away from the player
- * and y upward, and isn't thrown, so it can be picked up again at once.
+ * Where `object` is put down on `side` (+1 right, -1 left), or null if it
+ * can't go there: beside the player's feet, or, if something solid is there,
+ * on top of it (the lowest free spot straight above), so the player can build
+ * a stack. It goes no higher than where it is carried, so never on top of a
+ * wall or stack taller than the player.
+ */
+function dropSpot(state, object, side, solids) {
+  const { player } = state;
+  const atFeet = besideFeet(object, player, side);
+  const spot = { ...atFeet, y: freeYAbove(state.level, atFeet, solids) };
+  const carriedY = aboveHead(object, player).y;
+  return spot.y >= carriedY - HEIGHT_TOLERANCE && fitsIn(state.level, spot, solids) ? spot : null;
+}
+
+// How far above where it is carried a dropped object may still go, for rounding error only.
+const HEIGHT_TOLERANCE = 1e-9;
+
+/**
+ * Drops the held object (req 32) at its drop spot (dropSpot) on the side the
+ * player faces if it has one, else on the other side; if neither has one, the
+ * player keeps holding it. It starts at dropSpeed (tuning), x away from the
+ * player and y upward, and isn't thrown, so it can be picked up again at once.
  */
 function dropObject(state, object) {
   const { player } = state;
   const forward = player.facing === Facing.RIGHT ? 1 : -1;
   const solids = solidObjects(state);
-  const side = [forward, -forward].find((s) => fitsIn(state.level, besideFeet(object, player, s), solids));
+  const side = [forward, -forward].find((s) => dropSpot(state, object, s, solids));
   if (side === undefined) return;
 
-  const { x, y } = besideFeet(object, player, side);
+  const { x, y } = dropSpot(state, object, side, solids);
   const { dropSpeed } = state.data.tuning;
   object.held = false;
   object.x = x;

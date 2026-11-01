@@ -504,8 +504,13 @@ describe('throw (req 31)', () => {
 // ---------------------------------------------------------------------------
 // Task 4.4: dropping. Decided:
 //  - the object goes down beside the player's feet, flush against the side
-//    they face, its bottom level with their feet; if it doesn't fit there, the
-//    same place on the other side; if neither fits, the player keeps holding it;
+//    they face, its bottom level with their feet;
+//  - if something solid is there (a crate, a ledge), it goes on top of it
+//    instead: the lowest free spot straight above, so the player can build a
+//    stack. It goes no higher than where it is carried, so it can't be put on
+//    top of a tall wall or stack;
+//  - if neither works on the side they face, the same on the other side; if
+//    neither side works, the player keeps holding it;
 //  - dropSpeed (tuning) uses throwSpeed's convention: x away from the player
 //    (toward the side the object went down on), y upward;
 //  - a dropped object isn't thrown, so it can be picked up again at once.
@@ -598,7 +603,7 @@ describe('drop (req 32)', () => {
   });
 
   test('a wall in front: the object goes down on the other side instead, moving away from the player', () => {
-    const grid = ['..........', '....P#...G', '##########'];   // facing right, wall at column 5
+    const grid = ['.....#....', '....P#...G', '##########'];   // facing right, a 2-tile wall at column 5
     const after = step(dropState({ grid }), DOWN_ACTION, FIXED_DT);
     assertBesideFeet(after.objects[0], after.player, Facing.LEFT, 'after dropping away from the wall');
     const withSpeed = step(dropState({ grid, dropSpeed: DROP_SPEED }), DOWN_ACTION, FIXED_DT);
@@ -612,10 +617,43 @@ describe('drop (req 32)', () => {
   });
 
   test('walls on both sides: nothing happens, and the player keeps holding the object', () => {
-    const state = dropState({ grid: ['..........', '...#P#...G', '##########'] });
+    const state = dropState({ grid: ['...#.#....', '...#P#...G', '##########'] });
     const after = step(state, DOWN_ACTION, FIXED_DT);
     assert.deepEqual(heldIndexes(after), [0]);
     assertAboveHead(after.objects[0], after.player, 'after a refused drop');
+  });
+
+  /** Asserts `object` is flush against the player's right side and sits on top of `lower`. */
+  function assertOnTopInFront(object, player, lower, when) {
+    assertNear(object.x, player.x + player.width, `object left edge ${when}`);
+    assertNear(object.y + object.height, lower.y, `object bottom ${when}`);
+  }
+
+  test('a crate in front: the object goes on top of it, so the player can build a stack', () => {
+    const after = step(dropState({ grid: ['..........', '....Pc...G', '##########'] }), DOWN_ACTION, FIXED_DT);
+    const [crate, dropped] = after.objects;
+    assert.equal(dropped.held, false);
+    assertOnTopInFront(dropped, after.player, crate, 'after dropping onto the crate');
+  });
+
+  test('a ledge in front as high as the player: the object goes on top of the ledge, at the height it is carried', () => {
+    const ledgeTop = 1;   // the '#' in row 1
+    const after = step(dropState({ grid: ['..........', '....P#...G', '##########'] }), DOWN_ACTION, FIXED_DT);
+    const [dropped] = after.objects;
+    assertOnTopInFront(dropped, after.player, { y: ledgeTop }, 'after dropping onto the ledge');
+    assertNear(dropped.y, after.player.y - dropped.height, 'as high as above the head');
+  });
+
+  test('a stack in front taller than where the object is carried: it goes down on the other side', () => {
+    const after = step(dropState({ grid: ['.....c....', '....Pc...G', '##########'] }), DOWN_ACTION, FIXED_DT);
+    assertBesideFeet(after.objects.at(-1), after.player, Facing.LEFT, 'after dropping away from the tall stack');
+  });
+
+  test('a wall in front and a crate behind: the object goes on top of the crate behind', () => {
+    const after = step(dropState({ grid: ['.....#....', '...cP#...G', '##########'] }), DOWN_ACTION, FIXED_DT);
+    const [crate, dropped] = after.objects;
+    assertNear(right(dropped), after.player.x, 'object right edge, flush against the player\'s left side');
+    assertNear(bottom(dropped), crate.y, 'object bottom, on top of the crate');
   });
 
   test('a dropped object can be picked up again with a new press', () => {
@@ -1006,16 +1044,18 @@ describe('stacking (task 4.6, req 35)', () => {
   describe('fit checks count resting stackable objects (carried over from 4.2a and 4.4)', () => {
     const DOWN_ACTION = holding(Input.DOWN, Input.ACTION);
 
-    test('a drop with a crate in front goes down on the other side', () => {
+    test('a drop with a crate in front goes on top of it and comes to rest there', () => {
       const state = holdingNew(physicsState(['......', '..Pc.G', '######']), 'crate');   // facing right; crate to the right
       const after = step(state, DOWN_ACTION, FIXED_DT);
-      const dropped = after.objects.at(-1);
+      const [crate, dropped] = after.objects;
       assert.equal(dropped.held, false);
-      assertNear(right(dropped), after.player.x, 'dropped on the left');
+      assertNear(dropped.x, right(after.player), 'dropped on the right');
+      assertNear(bottom(dropped), crate.y, 'on top of the crate');
+      assert.equal(dropped.resting, true);
     });
 
-    test('a drop with crates on both sides doesn\'t happen: the player keeps holding the object', () => {
-      const state = holdingNew(physicsState(['......', '.cPc.G', '######']), 'crate');
+    test('a drop with two-high stacks on both sides doesn\'t happen: the player keeps holding the object', () => {
+      const state = holdingNew(physicsState(['......', '.c.c..', '.cPc.G', '######']), 'crate');
       const after = step(state, DOWN_ACTION, FIXED_DT);
       assert.equal(after.objects.at(-1).held, true);
     });
@@ -1264,7 +1304,7 @@ describe('sound events (sound PRD req 14)', () => {
   });
 
   test('no drop when there is no room on either side, and the player keeps holding it', () => {
-    const state = stateFor(['.....', '.#P#G', '#####']);
+    const state = stateFor(['.#.#.', '.#P#G', '#####']);
     const { player } = state;
     const crate = new CarriableObject({ type: 'crate', ...ONE_TILE, x: player.x, y: player.y - ONE_TILE.height, held: true });
     assert.deepEqual(step({ ...state, objects: [crate] }, DOWN_ACTION, FIXED_DT).events, []);

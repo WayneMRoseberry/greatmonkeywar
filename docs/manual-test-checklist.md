@@ -14,13 +14,13 @@ For each run, copy the results table at the bottom, fill it in, and add it under
 - You have a standard gamepad (for example an Xbox controller) for section 4.
 - You have speakers or headphones for section 7.
 
-Keys used below: arrows or A/D to move, Space, W or Up to jump, E or X for action (pick up, drop, throw), Q or C to punch, Enter to choose, F3 for the debug overlay, F11 for fullscreen, M to mute. On a gamepad: d-pad or left stick to move, A to jump and choose, X for action, B to punch. Menu options (Start, Next level, Exit game) can also be clicked with the mouse.
+Keys used below: arrows or A/D to move, Space, W or Up to jump, E or X for action (pick up, throw; hold Down and press it to drop), Q or C to punch, Enter to choose, F3 for the debug overlay, F11 for fullscreen, M to mute. On a gamepad: d-pad or left stick to move, A to jump and choose, X for action (hold down and press it to drop), B to punch. Menu options (Start, Next level, Exit game) can also be clicked with the mouse.
 
 ## 1. Electron app, with Steam running
 
 1. Start Steam and log in.
 2. Run `npm start`.
-3. **Check:** the game window opens on the start screen, with no error screen, and shows the hint "Enter / A or click: choose" under Start.
+3. **Check:** the game window opens on the start screen, with no error screen, and shows the hint "Press Enter (A on a gamepad) or click an option" under Start.
 4. Click Start with the mouse. **Check:** level 1 starts. (Close and run `npm start` again to carry on from the start screen.)
 5. Press F3. **Check:** the debug overlay shows Steam as connected, with your Steam display name (requirement 10).
 6. Press Shift+Tab. **Check:** the Steam overlay opens over the game. Press Shift+Tab again to close it (requirement 11).
@@ -32,6 +32,9 @@ Keys used below: arrows or A/D to move, Space, W or Up to jump, E or X for actio
 1. Quit Steam completely (Steam > Exit).
 2. Run `npm start`.
 3. **Check:** the game starts and is playable (requirement 9).
+   - Pick up a coconut with E. **Check:** the hint "E: throw · Down + E: drop" shows along the bottom of the screen while you carry it.
+   - Hold Down and press E. **Check:** the coconut drops beside your feet instead of flying off, and the hint goes away (requirement 32).
+   - Pick up a crate, walk up to another crate facing it, then hold Down and press E. **Check:** the crate you carried goes on top of the other one, not behind you, and you can jump up onto the stack.
 4. **Check:** the terminal shows a message saying Steam is unavailable and the game runs without it.
 5. Press F3. **Check:** the debug overlay shows Steam as unavailable.
 
@@ -47,6 +50,7 @@ In the Electron app:
 
 1. Connect the gamepad, then start the game (either mode).
 2. **Check:** you can choose Start with A, then move, jump, pick up and throw a coconut, stack the crates, and punch an enemy, all with the gamepad.
+   - While carrying, after using the gamepad, **check:** the hint along the bottom says "X: throw · D-pad down + X: drop". Hold d-pad down and press X. **Check:** the object drops beside your feet.
 3. Press F3. **Check:** the debug overlay shows the gamepad as the input device while you use it, and the keyboard again after you press a key.
 4. **Check:** with the left stick resting at the centre, the player doesn't drift.
 

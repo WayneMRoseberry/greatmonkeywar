@@ -3,7 +3,7 @@
 
 import { MenuOption } from '../simulation/flow.js';
 import { hudFontSize } from './hud.js';
-import { confirmNames } from './binding-names.js';
+import { confirmKeyName, confirmButtonName } from './binding-names.js';
 
 export const GAME_TITLE = 'Great Monkey War';
 
@@ -39,9 +39,9 @@ function centredText(ctx, text, x, y, size, color = TEXT_COLOR) {
   ctx.fillText(text, x, y);
 }
 
-/** The menu hint: how to choose an option, e.g. "Enter / A or click: choose". */
+/** The menu hint: how to choose an option, e.g. "Press Enter (A on a gamepad) or click an option". */
 export function menuHint(bindings) {
-  return `${confirmNames(bindings)} or click: choose`;
+  return `Press ${confirmKeyName(bindings)} (${confirmButtonName(bindings)} on a gamepad) or click an option`;
 }
 
 /**
